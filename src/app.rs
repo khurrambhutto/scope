@@ -1,13 +1,13 @@
 //! Application state management
 
-use crate::package::{sort_packages, AppTypeFilter, Package, SortCriteria};
+use crate::package::{sort_packages, AppTypeFilter, Package, PackageSource, SortCriteria};
 use crate::scanner;
+use std::collections::HashSet;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum View {
     Main,
     Details,
-    Search,
     Confirm,
     UpdateSelect,
     Loading,
@@ -20,6 +20,94 @@ pub enum ConfirmAction {
     Update,
 }
 
+/// Sidebar sections
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SidebarSection {
+    #[default]
+    Apps,
+    Updates,
+    Clean,
+}
+
+impl SidebarSection {
+    pub fn next(self) -> Self {
+        match self {
+            SidebarSection::Apps => SidebarSection::Updates,
+            SidebarSection::Updates => SidebarSection::Clean,
+            SidebarSection::Clean => SidebarSection::Apps,
+        }
+    }
+
+    pub fn prev(self) -> Self {
+        match self {
+            SidebarSection::Apps => SidebarSection::Clean,
+            SidebarSection::Updates => SidebarSection::Apps,
+            SidebarSection::Clean => SidebarSection::Updates,
+        }
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            SidebarSection::Apps => "Apps",
+            SidebarSection::Updates => "Updates",
+            SidebarSection::Clean => "Clean",
+        }
+    }
+}
+
+/// Source filter tabs
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SourceTab {
+    #[default]
+    All,
+    Apt,
+    Snap,
+    Flatpak,
+    AppImage,
+}
+
+impl SourceTab {
+    pub fn next(self) -> Self {
+        match self {
+            SourceTab::All => SourceTab::Apt,
+            SourceTab::Apt => SourceTab::Snap,
+            SourceTab::Snap => SourceTab::Flatpak,
+            SourceTab::Flatpak => SourceTab::AppImage,
+            SourceTab::AppImage => SourceTab::All,
+        }
+    }
+
+    pub fn prev(self) -> Self {
+        match self {
+            SourceTab::All => SourceTab::AppImage,
+            SourceTab::Apt => SourceTab::All,
+            SourceTab::Snap => SourceTab::Apt,
+            SourceTab::Flatpak => SourceTab::Snap,
+            SourceTab::AppImage => SourceTab::Flatpak,
+        }
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            SourceTab::All => "All",
+            SourceTab::Apt => "APT",
+            SourceTab::Snap => "Snap",
+            SourceTab::Flatpak => "Flatpak",
+            SourceTab::AppImage => "AppImage",
+        }
+    }
+
+    pub fn matches(&self, source: PackageSource) -> bool {
+        match self {
+            SourceTab::All => true,
+            SourceTab::Apt => matches!(source, PackageSource::Apt | PackageSource::DebFile),
+            SourceTab::Snap => source == PackageSource::Snap,
+            SourceTab::Flatpak => source == PackageSource::Flatpak,
+            SourceTab::AppImage => source == PackageSource::AppImage,
+        }
+    }
+}
+
 pub struct App {
     /// All packages from all sources
     pub packages: Vec<Package>,
@@ -29,12 +117,14 @@ pub struct App {
     pub selected: usize,
     /// Current view
     pub view: View,
-    /// Search query
+    /// Search query (always active)
     pub search_query: String,
     /// Sort criteria
     pub sort_criteria: SortCriteria,
     /// App type filter
     pub app_type_filter: AppTypeFilter,
+    /// Source tab filter
+    pub source_tab: SourceTab,
     /// Confirmation action pending
     pub confirm_action: Option<ConfirmAction>,
     /// Loading message
@@ -49,6 +139,14 @@ pub struct App {
     pub details_scroll: u16,
     /// Application should quit
     pub should_quit: bool,
+    /// Scanning status - which scanners are currently running
+    pub scanning_sources: HashSet<PackageSource>,
+    /// Whether initial scan is complete
+    pub scan_complete: bool,
+    /// Current sidebar section
+    pub sidebar_section: SidebarSection,
+    /// Whether sidebar is focused (for navigation)
+    pub sidebar_focused: bool,
 }
 
 impl Default for App {
@@ -63,17 +161,66 @@ impl App {
             packages: Vec::new(),
             filtered_packages: Vec::new(),
             selected: 0,
-            view: View::Loading,
+            view: View::Main, // Start with Main view, show packages as they load
             search_query: String::new(),
             sort_criteria: SortCriteria::default(), // Size descending
             app_type_filter: AppTypeFilter::default(),
+            source_tab: SourceTab::default(),
             confirm_action: None,
-            loading_message: "Scanning installed packages...".to_string(),
+            loading_message: "Scanning...".to_string(),
             error_message: String::new(),
             checking_updates: false,
             update_selection: Vec::new(),
             details_scroll: 0,
             should_quit: false,
+            scanning_sources: HashSet::new(),
+            scan_complete: false,
+            sidebar_section: SidebarSection::default(),
+            sidebar_focused: false,
+        }
+    }
+
+    /// Add packages from a scanner (used during streaming load)
+    pub fn add_packages(&mut self, mut new_packages: Vec<Package>) {
+        self.packages.append(&mut new_packages);
+        self.sort_packages();
+        self.apply_filters();
+    }
+
+    /// Mark a scanner as started
+    pub fn scanner_started(&mut self, source: PackageSource) {
+        self.scanning_sources.insert(source);
+    }
+
+    /// Mark a scanner as completed
+    pub fn scanner_completed(&mut self, source: PackageSource) {
+        self.scanning_sources.remove(&source);
+    }
+
+    /// Mark all scanning as done
+    pub fn scanning_done(&mut self) {
+        self.scan_complete = true;
+        self.scanning_sources.clear();
+    }
+
+    /// Check if we're still scanning
+    pub fn is_scanning(&self) -> bool {
+        !self.scan_complete || !self.scanning_sources.is_empty()
+    }
+
+    /// Get scanning status message
+    pub fn get_scan_status(&self) -> String {
+        if self.scan_complete {
+            String::new()
+        } else if self.scanning_sources.is_empty() {
+            "Starting scan...".to_string()
+        } else {
+            let sources: Vec<String> = self
+                .scanning_sources
+                .iter()
+                .map(|s| s.to_string())
+                .collect();
+            format!("Scanning: {}", sources.join(", "))
         }
     }
 
@@ -106,11 +253,11 @@ impl App {
         self.view = View::Loading;
 
         let result = scanner::check_all_updates(&mut self.packages).await;
-        
+
         self.checking_updates = false;
         self.view = prev_view;
         self.apply_filters();
-        
+
         result
     }
 
@@ -126,14 +273,17 @@ impl App {
             .iter()
             .enumerate()
             .filter(|(_, pkg)| {
+                // Apply source tab filter
+                let matches_source = self.source_tab.matches(pkg.source);
+
                 // Apply search filter
-                let matches_search = self.search_query.is_empty() 
-                    || pkg.matches_search(&self.search_query);
-                
+                let matches_search =
+                    self.search_query.is_empty() || pkg.matches_search(&self.search_query);
+
                 // Apply app type filter
                 let matches_type = self.app_type_filter.matches(pkg.app_type);
-                
-                matches_search && matches_type
+
+                matches_source && matches_search && matches_type
             })
             .map(|(i, _)| i)
             .collect();
@@ -142,6 +292,36 @@ impl App {
         if self.selected >= self.filtered_packages.len() {
             self.selected = self.filtered_packages.len().saturating_sub(1);
         }
+    }
+
+    /// Switch to next source tab
+    pub fn next_tab(&mut self) {
+        self.source_tab = self.source_tab.next();
+        self.apply_filters();
+    }
+
+    /// Switch to previous source tab
+    pub fn prev_tab(&mut self) {
+        self.source_tab = self.source_tab.prev();
+        self.apply_filters();
+    }
+
+    /// Handle character input for search
+    pub fn search_input(&mut self, c: char) {
+        self.search_query.push(c);
+        self.apply_filters();
+    }
+
+    /// Handle backspace for search
+    pub fn search_backspace(&mut self) {
+        self.search_query.pop();
+        self.apply_filters();
+    }
+
+    /// Clear search
+    pub fn clear_search(&mut self) {
+        self.search_query.clear();
+        self.apply_filters();
     }
 
     /// Get currently selected package (if any)
@@ -182,8 +362,8 @@ impl App {
 
     /// Page down
     pub fn page_down(&mut self, page_size: usize) {
-        self.selected = (self.selected + page_size)
-            .min(self.filtered_packages.len().saturating_sub(1));
+        self.selected =
+            (self.selected + page_size).min(self.filtered_packages.len().saturating_sub(1));
     }
 
     /// Toggle sort criteria
@@ -196,23 +376,6 @@ impl App {
     /// Toggle app type filter
     pub fn toggle_filter(&mut self) {
         self.app_type_filter = self.app_type_filter.next();
-        self.apply_filters();
-    }
-
-    /// Enter search mode
-    pub fn enter_search(&mut self) {
-        self.view = View::Search;
-    }
-
-    /// Exit search mode
-    pub fn exit_search(&mut self) {
-        self.view = View::Main;
-        self.apply_filters();
-    }
-
-    /// Clear search
-    pub fn clear_search(&mut self) {
-        self.search_query.clear();
         self.apply_filters();
     }
 
@@ -279,21 +442,41 @@ impl App {
         let mut snap = 0;
         let mut flatpak = 0;
         let mut appimage = 0;
-        
+
         for pkg in &self.packages {
             match pkg.source {
-                crate::package::PackageSource::Apt | crate::package::PackageSource::DebFile => apt += 1,
+                crate::package::PackageSource::Apt | crate::package::PackageSource::DebFile => {
+                    apt += 1
+                }
                 crate::package::PackageSource::Snap => snap += 1,
                 crate::package::PackageSource::Flatpak => flatpak += 1,
                 crate::package::PackageSource::AppImage => appimage += 1,
             }
         }
-        
+
         (self.packages.len(), apt, snap, flatpak, appimage)
     }
 
     /// Get count of packages with updates
     pub fn get_update_count(&self) -> usize {
-        self.packages.iter().filter(|p| p.has_update == Some(true)).count()
+        self.packages
+            .iter()
+            .filter(|p| p.has_update == Some(true))
+            .count()
+    }
+
+    /// Toggle sidebar focus
+    pub fn toggle_sidebar_focus(&mut self) {
+        self.sidebar_focused = !self.sidebar_focused;
+    }
+
+    /// Move to next sidebar section
+    pub fn next_sidebar_section(&mut self) {
+        self.sidebar_section = self.sidebar_section.next();
+    }
+
+    /// Move to previous sidebar section
+    pub fn prev_sidebar_section(&mut self) {
+        self.sidebar_section = self.sidebar_section.prev();
     }
 }

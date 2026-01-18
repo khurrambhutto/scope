@@ -27,14 +27,7 @@ impl fmt::Display for PackageSource {
 
 impl PackageSource {
     pub fn color(&self) -> ratatui::style::Color {
-        use ratatui::style::Color;
-        match self {
-            PackageSource::Apt => Color::Green,
-            PackageSource::Snap => Color::Yellow,
-            PackageSource::Flatpak => Color::Cyan,
-            PackageSource::AppImage => Color::Magenta,
-            PackageSource::DebFile => Color::Blue,
-        }
+        crate::theme::get_theme().source_color(self)
     }
 }
 
@@ -151,8 +144,12 @@ pub fn sort_packages(packages: &mut [Package], criteria: SortCriteria) {
     match criteria {
         SortCriteria::SizeDesc => packages.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes)),
         SortCriteria::SizeAsc => packages.sort_by(|a, b| a.size_bytes.cmp(&b.size_bytes)),
-        SortCriteria::NameAsc => packages.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase())),
-        SortCriteria::NameDesc => packages.sort_by(|a, b| b.name.to_lowercase().cmp(&a.name.to_lowercase())),
+        SortCriteria::NameAsc => {
+            packages.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+        }
+        SortCriteria::NameDesc => {
+            packages.sort_by(|a, b| b.name.to_lowercase().cmp(&a.name.to_lowercase()))
+        }
         SortCriteria::SourceAsc => packages.sort_by(|a, b| {
             let source_cmp = (a.source as u8).cmp(&(b.source as u8));
             if source_cmp == std::cmp::Ordering::Equal {

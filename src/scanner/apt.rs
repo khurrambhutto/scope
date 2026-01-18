@@ -65,6 +65,10 @@ impl AptScanner {
 }
 
 impl PackageScanner for AptScanner {
+    fn source_type(&self) -> PackageSource {
+        PackageSource::Apt
+    }
+
     fn is_available(&self) -> Pin<Box<dyn Future<Output = bool> + Send + '_>> {
         Box::pin(async {
             Command::new("dpkg-query")
@@ -143,14 +147,12 @@ impl PackageScanner for AptScanner {
         })
     }
 
-    fn get_updates(&self) -> Pin<Box<dyn Future<Output = Result<Vec<(String, String)>>> + Send + '_>>
-    {
+    fn get_updates(
+        &self,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<(String, String)>>> + Send + '_>> {
         Box::pin(async {
             // First update package lists
-            let _ = Command::new("apt")
-                .args(["update", "-qq"])
-                .output()
-                .await;
+            let _ = Command::new("apt").args(["update", "-qq"]).output().await;
 
             // Get upgradable packages
             let output = Command::new("apt")
@@ -176,7 +178,10 @@ impl PackageScanner for AptScanner {
         })
     }
 
-    fn uninstall(&self, package: &Package) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
+    fn uninstall(
+        &self,
+        package: &Package,
+    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
         let name = package.name.clone();
         Box::pin(async move {
             let status = Command::new("pkexec")

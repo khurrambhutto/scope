@@ -6,44 +6,44 @@
 mod app;
 mod package;
 mod scanner;
+pub mod theme;
 mod ui;
 
-use app::{App, ConfirmAction, View};
 use anyhow::Result;
+use app::{App, ConfirmAction, SidebarSection, View};
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers},
+    event::{self, Event, KeyCode, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use ratatui::{backend::CrosstermBackend, Terminal};
+use ratatui::{backend::CrosstermBackend, layout::Rect, Terminal};
 use std::io;
 use std::time::Duration;
 
+// Configuration for the floating window
+const WINDOW_WIDTH: u16 = 100;
+const WINDOW_HEIGHT: u16 = 35;
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Setup terminal
+    // Setup terminal with alternate screen
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
     // Create app state
     let mut app = App::new();
 
-    // Run initial scan in background
-    let scan_result = run_app(&mut terminal, &mut app).await;
+    // Run the app
+    let result = run_app(&mut terminal, &mut app).await;
 
     // Restore terminal
     disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
-    terminal.show_cursor()?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
 
-    if let Err(e) = scan_result {
+    if let Err(e) = result {
         eprintln!("Error: {}", e);
         std::process::exit(1);
     }
@@ -51,29 +51,62 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+/// Calculate the window area in top-left corner
+fn calculate_window_area(terminal_size: Rect) -> Rect {
+    // Position in top-left corner
+    let x = 0;
+    let y = 0;
+
+    Rect::new(
+        x,
+        y,
+        WINDOW_WIDTH.min(terminal_size.width),
+        WINDOW_HEIGHT.min(terminal_size.height),
+    )
+}
+
 async fn run_app(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     app: &mut App,
 ) -> Result<()> {
-    // Initial render
-    terminal.draw(|f| ui::render(f, app))?;
-
-    // Load packages
-    app.load_packages().await?;
+    // Start streaming scan
+    let mut scan_rx = scanner::scan_all_streaming();
 
     loop {
-        // Draw UI
-        terminal.draw(|f| ui::render(f, app))?;
+        // Draw UI within window area
+        terminal.draw(|f| {
+            let window_area = calculate_window_area(f.area());
+            ui::render_in_area(f, app, window_area);
+        })?;
+
+        // Check for scan results (non-blocking)
+        while let Ok(msg) = scan_rx.try_recv() {
+            match msg {
+                scanner::ScanMessage::Packages(packages) => {
+                    app.add_packages(packages);
+                }
+                scanner::ScanMessage::Started(source) => {
+                    app.scanner_started(source);
+                }
+                scanner::ScanMessage::Completed(source) => {
+                    app.scanner_completed(source);
+                }
+                scanner::ScanMessage::Done => {
+                    app.scanning_done();
+                }
+            }
+        }
 
         // Handle events with timeout for animation
-        if event::poll(Duration::from_millis(100))? {
+        if event::poll(Duration::from_millis(50))? {
             if let Event::Key(key) = event::read()? {
                 match app.view {
                     View::Main => handle_main_input(app, key.code, key.modifiers).await?,
-                    View::Search => handle_search_input(app, key.code, key.modifiers),
                     View::Details => handle_details_input(app, key.code).await?,
-                    View::Confirm => handle_confirm_input(app, key.code).await?,
-                    View::UpdateSelect => handle_update_select_input(app, key.code).await?,
+                    View::Confirm => handle_confirm_input(app, key.code, terminal).await?,
+                    View::UpdateSelect => {
+                        handle_update_select_input(app, key.code, terminal).await?
+                    }
                     View::Loading => {
                         // Allow quitting during loading
                         if key.code == KeyCode::Char('q') {
@@ -94,20 +127,89 @@ async fn run_app(
 }
 
 async fn handle_main_input(app: &mut App, key: KeyCode, modifiers: KeyModifiers) -> Result<()> {
+    // Handle sidebar navigation when sidebar is focused
+    if app.sidebar_focused {
+        match key {
+            KeyCode::Esc | KeyCode::Right | KeyCode::Char('l') => {
+                // Exit sidebar focus, go to main content
+                app.sidebar_focused = false;
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                app.prev_sidebar_section();
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                app.next_sidebar_section();
+            }
+            KeyCode::Enter => {
+                // Select current section and exit sidebar focus
+                let section = app.sidebar_section;
+                app.sidebar_focused = false;
+                
+                // Handle section-specific actions
+                match section {
+                    SidebarSection::Updates => {
+                        // Check for updates first, then show selection
+                        app.check_updates().await?;
+                        if app.get_update_count() > 0 {
+                            app.show_update_selection();
+                        }
+                    }
+                    SidebarSection::Apps | SidebarSection::Clean => {
+                        // Apps and Clean just switch sections (already done)
+                    }
+                }
+            }
+            KeyCode::Char('q') => {
+                app.should_quit = true;
+            }
+            _ => {}
+        }
+        return Ok(());
+    }
+
+    // Normal main view input handling
     match key {
-        KeyCode::Char('q') | KeyCode::Esc => {
+        KeyCode::Esc => {
+            // Esc clears search if there's a query, otherwise quits
+            if !app.search_query.is_empty() {
+                app.clear_search();
+            } else {
+                app.should_quit = true;
+            }
+        }
+        KeyCode::Char('q') if app.search_query.is_empty() => {
+            // Only quit if not searching
             app.should_quit = true;
         }
-        KeyCode::Up | KeyCode::Char('k') => {
+        // Ctrl+b or Left arrow to focus sidebar
+        KeyCode::Char('b') if modifiers.contains(KeyModifiers::CONTROL) => {
+            app.sidebar_focused = true;
+        }
+        KeyCode::Left | KeyCode::Char('h') if app.search_query.is_empty() => {
+            app.sidebar_focused = true;
+        }
+        KeyCode::Up | KeyCode::Char('k') if app.search_query.is_empty() => {
             app.select_previous();
         }
-        KeyCode::Down | KeyCode::Char('j') => {
+        KeyCode::Up => {
+            app.select_previous();
+        }
+        KeyCode::Down | KeyCode::Char('j') if app.search_query.is_empty() => {
             app.select_next();
         }
-        KeyCode::Home | KeyCode::Char('g') => {
+        KeyCode::Down => {
+            app.select_next();
+        }
+        KeyCode::Home => {
             app.select_first();
         }
-        KeyCode::End | KeyCode::Char('G') => {
+        KeyCode::Char('g') if app.search_query.is_empty() => {
+            app.select_first();
+        }
+        KeyCode::End => {
+            app.select_last();
+        }
+        KeyCode::Char('G') if app.search_query.is_empty() => {
             app.select_last();
         }
         KeyCode::PageUp => {
@@ -119,61 +221,45 @@ async fn handle_main_input(app: &mut App, key: KeyCode, modifiers: KeyModifiers)
         KeyCode::Enter => {
             app.show_details();
         }
-        KeyCode::Char('/') => {
-            app.enter_search();
+        KeyCode::Tab => {
+            // Switch source tabs
+            if modifiers.contains(KeyModifiers::SHIFT) {
+                app.prev_tab();
+            } else {
+                app.next_tab();
+            }
         }
-        KeyCode::Char('s') => {
+        KeyCode::BackTab => {
+            // Shift+Tab goes to previous tab
+            app.prev_tab();
+        }
+        KeyCode::Char('s') if app.search_query.is_empty() => {
             app.toggle_sort();
         }
-        KeyCode::Char('f') => {
+        KeyCode::Char('f') if app.search_query.is_empty() => {
             app.toggle_filter();
         }
-        KeyCode::Char('d') => {
+        KeyCode::Char('d') if app.search_query.is_empty() => {
             app.request_uninstall();
-        }
-        KeyCode::Char('c') => {
-            // Check for updates
-            app.check_updates().await?;
-        }
-        KeyCode::Char('U') => {
-            // Show update selection if there are updates
-            if app.get_update_count() > 0 {
-                app.show_update_selection();
-            }
         }
         KeyCode::Char('u') if modifiers.contains(KeyModifiers::CONTROL) => {
             app.clear_search();
         }
-        KeyCode::Char('r') => {
+        KeyCode::Char('r') if app.search_query.is_empty() => {
             // Refresh/rescan
             app.load_packages().await?;
+        }
+        KeyCode::Backspace => {
+            // Delete last character from search
+            app.search_backspace();
+        }
+        KeyCode::Char(c) => {
+            // Always-on search: type to filter
+            app.search_input(c);
         }
         _ => {}
     }
     Ok(())
-}
-
-fn handle_search_input(app: &mut App, key: KeyCode, modifiers: KeyModifiers) {
-    match key {
-        KeyCode::Esc => {
-            app.exit_search();
-        }
-        KeyCode::Enter => {
-            app.exit_search();
-        }
-        KeyCode::Backspace => {
-            app.search_query.pop();
-            app.apply_filters();
-        }
-        KeyCode::Char('u') if modifiers.contains(KeyModifiers::CONTROL) => {
-            app.clear_search();
-        }
-        KeyCode::Char(c) => {
-            app.search_query.push(c);
-            app.apply_filters();
-        }
-        _ => {}
-    }
 }
 
 async fn handle_details_input(app: &mut App, key: KeyCode) -> Result<()> {
@@ -198,33 +284,49 @@ async fn handle_details_input(app: &mut App, key: KeyCode) -> Result<()> {
     Ok(())
 }
 
-async fn handle_confirm_input(app: &mut App, key: KeyCode) -> Result<()> {
+async fn handle_confirm_input(
+    app: &mut App,
+    key: KeyCode,
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+) -> Result<()> {
     match key {
         KeyCode::Char('y') | KeyCode::Char('Y') => {
             match app.confirm_action {
                 Some(ConfirmAction::Uninstall) => {
                     // Extract needed data before borrowing
-                    let pkg_info = app.selected_package().map(|pkg| {
-                        (pkg.name.clone(), pkg.source, app.selected)
-                    });
-                    
+                    let pkg_info = app
+                        .selected_package()
+                        .map(|pkg| (pkg.name.clone(), pkg.source, app.selected));
+
                     if let Some((name, source, selected_idx)) = pkg_info {
                         let scanner = scanner::get_scanner(source);
                         app.loading_message = format!("Uninstalling {}...", name);
                         app.view = View::Loading;
-                        
+
                         // Create a temporary package for uninstall
                         let temp_pkg = crate::package::Package::new(name.clone(), source);
-                        
+
+                        // Leave alternate screen for pkexec to show its UI
+                        disable_raw_mode()?;
+                        execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+
                         // Perform uninstall
-                        if let Err(e) = scanner.uninstall(&temp_pkg).await {
+                        let result = scanner.uninstall(&temp_pkg).await;
+
+                        // Re-enter alternate screen and restore raw mode
+                        execute!(terminal.backend_mut(), EnterAlternateScreen)?;
+                        enable_raw_mode()?;
+                        terminal.clear()?;
+
+                        if let Err(e) = result {
                             app.error_message = format!("Uninstall failed: {}", e);
                             app.view = View::Error;
                         } else {
                             // Remove from package list
                             if let Some(&idx) = app.filtered_packages.get(selected_idx) {
                                 app.packages.remove(idx);
-                                app.apply_filters();
+                                // Clear search to show all packages
+                                app.clear_search();
                             }
                             app.view = View::Main;
                         }
@@ -232,20 +334,32 @@ async fn handle_confirm_input(app: &mut App, key: KeyCode) -> Result<()> {
                 }
                 Some(ConfirmAction::Update) => {
                     // Extract needed data before borrowing
-                    let pkg_info = app.selected_package().map(|pkg| {
-                        (pkg.name.clone(), pkg.source, pkg.install_path.clone())
-                    });
-                    
+                    let pkg_info = app
+                        .selected_package()
+                        .map(|pkg| (pkg.name.clone(), pkg.source, pkg.install_path.clone()));
+
                     if let Some((name, source, install_path)) = pkg_info {
                         let scanner = scanner::get_scanner(source);
                         app.loading_message = format!("Updating {}...", name);
                         app.view = View::Loading;
-                        
+
                         // Create a temporary package for update
                         let mut temp_pkg = crate::package::Package::new(name.clone(), source);
                         temp_pkg.install_path = install_path;
-                        
-                        if let Err(e) = scanner.update(&temp_pkg).await {
+
+                        // Leave alternate screen for pkexec to show its UI
+                        disable_raw_mode()?;
+                        execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+
+                        // Perform update
+                        let result = scanner.update(&temp_pkg).await;
+
+                        // Re-enter alternate screen and restore raw mode
+                        execute!(terminal.backend_mut(), EnterAlternateScreen)?;
+                        enable_raw_mode()?;
+                        terminal.clear()?;
+
+                        if let Err(e) = result {
                             app.error_message = format!("Update failed: {}", e);
                             app.view = View::Error;
                         } else {
@@ -266,7 +380,11 @@ async fn handle_confirm_input(app: &mut App, key: KeyCode) -> Result<()> {
     Ok(())
 }
 
-async fn handle_update_select_input(app: &mut App, key: KeyCode) -> Result<()> {
+async fn handle_update_select_input(
+    app: &mut App,
+    key: KeyCode,
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+) -> Result<()> {
     match key {
         KeyCode::Esc | KeyCode::Char('q') => {
             // Clear selections and return to main
@@ -312,16 +430,23 @@ async fn handle_update_select_input(app: &mut App, key: KeyCode) -> Result<()> {
                 .copied()
                 .collect();
 
+            // Leave alternate screen for pkexec to show its UI
+            disable_raw_mode()?;
+            execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+
             for idx in selected_indices {
                 let pkg = &app.packages[idx];
-                app.loading_message = format!("Updating {}...", pkg.name);
-                
                 let scanner = scanner::get_scanner(pkg.source);
                 if let Err(e) = scanner.update(pkg).await {
+                    // Store error but continue with other updates
                     app.error_message = format!("Failed to update {}: {}", pkg.name, e);
-                    // Continue with other updates
                 }
             }
+
+            // Re-enter alternate screen and restore raw mode
+            execute!(terminal.backend_mut(), EnterAlternateScreen)?;
+            enable_raw_mode()?;
+            terminal.clear()?;
 
             // Refresh after updates
             app.load_packages().await?;

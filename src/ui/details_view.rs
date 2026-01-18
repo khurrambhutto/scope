@@ -1,16 +1,19 @@
 //! Details view - shows full package information
 
 use crate::app::App;
+use crate::theme::get_theme;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::Modifier,
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph, Wrap},
+    widgets::{Block, BorderType, Borders, Clear, Paragraph, Wrap},
     Frame,
 };
 
-/// Render the details popup
+/// Render the details popup (full-screen version - deprecated)
+#[allow(dead_code)]
 pub fn render(frame: &mut Frame, app: &App) {
+    let theme = get_theme();
     let area = centered_rect(70, 70, frame.area());
     frame.render_widget(Clear, area);
 
@@ -19,25 +22,25 @@ pub fn render(frame: &mut Frame, app: &App) {
             .direction(Direction::Vertical)
             .margin(1)
             .constraints([
-                Constraint::Length(3),  // Title
-                Constraint::Min(10),    // Details
-                Constraint::Length(3),  // Footer
+                Constraint::Length(3), // Title
+                Constraint::Min(10),   // Details
+                Constraint::Length(3), // Footer
             ])
             .split(area);
 
         // Package name as title
         let title = Paragraph::new(Line::from(vec![
-            Span::styled(
-                &pkg.name,
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
-            ),
+            Span::styled(&pkg.name, theme.primary_bold()),
             Span::raw(" "),
-            Span::styled(
-                format!("({})", pkg.source),
-                Style::default().fg(pkg.source.color()),
-            ),
+            Span::styled(format!("({})", pkg.source), theme.primary_style()),
         ]))
-        .block(Block::default().borders(Borders::BOTTOM));
+        .block(
+            Block::default()
+                .borders(Borders::BOTTOM)
+                .border_type(BorderType::Rounded)
+                .border_style(theme.border_style()),
+        )
+        .style(theme.base_style());
 
         frame.render_widget(title, chunks[0]);
 
@@ -45,34 +48,27 @@ pub fn render(frame: &mut Frame, app: &App) {
         let size_human = pkg.size_human();
         let mut details_lines = vec![
             Line::from(vec![
-                Span::styled("Version:     ", Style::default().fg(Color::Yellow)),
+                Span::styled("Version:     ", theme.label_style()),
                 Span::raw(&pkg.version),
             ]),
             Line::from(vec![
-                Span::styled("Size:        ", Style::default().fg(Color::Yellow)),
-                Span::styled(size_human, Style::default().fg(Color::Magenta)),
+                Span::styled("Size:        ", theme.label_style()),
+                Span::styled(size_human, theme.primary_style()),
             ]),
             Line::from(vec![
-                Span::styled("Type:        ", Style::default().fg(Color::Yellow)),
-                Span::styled(
-                    pkg.app_type.to_string(),
-                    Style::default().fg(match pkg.app_type {
-                        crate::package::AppType::GUI => Color::Green,
-                        crate::package::AppType::CLI => Color::Blue,
-                        crate::package::AppType::Unknown => Color::DarkGray,
-                    }),
-                ),
+                Span::styled("Type:        ", theme.label_style()),
+                Span::styled(pkg.app_type.to_string(), theme.primary_style()),
             ]),
             Line::from(vec![
-                Span::styled("Source:      ", Style::default().fg(Color::Yellow)),
-                Span::styled(pkg.source.to_string(), Style::default().fg(pkg.source.color())),
+                Span::styled("Source:      ", theme.label_style()),
+                Span::styled(pkg.source.to_string(), theme.primary_style()),
             ]),
         ];
 
         // Add install path if available
         if let Some(ref path) = pkg.install_path {
             details_lines.push(Line::from(vec![
-                Span::styled("Path:        ", Style::default().fg(Color::Yellow)),
+                Span::styled("Path:        ", theme.label_style()),
                 Span::raw(path),
             ]));
         }
@@ -82,47 +78,50 @@ pub fn render(frame: &mut Frame, app: &App) {
         match pkg.has_update {
             Some(true) => {
                 details_lines.push(Line::from(vec![
-                    Span::styled("Update:      ", Style::default().fg(Color::Yellow)),
+                    Span::styled("Update:      ", theme.label_style()),
                     Span::styled(
-                        format!("Available ({})", pkg.update_version.as_deref().unwrap_or("?")),
-                        Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+                        format!(
+                            "Available ({})",
+                            pkg.update_version.as_deref().unwrap_or("?")
+                        ),
+                        theme.success_style().add_modifier(Modifier::BOLD),
                     ),
                 ]));
             }
             Some(false) => {
                 details_lines.push(Line::from(vec![
-                    Span::styled("Update:      ", Style::default().fg(Color::Yellow)),
+                    Span::styled("Update:      ", theme.label_style()),
                     Span::raw("Up to date"),
                 ]));
             }
             None => {
                 details_lines.push(Line::from(vec![
-                    Span::styled("Update:      ", Style::default().fg(Color::Yellow)),
-                    Span::styled("Not checked", Style::default().fg(Color::DarkGray)),
+                    Span::styled("Update:      ", theme.label_style()),
+                    Span::styled("Not checked", theme.muted_style()),
                 ]));
             }
         }
 
         // Add description
         details_lines.push(Line::from(""));
-        details_lines.push(Line::from(vec![
-            Span::styled("Description:", Style::default().fg(Color::Yellow)),
-        ]));
-        
+        details_lines.push(Line::from(vec![Span::styled(
+            "Description:",
+            theme.label_style(),
+        )]));
+
         // Word-wrap description
         let desc = if pkg.description.is_empty() {
             "No description available".to_string()
         } else {
             pkg.description.clone()
         };
-        
-        details_lines.push(Line::from(vec![
-            Span::raw(desc),
-        ]));
+
+        details_lines.push(Line::from(vec![Span::raw(desc)]));
 
         let details = Paragraph::new(details_lines)
             .wrap(Wrap { trim: true })
-            .scroll((app.details_scroll, 0));
+            .scroll((app.details_scroll, 0))
+            .style(theme.base_style());
 
         frame.render_widget(details, chunks[1]);
 
@@ -134,17 +133,25 @@ pub fn render(frame: &mut Frame, app: &App) {
         };
 
         let footer = Paragraph::new(footer_text)
-            .style(Style::default().fg(Color::DarkGray))
-            .block(Block::default().borders(Borders::TOP));
+            .style(theme.muted_style())
+            .block(
+                Block::default()
+                    .borders(Borders::TOP)
+                    .border_type(BorderType::Rounded)
+                    .border_style(theme.border_style()),
+            );
 
         frame.render_widget(footer, chunks[2]);
 
         // Outer border
         let border = Block::default()
             .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
             .title(" Package Details ")
-            .border_style(Style::default().fg(Color::Cyan));
-        
+            .title_style(theme.title_style())
+            .border_style(theme.border_style())
+            .style(theme.base_style());
+
         frame.render_widget(border, area);
     }
 }
@@ -168,4 +175,110 @@ fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
             Constraint::Percentage((100 - percent_x) / 2),
         ])
         .split(popup_layout[1])[1]
+}
+
+/// Render the details view within a specific area
+pub fn render_in_area(frame: &mut Frame, app: &App, area: Rect) {
+    let theme = get_theme();
+    frame.render_widget(Clear, area);
+
+    // Fill background
+    let bg_block = Block::default().style(theme.base_style());
+    frame.render_widget(bg_block, area);
+
+    if let Some(pkg) = app.selected_package() {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .margin(1)
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Min(5),
+                Constraint::Length(3),
+            ])
+            .split(area);
+
+        // Package name as title
+        let title = Paragraph::new(Line::from(vec![
+            Span::styled(&pkg.name, theme.primary_bold()),
+            Span::raw(" "),
+            Span::styled(format!("({})", pkg.source), theme.primary_style()),
+        ]))
+        .block(
+            Block::default()
+                .borders(Borders::BOTTOM)
+                .border_type(BorderType::Rounded)
+                .border_style(theme.border_style()),
+        )
+        .style(theme.base_style());
+
+        frame.render_widget(title, chunks[0]);
+
+        // Package details
+        let size_human = pkg.size_human();
+        let mut details_lines = vec![
+            Line::from(vec![
+                Span::styled("Ver:  ", theme.label_style()),
+                Span::raw(&pkg.version),
+            ]),
+            Line::from(vec![
+                Span::styled("Size: ", theme.label_style()),
+                Span::styled(size_human, theme.primary_style()),
+            ]),
+            Line::from(vec![
+                Span::styled("Type: ", theme.label_style()),
+                Span::styled(pkg.app_type.to_string(), theme.primary_style()),
+            ]),
+        ];
+
+        if let Some(ref path) = pkg.install_path {
+            details_lines.push(Line::from(vec![
+                Span::styled("Path: ", theme.label_style()),
+                Span::raw(&path[..path.len().min(30)]),
+            ]));
+        }
+
+        details_lines.push(Line::from(""));
+        match pkg.has_update {
+            Some(true) => {
+                details_lines.push(Line::from(vec![
+                    Span::styled("Update: ", theme.label_style()),
+                    Span::styled(
+                        format!("Avail ({})", pkg.update_version.as_deref().unwrap_or("?")),
+                        theme.success_style(),
+                    ),
+                ]));
+            }
+            Some(false) => {
+                details_lines.push(Line::from(vec![
+                    Span::styled("Update: ", theme.label_style()),
+                    Span::raw("Up to date"),
+                ]));
+            }
+            None => {}
+        }
+
+        let details = Paragraph::new(details_lines)
+            .wrap(Wrap { trim: true })
+            .style(theme.base_style());
+
+        frame.render_widget(details, chunks[1]);
+
+        // Footer
+        let footer_text = if pkg.has_update == Some(true) {
+            " [Esc] Back | [d] Uninstall | [u] Update "
+        } else {
+            " [Esc] Back | [d] Uninstall "
+        };
+
+        let footer = Paragraph::new(footer_text)
+            .style(theme.muted_style())
+            .block(
+                Block::default()
+                    .borders(Borders::TOP)
+                    .border_type(BorderType::Rounded)
+                    .border_style(theme.border_style()),
+            );
+
+        frame.render_widget(footer, chunks[2]);
+    }
 }

@@ -1,46 +1,109 @@
 //! Scanner module - scans for installed packages from various sources
 
-pub mod apt;
-pub mod snap;
-pub mod flatpak;
 pub mod appimage;
+pub mod apt;
+pub mod flatpak;
+pub mod snap;
 
-use crate::package::Package;
+use crate::package::{Package, PackageSource};
 use anyhow::Result;
 use std::future::Future;
 use std::pin::Pin;
+use tokio::sync::mpsc;
 
 /// Trait for package scanners
 pub trait PackageScanner: Send + Sync {
     /// Check if this package manager is available on the system
     fn is_available(&self) -> Pin<Box<dyn Future<Output = bool> + Send + '_>>;
-    
+
     /// Scan for installed packages
     fn scan(&self) -> Pin<Box<dyn Future<Output = Result<Vec<Package>>> + Send + '_>>;
-    
+
     /// Get packages that have updates available
-    fn get_updates(&self) -> Pin<Box<dyn Future<Output = Result<Vec<(String, String)>>> + Send + '_>>;
-    
+    fn get_updates(
+        &self,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<(String, String)>>> + Send + '_>>;
+
     /// Uninstall a package
-    fn uninstall(&self, package: &Package) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>>;
-    
+    fn uninstall(&self, package: &Package)
+        -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>>;
+
     /// Update a package
     fn update(&self, package: &Package) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>>;
+
+    /// Get the source type for this scanner
+    fn source_type(&self) -> PackageSource;
+}
+
+/// Message sent from scanners during progressive loading
+#[derive(Debug)]
+pub enum ScanMessage {
+    /// A batch of packages was found
+    Packages(Vec<Package>),
+    /// Scanner started for a source
+    Started(PackageSource),
+    /// Scanner completed for a source
+    Completed(PackageSource),
+    /// All scanning done
+    Done,
+}
+
+/// Scan all available package managers and send results through channel
+pub fn scan_all_streaming() -> mpsc::Receiver<ScanMessage> {
+    let (tx, rx) = mpsc::channel(100);
+
+    tokio::spawn(async move {
+        use tokio::task::JoinSet;
+
+        let scanners: Vec<Box<dyn PackageScanner>> = vec![
+            Box::new(apt::AptScanner::new()),
+            Box::new(snap::SnapScanner::new()),
+            Box::new(flatpak::FlatpakScanner::new()),
+            Box::new(appimage::AppImageScanner::new()),
+        ];
+
+        let mut join_set = JoinSet::new();
+
+        for scanner in scanners {
+            let tx = tx.clone();
+            join_set.spawn(async move {
+                let source = scanner.source_type();
+                let _ = tx.send(ScanMessage::Started(source)).await;
+
+                if scanner.is_available().await {
+                    if let Ok(packages) = scanner.scan().await {
+                        if !packages.is_empty() {
+                            let _ = tx.send(ScanMessage::Packages(packages)).await;
+                        }
+                    }
+                }
+
+                let _ = tx.send(ScanMessage::Completed(source)).await;
+            });
+        }
+
+        // Wait for all scanners to complete
+        while join_set.join_next().await.is_some() {}
+
+        let _ = tx.send(ScanMessage::Done).await;
+    });
+
+    rx
 }
 
 /// Scan all available package managers in parallel
 pub async fn scan_all() -> Result<Vec<Package>> {
     use tokio::task::JoinSet;
-    
+
     let scanners: Vec<Box<dyn PackageScanner>> = vec![
         Box::new(apt::AptScanner::new()),
         Box::new(snap::SnapScanner::new()),
         Box::new(flatpak::FlatpakScanner::new()),
         Box::new(appimage::AppImageScanner::new()),
     ];
-    
+
     let mut join_set = JoinSet::new();
-    
+
     for scanner in scanners {
         join_set.spawn(async move {
             if scanner.is_available().await {
@@ -50,31 +113,31 @@ pub async fn scan_all() -> Result<Vec<Package>> {
             }
         });
     }
-    
+
     let mut all_packages = Vec::new();
-    
+
     while let Some(result) = join_set.join_next().await {
         if let Ok(packages) = result {
             all_packages.extend(packages);
         }
     }
-    
+
     Ok(all_packages)
 }
 
 /// Check for updates across all package managers
 pub async fn check_all_updates(packages: &mut [Package]) -> Result<()> {
-    use tokio::task::JoinSet;
     use std::collections::HashMap;
-    
+    use tokio::task::JoinSet;
+
     let scanners: Vec<Box<dyn PackageScanner>> = vec![
         Box::new(apt::AptScanner::new()),
         Box::new(snap::SnapScanner::new()),
         Box::new(flatpak::FlatpakScanner::new()),
     ];
-    
+
     let mut join_set = JoinSet::new();
-    
+
     for scanner in scanners {
         join_set.spawn(async move {
             if scanner.is_available().await {
@@ -84,9 +147,9 @@ pub async fn check_all_updates(packages: &mut [Package]) -> Result<()> {
             }
         });
     }
-    
+
     let mut updates_map: HashMap<String, String> = HashMap::new();
-    
+
     while let Some(result) = join_set.join_next().await {
         if let Ok(updates) = result {
             for (name, version) in updates {
@@ -94,7 +157,7 @@ pub async fn check_all_updates(packages: &mut [Package]) -> Result<()> {
             }
         }
     }
-    
+
     // Mark packages with updates
     for package in packages.iter_mut() {
         if let Some(new_version) = updates_map.get(&package.name) {
@@ -104,7 +167,7 @@ pub async fn check_all_updates(packages: &mut [Package]) -> Result<()> {
             package.has_update = Some(false);
         }
     }
-    
+
     Ok(())
 }
 

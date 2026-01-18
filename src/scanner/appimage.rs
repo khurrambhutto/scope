@@ -18,10 +18,7 @@ impl AppImageScanner {
 
     /// Get common directories where AppImages might be stored
     fn get_search_directories() -> Vec<PathBuf> {
-        let mut dirs = vec![
-            PathBuf::from("/opt"),
-            PathBuf::from("/usr/local/bin"),
-        ];
+        let mut dirs = vec![PathBuf::from("/opt"), PathBuf::from("/usr/local/bin")];
 
         // Add user-specific directories
         if let Ok(home) = std::env::var("HOME") {
@@ -66,7 +63,9 @@ impl AppImageScanner {
     /// Extract version from AppImage filename if possible
     fn extract_version(filename: &str) -> String {
         // Common patterns: App-1.2.3.AppImage, App_v1.2.3_x86_64.AppImage
-        let name = filename.trim_end_matches(".AppImage").trim_end_matches(".appimage");
+        let name = filename
+            .trim_end_matches(".AppImage")
+            .trim_end_matches(".appimage");
 
         // Try to find version pattern
         let patterns = [
@@ -114,6 +113,10 @@ impl AppImageScanner {
 }
 
 impl PackageScanner for AppImageScanner {
+    fn source_type(&self) -> PackageSource {
+        PackageSource::AppImage
+    }
+
     fn is_available(&self) -> Pin<Box<dyn Future<Output = bool> + Send + '_>> {
         Box::pin(async { true }) // Always available - just scans filesystem
     }
@@ -176,7 +179,10 @@ impl PackageScanner for AppImageScanner {
         })
     }
 
-    fn uninstall(&self, package: &Package) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
+    fn uninstall(
+        &self,
+        package: &Package,
+    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
         let path = package.install_path.clone();
         Box::pin(async move {
             if let Some(path) = path {
@@ -191,7 +197,11 @@ impl PackageScanner for AppImageScanner {
                         use tokio::io::AsyncReadExt;
                         while let Ok(Some(entry)) = entries.next_entry().await {
                             let entry_path = entry.path();
-                            if entry_path.extension().map(|e| e == "desktop").unwrap_or(false) {
+                            if entry_path
+                                .extension()
+                                .map(|e| e == "desktop")
+                                .unwrap_or(false)
+                            {
                                 if let Ok(mut file) = fs::File::open(&entry_path).await {
                                     let mut contents = String::new();
                                     if file.read_to_string(&mut contents).await.is_ok() {

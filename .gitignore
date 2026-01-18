@@ -1,1 +1,19 @@
+# Build artifacts
 /target
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Cargo lock is typically committed for binaries
+# Cargo.lock

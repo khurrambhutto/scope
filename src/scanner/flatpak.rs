@@ -17,6 +17,10 @@ impl FlatpakScanner {
 }
 
 impl PackageScanner for FlatpakScanner {
+    fn source_type(&self) -> PackageSource {
+        PackageSource::Flatpak
+    }
+
     fn is_available(&self) -> Pin<Box<dyn Future<Output = bool> + Send + '_>> {
         Box::pin(async { Path::new("/usr/bin/flatpak").exists() })
     }
@@ -96,7 +100,10 @@ impl PackageScanner for FlatpakScanner {
         })
     }
 
-    fn uninstall(&self, package: &Package) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
+    fn uninstall(
+        &self,
+        package: &Package,
+    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
         let app_id = package.install_path.clone().unwrap_or(package.name.clone());
         Box::pin(async move {
             let status = Command::new("flatpak")
