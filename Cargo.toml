@@ -48,3 +48,14 @@ glob = "0.3"
 opt-level = 3
 lto = true
 strip = true
+
+[package.metadata.deb]
+maintainer = "Khurram Bhutto <khurrambhutto@github>"
+copyright = "2025, Khurram Bhutto"
+license-file = ["LICENSE", "0"]
+extended-description = "A beautiful TUI for managing Linux packages across APT, Snap, Flatpak, and AppImage."
+section = "utils"
+priority = "optional"
+assets = [
+    ["target/release/scope", "usr/bin/", "755"],
+]
