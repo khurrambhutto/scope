@@ -28,52 +28,10 @@ pub fn render(frame: &mut Frame, app: &App) {
     render_footer(frame, chunks[2], app);
 }
 
-/// Render header with source tabs and stats
+/// Render header with source tabs
 fn render_header(frame: &mut Frame, area: Rect, app: &App) {
-    let theme = get_theme();
-
-    // Split header into tabs and stats
-    let header_chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Length(45), // Tabs
-            Constraint::Min(10),    // Stats
-        ])
-        .split(area);
-
-    // Render source tabs
-    render_source_tabs(frame, header_chunks[0], app);
-
-    // Render stats on the right
-    let (total, apt, snap, flatpak, appimage) = app.get_stats();
-
-    let mut spans = vec![Span::styled(
-        format!(" {} pkgs", total),
-        theme.primary_bold(),
-    )];
-
-    // Show counts by source (compact)
-    spans.push(Span::styled(
-        format!(" A:{} S:{} F:{} I:{}", apt, snap, flatpak, appimage),
-        theme.muted_style(),
-    ));
-
-    // Show scanning status
-    if app.is_scanning() {
-        spans.push(Span::raw(" "));
-        spans.push(Span::styled(app.get_scan_status(), theme.success_style()));
-    }
-
-    let stats = Paragraph::new(Line::from(spans))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .border_style(theme.border_style()),
-        )
-        .style(theme.base_style());
-
-    frame.render_widget(stats, header_chunks[1]);
+    // Render source tabs (full width)
+    render_source_tabs(frame, area, app);
 }
 
 /// Render source filter tabs
@@ -165,11 +123,9 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
                 .title(format!(
-                    " Packages ({}/{}) - Sort: {} - Filter: {} ",
+                    " Packages ({}/{}) ",
                     app.filtered_packages.len(),
                     app.packages.len(),
-                    app.sort_criteria.label(),
-                    app.app_type_filter.label()
                 ))
                 .title_style(theme.title_style())
                 .border_style(theme.border_style()),
@@ -221,8 +177,8 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
 
     frame.render_widget(search_box, footer_chunks[0]);
 
-    // Help text on the right
-    let help_text = " [Tab] Source | [d] Del | [s] Sort | [q] Quit ";
+    // Help text on the right - minimal, clean
+    let help_text = " [Enter] Details | [Tab] Source | [q] Quit ";
 
     let footer = Paragraph::new(help_text).style(theme.muted_style()).block(
         Block::default()

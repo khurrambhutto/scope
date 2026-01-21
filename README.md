@@ -17,120 +17,64 @@ A beautiful terminal user interface (TUI) for managing Linux packages across mul
 - **Beautiful TUI** - Modern terminal interface with:
   - Retro Warmth color theme (Gruvbox-inspired)
   - Real-time package scanning with streaming updates
-  - Responsive keyboard navigation
+  - Clean, minimal design
 
 - **Powerful Package Management**:
   - 🔍 **Real-time search** - Type to filter packages instantly
-  - 📊 **Multiple sort options** - By size, name, or source
-  - 🏷️ **Filter by type** - GUI apps, CLI tools, or all
-  - 🗑️ **Uninstall packages** - With confirmation dialog
+  - 🗑️ **Uninstall packages** - From the details view
   - 🔄 **Check for updates** - Batch update support
 
 ## 📸 Screenshot
 
-```
-┌─ SCOPE ─────────────────────────────────────────────────────────────────────┐
-│  ┌─────────────────────────────────────────────────────────────────────────┐│
-│  │ > Apps         │ All │ APT │ Snap │ Flatpak │ AppImage │  172 pkgs     ││
-│  │   Updates      ├─────────────────────────────────────────────────────────┤│
-│  │   Clean        │ Packages (163/172) - Sort: Size (largest first)        ││
-│  │                │─────────────────────────────────────────────────────────││
-│  │                │   Name                 Source    Type   Size           ││
-│  │                │ > antigravity          apt       GUI    710.13 MiB     ││
-│  │                │   obsidian             flatpak   GUI    636.70 MiB     ││
-│  │                │   cursor               apt       GUI    582.91 MiB     ││
-│  │                │   google-chrome        apt       GUI    378.72 MiB     ││
-│  │                │   docker.io            apt       CLI    104.38 MiB     ││
-│  └─────────────────────────────────────────────────────────────────────────┘│
-│  ┌─────────────────────────────────────────────────────────────────────────┐│
-│  │ Search...                    │ [Tab] Source │ [d] Del │ [s] Sort       ││
-│  └─────────────────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+![Scope Screenshot](image.png)
 
-## 🚀 Installation
+## 🗺️ Roadmap
 
-### Prerequisites
+### ✅ Completed
+- [x] Package scanning (APT, Snap, Flatpak, AppImage)
+- [x] Real-time search
+- [x] Uninstall packages (APT, Snap, Flatpak)
 
-- Rust 1.70 or higher
-- Linux operating system
-- Package managers you want to manage (apt, snap, flatpak, etc.)
+### 🚧 In Progress
+- [ ] AppImage deletion support
 
-### Build from Source
+### 📋 Planned
+- [ ] Package updates
+- [ ] Package installation
+- [ ] Clear cache
 
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/scope.git
-cd scope
-
-# Build release version
-cargo build --release
-
-# Run the application
-./target/release/scope
-```
-
-### Install Globally
-
-```bash
-# Install to ~/.cargo/bin
-cargo install --path .
-
-# Or copy to /usr/local/bin
-sudo cp ./target/release/scope /usr/local/bin/
-```
 
 ## ⌨️ Keyboard Shortcuts
 
-### Navigation
+### Main View
 
 | Key | Action |
 |-----|--------|
 | `↑` / `k` | Move up |
 | `↓` / `j` | Move down |
 | `←` / `h` | Focus sidebar |
-| `→` / `l` | Exit sidebar |
-| `Enter` | Select / View details |
+| `Enter` | View package details |
 | `Tab` | Next source filter |
 | `Shift+Tab` | Previous source filter |
 | `Home` / `g` | Jump to first |
 | `End` / `G` | Jump to last |
 | `PageUp` / `PageDown` | Page navigation |
+| `Esc` | Clear search / Quit |
+| `q` | Quit application |
 
-### Actions
+### Details View
 
 | Key | Action |
 |-----|--------|
-| `d` | Delete/Uninstall package |
-| `s` | Toggle sort mode |
-| `f` | Toggle filter (All/GUI/CLI) |
-| `r` | Refresh package list |
-| `Esc` | Clear search / Go back / Quit |
-| `q` | Quit application |
+| `d` | Uninstall package |
+| `u` | Update package (if available) |
+| `Esc` | Go back to main view |
 
 ### Search
 
 Just start typing to filter packages in real-time. Press `Esc` to clear the search.
 
-### Updates Section
 
-Navigate to the **Updates** section in the sidebar and press `Enter` to:
-1. Check all packages for available updates
-2. Select which packages to update
-3. Batch update selected packages
-
-## 🎨 Color Theme
-
-Scope uses a **Retro Warmth** color palette inspired by Gruvbox:
-
-| Element | Color | Purpose |
-|---------|-------|---------|
-| Background | `#1d2021` | Soft dark background |
-| Primary Text | `#ebdbb2` | Warm cream for main content |
-| Secondary Text | `#d5c4a1` | Muted beige for metadata |
-| Borders | `#b8bb26` | Yellow-green accents |
-| CLI Indicator | `#fe8019` | Orange for CLI apps |
-| Warnings/Errors | `#fb4934` | Red for alerts |
 
 ## 📁 Project Structure
 
@@ -180,12 +124,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+## Author 
+Khurram Bhutto 
+https://github.com/khurrambhutto
 
-- Inspired by tools like `htop`, `lazygit`, and `ncdu`
-- Color palette based on [Gruvbox](https://github.com/morhetz/gruvbox)
-- Built with the amazing [Ratatui](https://ratatui.rs/) library
-
----
-
-Made with ❤️ and Rust 🦀
