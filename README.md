@@ -14,15 +14,7 @@ A beautiful terminal user interface (TUI) for managing Linux packages across mul
   - 📱 **Flatpak**
   - 🖼️ **AppImage**
 
-- **Beautiful TUI** - Modern terminal interface with:
-  - Retro Warmth color theme (Gruvbox-inspired)
-  - Real-time package scanning with streaming updates
-  - Clean, minimal design
 
-- **Powerful Package Management**:
-  - 🔍 **Real-time search** - Type to filter packages instantly
-  - 🗑️ **Uninstall packages** - From the details view
-  - 🔄 **Check for updates** - Batch update support
 
 ## 📸 Screenshot
 

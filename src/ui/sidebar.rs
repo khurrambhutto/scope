@@ -38,14 +38,26 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     };
 
     // Sidebar sections
-    let sections = [SidebarSection::Apps, SidebarSection::Updates, SidebarSection::Clean];
+    let sections = [
+        SidebarSection::Delete,
+        SidebarSection::Update,
+        SidebarSection::Install,
+        SidebarSection::Clean,
+    ];
 
     let mut lines: Vec<Line> = Vec::new();
 
-    // Add some top padding
-    lines.push(Line::from(""));
+    // Calculate vertical centering (account for spacing between items)
+    let section_count = sections.len() as u16;
+    let total_lines = section_count * 2; // Each item + spacing
+    let top_padding = inner_area.height.saturating_sub(total_lines + 2) / 3;
+    
+    // Add top padding for centering
+    for _ in 0..top_padding {
+        lines.push(Line::from(""));
+    }
 
-    for section in sections.iter() {
+    for (i, section) in sections.iter().enumerate() {
         let is_selected = *section == app.sidebar_section;
 
         let style = if is_selected {
@@ -54,61 +66,39 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
             theme.sidebar_style()
         };
 
-        // Icon based on section
+        // Icon based on selection
         let icon = if is_selected { ">" } else { " " };
 
-        // Create the menu item line with optional badge for Updates
-        let line = if *section == SidebarSection::Updates {
-            let update_count = app.get_update_count();
-            if update_count > 0 {
-                Line::from(vec![
-                    Span::styled(
-                        format!(" {} {} ", icon, section.label()),
-                        style.add_modifier(if is_selected {
-                            Modifier::BOLD
-                        } else {
-                            Modifier::empty()
-                        }),
-                    ),
-                    Span::styled(
-                        format!("[{}]", update_count),
-                        theme.warning_style().add_modifier(Modifier::BOLD),
-                    ),
-                ])
+        // Create the menu item line (left aligned with small indent)
+        let label = format!("  {} {}", icon, section.label());
+        
+        let line = Line::from(vec![Span::styled(
+            label,
+            style.add_modifier(if is_selected {
+                Modifier::BOLD
             } else {
-                Line::from(vec![Span::styled(
-                    format!(" {} {} ", icon, section.label()),
-                    style.add_modifier(if is_selected {
-                        Modifier::BOLD
-                    } else {
-                        Modifier::empty()
-                    }),
-                )])
-            }
-        } else {
-            Line::from(vec![Span::styled(
-                format!(" {} {} ", icon, section.label()),
-                style.add_modifier(if is_selected {
-                    Modifier::BOLD
-                } else {
-                    Modifier::empty()
-                }),
-            )])
-        };
+                Modifier::empty()
+            }),
+        )]);
 
         lines.push(line);
+        
+        // Add spacing between items (except after last item)
+        if i < sections.len() - 1 {
+            lines.push(Line::from(""));
+        }
     }
 
-    // Add hint at bottom for navigation
+    // Add hint at bottom for navigation (only when focused)
     if app.sidebar_focused {
         // Add spacing before hint
         let remaining_height = inner_area.height.saturating_sub(lines.len() as u16 + 2);
         for _ in 0..remaining_height {
             lines.push(Line::from(""));
         }
-        lines.push(Line::from(Span::styled(" [j/k] Nav", theme.muted_style())));
+        lines.push(Line::from(Span::styled("   [j/k] Nav", theme.muted_style())));
         lines.push(Line::from(Span::styled(
-            " [Enter] Select",
+            "   [Enter] Select",
             theme.muted_style(),
         )));
     }

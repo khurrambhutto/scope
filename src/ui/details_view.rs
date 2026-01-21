@@ -187,70 +187,74 @@ pub fn render_in_area(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(bg_block, area);
 
     if let Some(pkg) = app.selected_package() {
+        // Calculate content height to center it
+        let content_lines = 6; // title + details lines
+        let footer_height = 2;
+        let total_content = content_lines + footer_height;
+        let available_height = area.height.saturating_sub(2); // margin
+        let top_padding = available_height.saturating_sub(total_content as u16) / 3;
+        
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .margin(1)
             .constraints([
-                Constraint::Length(3),
-                Constraint::Min(5),
-                Constraint::Length(3),
+                Constraint::Length(top_padding.max(1)),      // Top padding
+                Constraint::Length(2),                       // Title
+                Constraint::Length(content_lines as u16),    // Content
+                Constraint::Length(1),                       // Small gap
+                Constraint::Length(1),                       // Footer
+                Constraint::Min(0),                          // Bottom space
             ])
             .split(area);
 
-        // Package name as title
+        // Package name as title (centered, no underline)
         let title = Paragraph::new(Line::from(vec![
             Span::styled(&pkg.name, theme.primary_bold()),
             Span::raw(" "),
             Span::styled(format!("({})", pkg.source), theme.primary_style()),
         ]))
-        .block(
-            Block::default()
-                .borders(Borders::BOTTOM)
-                .border_type(BorderType::Rounded)
-                .border_style(theme.border_style()),
-        )
+        .alignment(ratatui::layout::Alignment::Center)
         .style(theme.base_style());
 
-        frame.render_widget(title, chunks[0]);
+        frame.render_widget(title, chunks[1]);
 
-        // Package details
+        // Package details (centered)
         let size_human = pkg.size_human();
         let mut details_lines = vec![
             Line::from(vec![
-                Span::styled("Ver:  ", theme.label_style()),
+                Span::styled("Version:  ", theme.label_style()),
                 Span::raw(&pkg.version),
             ]),
             Line::from(vec![
-                Span::styled("Size: ", theme.label_style()),
+                Span::styled("Size:     ", theme.label_style()),
                 Span::styled(size_human, theme.primary_style()),
             ]),
             Line::from(vec![
-                Span::styled("Type: ", theme.label_style()),
+                Span::styled("Type:     ", theme.label_style()),
                 Span::styled(pkg.app_type.to_string(), theme.primary_style()),
             ]),
         ];
 
         if let Some(ref path) = pkg.install_path {
             details_lines.push(Line::from(vec![
-                Span::styled("Path: ", theme.label_style()),
-                Span::raw(&path[..path.len().min(30)]),
+                Span::styled("Path:     ", theme.label_style()),
+                Span::raw(&path[..path.len().min(40)]),
             ]));
         }
 
-        details_lines.push(Line::from(""));
         match pkg.has_update {
             Some(true) => {
                 details_lines.push(Line::from(vec![
-                    Span::styled("Update: ", theme.label_style()),
+                    Span::styled("Update:   ", theme.label_style()),
                     Span::styled(
-                        format!("Avail ({})", pkg.update_version.as_deref().unwrap_or("?")),
+                        format!("Available ({})", pkg.update_version.as_deref().unwrap_or("?")),
                         theme.success_style(),
                     ),
                 ]));
             }
             Some(false) => {
                 details_lines.push(Line::from(vec![
-                    Span::styled("Update: ", theme.label_style()),
+                    Span::styled("Update:   ", theme.label_style()),
                     Span::raw("Up to date"),
                 ]));
             }
@@ -258,27 +262,23 @@ pub fn render_in_area(frame: &mut Frame, app: &App, area: Rect) {
         }
 
         let details = Paragraph::new(details_lines)
+            .alignment(ratatui::layout::Alignment::Center)
             .wrap(Wrap { trim: true })
             .style(theme.base_style());
 
-        frame.render_widget(details, chunks[1]);
+        frame.render_widget(details, chunks[2]);
 
-        // Footer
+        // Footer (centered, no border)
         let footer_text = if pkg.has_update == Some(true) {
-            " [Esc] Back | [d] Uninstall | [u] Update "
+            "[Esc] Back  |  [d] Uninstall  |  [u] Update"
         } else {
-            " [Esc] Back | [d] Uninstall "
+            "[Esc] Back  |  [d] Uninstall"
         };
 
         let footer = Paragraph::new(footer_text)
-            .style(theme.muted_style())
-            .block(
-                Block::default()
-                    .borders(Borders::TOP)
-                    .border_type(BorderType::Rounded)
-                    .border_style(theme.border_style()),
-            );
+            .alignment(ratatui::layout::Alignment::Center)
+            .style(theme.muted_style());
 
-        frame.render_widget(footer, chunks[2]);
+        frame.render_widget(footer, chunks[4]);
     }
 }

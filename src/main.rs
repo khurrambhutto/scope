@@ -17,7 +17,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{backend::CrosstermBackend, layout::Rect, Terminal};
-use std::io;
+use std::io::{self, Write};
 use std::time::Duration;
 
 // Configuration for the floating window
@@ -26,6 +26,14 @@ const WINDOW_HEIGHT: u16 = 35;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Resize terminal window to our preferred size
+    // Using ANSI escape sequence: ESC[8;height;widtht
+    print!("\x1b[8;{};{}t", WINDOW_HEIGHT, WINDOW_WIDTH);
+    io::stdout().flush()?;
+    
+    // Small delay to let terminal resize
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    
     // Setup terminal with alternate screen
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -147,15 +155,18 @@ async fn handle_main_input(app: &mut App, key: KeyCode, modifiers: KeyModifiers)
                 
                 // Handle section-specific actions
                 match section {
-                    SidebarSection::Updates => {
+                    SidebarSection::Delete => {
+                        // Delete section - just shows the main package view
+                    }
+                    SidebarSection::Update => {
                         // Check for updates first, then show selection
                         app.check_updates().await?;
                         if app.get_update_count() > 0 {
                             app.show_update_selection();
                         }
                     }
-                    SidebarSection::Apps | SidebarSection::Clean => {
-                        // Apps and Clean just switch sections (already done)
+                    SidebarSection::Install | SidebarSection::Clean => {
+                        // Install and Clean - placeholder for future features
                     }
                 }
             }
