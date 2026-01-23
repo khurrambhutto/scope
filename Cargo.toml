@@ -1,6 +1,6 @@
 [package]
 name = "scope"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "A TUI application for managing Linux packages across multiple package managers"
 authors = ["Khurram"]
@@ -43,6 +43,12 @@ regex = "1.10"
 
 # Glob patterns
 glob = "0.3"
+
+# HTTP client for self-update
+reqwest = { version = "0.12", features = ["json", "blocking"] }
+
+# Version comparison
+semver = "1.0"
 
 [profile.release]
 opt-level = 3

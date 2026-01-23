@@ -8,9 +8,11 @@ mod package;
 mod scanner;
 pub mod theme;
 mod ui;
+mod updater;
 
 use anyhow::Result;
 use app::{App, ConfirmAction, SidebarSection, View};
+use clap::Parser;
 use crossterm::{
     event::{self, Event, KeyCode, KeyModifiers},
     execute,
@@ -24,8 +26,49 @@ use std::time::Duration;
 const WINDOW_WIDTH: u16 = 100;
 const WINDOW_HEIGHT: u16 = 35;
 
+/// Scope - A beautiful TUI for managing Linux packages
+#[derive(Parser)]
+#[command(name = "scope")]
+#[command(version = env!("CARGO_PKG_VERSION"))]
+#[command(about = "A TUI for managing Linux packages across APT, Snap, Flatpak, and AppImage")]
+struct Cli {
+    /// Check for updates and install if available
+    #[arg(short, long)]
+    update: bool,
+
+    /// Check if an update is available (non-interactive)
+    #[arg(long)]
+    check_update: bool,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
+    let cli = Cli::parse();
+
+    // Handle update commands before starting TUI
+    if cli.update {
+        return updater::check_and_update(false);
+    }
+
+    if cli.check_update {
+        match updater::check_update_available() {
+            Ok(Some(version)) => {
+                println!("Update available: {}", version);
+                println!("Run 'scope --update' to install");
+                std::process::exit(0);
+            }
+            Ok(None) => {
+                println!("You're running the latest version (v{})", updater::current_version());
+                std::process::exit(0);
+            }
+            Err(e) => {
+                eprintln!("Failed to check for updates: {}", e);
+                std::process::exit(1);
+            }
+        }
+    }
+
+    // Normal TUI startup
     // Resize terminal window to our preferred size
     // Using ANSI escape sequence: ESC[8;height;widtht
     print!("\x1b[8;{};{}t", WINDOW_HEIGHT, WINDOW_WIDTH);
@@ -58,6 +101,7 @@ async fn main() -> Result<()> {
 
     Ok(())
 }
+
 
 /// Calculate the window area in top-left corner
 fn calculate_window_area(terminal_size: Rect) -> Rect {

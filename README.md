@@ -6,35 +6,66 @@ A beautiful terminal user interface (TUI) for managing Linux packages across mul
 ![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-Linux-green?style=flat-square&logo=linux)
 
-## ✨ Features
-
-- **Multi-Package Manager Support** - Manage packages from:
-  - 📦 **APT** (Debian/Ubuntu)
-  - 🔶 **Snap**
-  - 📱 **Flatpak**
-  - 🖼️ **AppImage**
-
-
+---
 
 ## 📸 Screenshot
 
 ![Scope Screenshot](image.png)
 
-## 🗺️ Roadmap
+---
 
-### ✅ Completed
-- [x] Package scanning (APT, Snap, Flatpak, AppImage)
-- [x] Real-time search
-- [x] Uninstall packages (APT, Snap, Flatpak)
-- [x] AppImage deletion support
+## ✨ Features
 
-### 🚧 In Progress
+- **Multi-Package Manager Support**
+  - 📦 **APT** (Debian/Ubuntu)
+  - 🔶 **Snap**
+  - 📱 **Flatpak**
+  - 🖼️ **AppImage**
 
-### 📋 Planned
-- [ ] Package updates
-- [ ] Package installation
-- [ ] Clear cache
+- **Real-time Search** - Type to filter packages instantly
+- **Package Management** - View details, uninstall packages
+- **Self-Update** - Built-in update mechanism
+- **Beautiful UI** - Modern TUI with smooth navigation
 
+---
+
+## � Installation
+
+### From Release
+```bash
+# Download the latest release
+wget https://github.com/khurrambhutto/scope/releases/latest/download/scope
+chmod +x scope
+sudo mv scope /usr/local/bin/
+```
+
+### From .deb Package
+```bash
+wget https://github.com/khurrambhutto/scope/releases/latest/download/scope_0.1.1-1_amd64.deb
+sudo dpkg -i scope_0.1.1-1_amd64.deb
+```
+
+### From Source
+```bash
+git clone https://github.com/khurrambhutto/scope.git
+cd scope
+cargo build --release
+sudo cp target/release/scope /usr/local/bin/
+```
+
+---
+
+## � Usage
+
+```bash
+scope                 # Launch the TUI
+scope --update        # Check and install updates
+scope --check-update  # Check if update available
+scope --version       # Show version
+scope --help          # Show help
+```
+
+---
 
 ## ⌨️ Keyboard Shortcuts
 
@@ -50,73 +81,99 @@ A beautiful terminal user interface (TUI) for managing Linux packages across mul
 | `Shift+Tab` | Previous source filter |
 | `Home` / `g` | Jump to first |
 | `End` / `G` | Jump to last |
-| `PageUp` / `PageDown` | Page navigation |
+| `PageUp/Down` | Page navigation |
 | `Esc` | Clear search / Quit |
-| `q` | Quit application |
+| `q` | Quit |
 
 ### Details View
 
 | Key | Action |
 |-----|--------|
 | `d` | Uninstall package |
-| `u` | Update package (if available) |
-| `Esc` | Go back to main view |
+| `u` | Update package |
+| `Esc` | Go back |
 
 ### Search
 
-Just start typing to filter packages in real-time. Press `Esc` to clear the search.
+Just start typing to filter packages in real-time. Press `Esc` to clear.
 
+---
 
+## 🗺️ Roadmap
 
-## 📁 Project Structure
+### ✅ Completed
+- [x] Package scanning (APT, Snap, Flatpak, AppImage)
+- [x] Real-time search
+- [x] Uninstall packages (APT, Snap, Flatpak, AppImage)
+- [x] Self-update mechanism
+
+### � Planned
+- [ ] Package updates (batch update)
+- [ ] Package installation
+- [ ] Cache cleanup
+
+---
+
+## �📁 Project Structure
 
 ```
 scope/
-├── Cargo.toml          # Project configuration
+├── Cargo.toml
 ├── src/
-│   ├── main.rs         # Entry point and event handling
-│   ├── app.rs          # Application state management
+│   ├── main.rs         # Entry point & CLI
+│   ├── app.rs          # Application state
 │   ├── package.rs      # Package data structures
-│   ├── theme.rs        # Color theme definitions
-│   ├── scanner/        # Package manager scanners
-│   │   ├── mod.rs      # Scanner coordinator
-│   │   ├── apt.rs      # APT scanner
-│   │   ├── snap.rs     # Snap scanner
-│   │   ├── flatpak.rs  # Flatpak scanner
-│   │   └── appimage.rs # AppImage scanner
-│   └── ui/             # User interface components
-│       ├── mod.rs      # UI coordinator
-│       ├── main_view.rs    # Package list view
-│       ├── sidebar.rs      # Navigation sidebar
-│       ├── details_view.rs # Package details
-│       └── dialogs.rs      # Confirmation dialogs
+│   ├── theme.rs        # Color theme
+│   ├── updater.rs      # Self-update logic
+│   ├── scanner/        # Package scanners
+│   │   ├── mod.rs
+│   │   ├── apt.rs
+│   │   ├── snap.rs
+│   │   ├── flatpak.rs
+│   │   └── appimage.rs
+│   └── ui/             # UI components
+│       ├── mod.rs
+│       ├── main_view.rs
+│       ├── sidebar.rs
+│       ├── details_view.rs
+│       └── dialogs.rs
 └── README.md
 ```
 
+---
+
 ## 🔧 Dependencies
 
-- **[ratatui](https://github.com/ratatui-org/ratatui)** - Terminal UI framework
-- **[crossterm](https://github.com/crossterm-rs/crossterm)** - Terminal manipulation
-- **[tokio](https://tokio.rs/)** - Async runtime
-- **[serde](https://serde.rs/)** - Serialization
-- **[fuzzy-matcher](https://crates.io/crates/fuzzy-matcher)** - Fuzzy search
-- **[humansize](https://crates.io/crates/humansize)** - Human-readable sizes
+| Crate | Purpose |
+|-------|---------|
+| [ratatui](https://github.com/ratatui-org/ratatui) | Terminal UI framework |
+| [crossterm](https://github.com/crossterm-rs/crossterm) | Terminal manipulation |
+| [tokio](https://tokio.rs/) | Async runtime |
+| [clap](https://clap.rs/) | CLI argument parsing |
+| [reqwest](https://docs.rs/reqwest) | HTTP client (for updates) |
+| [semver](https://docs.rs/semver) | Version comparison |
+
+---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions welcome! 
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
+---
+
 ## 📝 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE) for details.
 
-## Author 
-Khurram Bhutto 
-https://github.com/khurrambhutto
+---
 
+## 👤 Author
+
+**Khurram Bhutto**  
+GitHub: [@khurrambhutto](https://github.com/khurrambhutto)
