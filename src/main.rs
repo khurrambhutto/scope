@@ -301,15 +301,16 @@ async fn handle_confirm_input(
                     // Extract needed data before borrowing
                     let pkg_info = app
                         .selected_package()
-                        .map(|pkg| (pkg.name.clone(), pkg.source, app.selected));
+                        .map(|pkg| (pkg.name.clone(), pkg.source, pkg.install_path.clone(), app.selected));
 
-                    if let Some((name, source, selected_idx)) = pkg_info {
+                    if let Some((name, source, install_path, selected_idx)) = pkg_info {
                         let scanner = scanner::get_scanner(source);
                         app.loading_message = format!("Uninstalling {}...", name);
                         app.view = View::Loading;
 
                         // Create a temporary package for uninstall
-                        let temp_pkg = crate::package::Package::new(name.clone(), source);
+                        let mut temp_pkg = crate::package::Package::new(name.clone(), source);
+                        temp_pkg.install_path = install_path;
 
                         // Leave alternate screen for pkexec to show its UI
                         disable_raw_mode()?;

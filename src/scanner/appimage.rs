@@ -34,24 +34,28 @@ impl AppImageScanner {
 
     /// Check if a file is an AppImage by checking magic bytes or extension
     async fn is_appimage(path: &Path) -> bool {
-        // Check extension first
+        // Check extension first - most reliable indicator
         if let Some(ext) = path.extension() {
             if ext.to_string_lossy().to_lowercase() == "appimage" {
                 return true;
             }
         }
 
-        // Check magic bytes: AppImages start with ELF header and contain "AI" magic
+        // Check magic bytes: AppImages have ELF header + "AI" signature at offset 8
+        // AppImage Type 1: offset 8 contains 0x41 0x49 0x01 ("AI" + version 1)
+        // AppImage Type 2: offset 8 contains 0x41 0x49 0x02 ("AI" + version 2)
         if let Ok(mut file) = fs::File::open(path).await {
             use tokio::io::AsyncReadExt;
             let mut buffer = [0u8; 16];
             if file.read_exact(&mut buffer).await.is_ok() {
-                // ELF magic number
+                // Must have ELF magic number first
                 if &buffer[0..4] == b"\x7fELF" {
-                    // Could be an AppImage - check if executable
-                    if let Ok(metadata) = fs::metadata(path).await {
-                        use std::os::unix::fs::PermissionsExt;
-                        return metadata.permissions().mode() & 0o111 != 0;
+                    // Check for AppImage signature "AI" at offset 8
+                    if buffer[8] == 0x41 && buffer[9] == 0x49 {
+                        // Valid AppImage Type 1 or Type 2
+                        if buffer[10] == 0x01 || buffer[10] == 0x02 {
+                            return true;
+                        }
                     }
                 }
             }

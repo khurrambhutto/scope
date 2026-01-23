@@ -26,9 +26,9 @@ A beautiful terminal user interface (TUI) for managing Linux packages across mul
 - [x] Package scanning (APT, Snap, Flatpak, AppImage)
 - [x] Real-time search
 - [x] Uninstall packages (APT, Snap, Flatpak)
+- [x] AppImage deletion support
 
 ### 🚧 In Progress
-- [ ] AppImage deletion support
 
 ### 📋 Planned
 - [ ] Package updates
