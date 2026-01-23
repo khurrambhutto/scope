@@ -29,32 +29,6 @@ A beautiful terminal user interface (TUI) for managing Linux packages across mul
 
 ---
 
-## � Installation
-
-### From Release
-```bash
-# Download the latest release
-wget https://github.com/khurrambhutto/scope/releases/latest/download/scope
-chmod +x scope
-sudo mv scope /usr/local/bin/
-```
-
-### From .deb Package
-```bash
-wget https://github.com/khurrambhutto/scope/releases/latest/download/scope_0.1.1-1_amd64.deb
-sudo dpkg -i scope_0.1.1-1_amd64.deb
-```
-
-### From Source
-```bash
-git clone https://github.com/khurrambhutto/scope.git
-cd scope
-cargo build --release
-sudo cp target/release/scope /usr/local/bin/
-```
-
----
-
 ## � Usage
 
 ```bash
