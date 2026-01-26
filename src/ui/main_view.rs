@@ -432,32 +432,6 @@ pub fn render_update_by_source_in_area(frame: &mut Frame, app: &App, area: Rect)
     
     let theme = get_theme();
 
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3),
-            Constraint::Min(5),
-        ])
-        .split(area);
-
-    // Header
-    let header_text = if app.updates_checked {
-        format!(" Update Packages ({} available)", app.get_total_update_count())
-    } else {
-        " Update Packages".to_string()
-    };
-    
-    let header = Paragraph::new(header_text)
-        .style(theme.primary_bold())
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .border_style(theme.primary_style()),
-        );
-
-    frame.render_widget(header, chunks[0]);
-
     // Source list - build the lines for centered display
     let sources = [
         (PackageSource::Apt, "APT"),
@@ -524,27 +498,32 @@ pub fn render_update_by_source_in_area(frame: &mut Frame, app: &App, area: Rect)
     let content_height = 5u16; // 3 sources + 1 separator + 1 all
     let content_width = 30u16;
     
-    let content_area = chunks[1];
-    let vertical_padding = content_area.height.saturating_sub(content_height + 4) / 2; // +4 for instructions
-    let horizontal_padding = content_area.width.saturating_sub(content_width) / 2;
+    let vertical_padding = area.height.saturating_sub(content_height + 4) / 2; // +4 for instructions
+    let horizontal_padding = area.width.saturating_sub(content_width) / 2;
     
     let centered_area = Rect {
-        x: content_area.x + horizontal_padding,
-        y: content_area.y + vertical_padding,
-        width: content_width.min(content_area.width),
-        height: content_height.min(content_area.height),
+        x: area.x + horizontal_padding,
+        y: area.y + vertical_padding,
+        width: content_width.min(area.width),
+        height: content_height.min(area.height),
     };
 
-    // Render background block for the full content area
+    // Render background block for the full area with title
+    let title = if app.updates_checked {
+        format!(" Update Packages ({} available) ", app.get_total_update_count())
+    } else {
+        " Update Packages ".to_string()
+    };
+
     let bg_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .title(" Select Source ")
+        .title(title)
         .title_style(theme.title_style())
         .border_style(theme.border_style())
         .style(theme.base_style());
     
-    frame.render_widget(bg_block, chunks[1]);
+    frame.render_widget(bg_block, area);
 
     // Render the centered source list
     let content = Paragraph::new(lines)
@@ -577,8 +556,8 @@ pub fn render_update_by_source_in_area(frame: &mut Frame, app: &App, area: Rect)
     let instructions_height = 4u16;
     
     let instructions_area = Rect {
-        x: content_area.x + content_area.width.saturating_sub(instructions_width + 3),
-        y: content_area.y + content_area.height.saturating_sub(instructions_height + 2),
+        x: area.x + area.width.saturating_sub(instructions_width + 3),
+        y: area.y + area.height.saturating_sub(instructions_height + 2),
         width: instructions_width,
         height: instructions_height,
     };

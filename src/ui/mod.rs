@@ -109,10 +109,10 @@ fn render_toast(frame: &mut Frame, message: &str, area: Rect) {
     let toast_width = (message.len() + 6) as u16;
     let toast_height = 3u16;
     
-    // Position at bottom-right of the window
+    // Position at top-right of the window
     let toast_area = Rect {
         x: area.x + area.width.saturating_sub(toast_width + 2),
-        y: area.y + area.height.saturating_sub(toast_height + 2),
+        y: area.y + 2, // Near the top
         width: toast_width.min(area.width.saturating_sub(4)),
         height: toast_height,
     };
