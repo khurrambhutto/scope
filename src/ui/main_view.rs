@@ -425,3 +425,435 @@ pub fn render_update_select_in_area(frame: &mut Frame, app: &App, area: Rect) {
 
     frame.render_widget(footer, chunks[2]);
 }
+
+/// Render update by source selection view (full-screen in content area)
+pub fn render_update_by_source_in_area(frame: &mut Frame, app: &App, area: Rect) {
+    use crate::package::PackageSource;
+    
+    let theme = get_theme();
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Min(5),
+        ])
+        .split(area);
+
+    // Header
+    let header_text = if app.updates_checked {
+        format!(" Update Packages ({} available)", app.get_total_update_count())
+    } else {
+        " Update Packages".to_string()
+    };
+    
+    let header = Paragraph::new(header_text)
+        .style(theme.primary_bold())
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(theme.primary_style()),
+        );
+
+    frame.render_widget(header, chunks[0]);
+
+    // Source list - build the lines for centered display
+    let sources = [
+        (PackageSource::Apt, "APT"),
+        (PackageSource::Snap, "Snap"),
+        (PackageSource::Flatpak, "Flatpak"),
+    ];
+
+    let mut lines: Vec<Line> = Vec::new();
+
+    for (i, (source, label)) in sources.iter().enumerate() {
+        let is_selected = app.selected_update_source == i;
+        let count = app
+            .update_source_counts
+            .as_ref()
+            .and_then(|c| c.get(source))
+            .copied()
+            .unwrap_or(0);
+
+        let count_str = if app.updates_checked {
+            format!("({})", count)
+        } else {
+            "(?)".to_string()
+        };
+
+        let style = if is_selected {
+            theme.selection_style()
+        } else {
+            theme.base_style()
+        };
+
+        let selector = if is_selected { ">" } else { " " };
+
+        lines.push(Line::styled(
+            format!("   {} {:<12} {:>6}", selector, label, count_str),
+            style,
+        ));
+    }
+
+    // Separator
+    lines.push(Line::from("     ─────────────────"));
+
+    // All option
+    let is_all_selected = app.selected_update_source == 3;
+    let total_count = app.get_total_update_count();
+    let total_str = if app.updates_checked {
+        format!("({})", total_count)
+    } else {
+        "(?)".to_string()
+    };
+
+    let all_style = if is_all_selected {
+        theme.selection_style()
+    } else {
+        theme.base_style()
+    };
+    let all_selector = if is_all_selected { ">" } else { " " };
+
+    lines.push(Line::styled(
+        format!("   {} {:<12} {:>6}", all_selector, "All", total_str),
+        all_style,
+    ));
+
+    // Calculate centered area for the source list
+    let content_height = 5u16; // 3 sources + 1 separator + 1 all
+    let content_width = 30u16;
+    
+    let content_area = chunks[1];
+    let vertical_padding = content_area.height.saturating_sub(content_height + 4) / 2; // +4 for instructions
+    let horizontal_padding = content_area.width.saturating_sub(content_width) / 2;
+    
+    let centered_area = Rect {
+        x: content_area.x + horizontal_padding,
+        y: content_area.y + vertical_padding,
+        width: content_width.min(content_area.width),
+        height: content_height.min(content_area.height),
+    };
+
+    // Render background block for the full content area
+    let bg_block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .title(" Select Source ")
+        .title_style(theme.title_style())
+        .border_style(theme.border_style())
+        .style(theme.base_style());
+    
+    frame.render_widget(bg_block, chunks[1]);
+
+    // Render the centered source list
+    let content = Paragraph::new(lines)
+        .style(theme.base_style())
+        .alignment(ratatui::layout::Alignment::Left);
+
+    frame.render_widget(content, centered_area);
+
+    // Instructions at bottom-right inside the content area
+    let instructions = vec![
+        Line::from(vec![
+            Span::styled("[c]", theme.primary_style()),
+            Span::styled(" Check for updates", theme.muted_style()),
+        ]),
+        Line::from(vec![
+            Span::styled("[Enter]", theme.primary_style()),
+            Span::styled(" Update", theme.muted_style()),
+        ]),
+        Line::from(vec![
+            Span::styled("[↑↓]", theme.primary_style()),
+            Span::styled(" Navigate", theme.muted_style()),
+        ]),
+        Line::from(vec![
+            Span::styled("[Esc]", theme.primary_style()),
+            Span::styled(" Back", theme.muted_style()),
+        ]),
+    ];
+
+    let instructions_width = 22u16;
+    let instructions_height = 4u16;
+    
+    let instructions_area = Rect {
+        x: content_area.x + content_area.width.saturating_sub(instructions_width + 3),
+        y: content_area.y + content_area.height.saturating_sub(instructions_height + 2),
+        width: instructions_width,
+        height: instructions_height,
+    };
+
+    let instructions_widget = Paragraph::new(instructions)
+        .style(theme.base_style())
+        .alignment(ratatui::layout::Alignment::Left);
+
+    frame.render_widget(instructions_widget, instructions_area);
+}
+
+/// Render update progress view (full-screen in content area)
+pub fn render_update_progress_in_area(frame: &mut Frame, app: &App, area: Rect) {
+    let theme = get_theme();
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Min(5),
+            Constraint::Length(3),
+        ])
+        .split(area);
+
+    let progress = &app.update_progress;
+    let source_name = progress
+        .source
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| "All".to_string());
+
+    // Header
+    let header = Paragraph::new(format!(" Updating {} Packages ", source_name))
+        .style(theme.warning_style().add_modifier(Modifier::BOLD))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(theme.warning_style()),
+        );
+
+    frame.render_widget(header, chunks[0]);
+
+    // Progress content
+    let filled = if progress.total > 0 {
+        (progress.current * 30) / progress.total
+    } else {
+        0
+    };
+    let empty = 30 - filled;
+    let progress_bar = format!(
+        "[{}{}]",
+        "█".repeat(filled),
+        "░".repeat(empty)
+    );
+
+    let progress_text = vec![
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  Current: ", theme.label_style()),
+            Span::styled(&progress.current_package, theme.primary_bold()),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  Progress: ", theme.label_style()),
+            Span::styled(progress_bar, theme.primary_style()),
+            Span::raw(format!(" {}/{}", progress.current, progress.total)),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  Completed: ", theme.label_style()),
+            Span::styled(format!("{}", progress.success_count), theme.success_style()),
+        ]),
+        if !progress.errors.is_empty() {
+            Line::from(vec![
+                Span::styled("  Failed: ", theme.label_style()),
+                Span::styled(format!("{}", progress.errors.len()), theme.error_style()),
+            ])
+        } else {
+            Line::from("")
+        },
+    ];
+
+    let content = Paragraph::new(progress_text)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(theme.border_style()),
+        )
+        .style(theme.base_style());
+
+    frame.render_widget(content, chunks[1]);
+
+    // Footer
+    let footer = Paragraph::new(" [Esc] Cancel ")
+        .style(theme.muted_style())
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(theme.muted_style()),
+        );
+
+    frame.render_widget(footer, chunks[2]);
+}
+
+/// Render cancel confirmation view (full-screen in content area)
+pub fn render_cancel_confirm_in_area(frame: &mut Frame, app: &App, area: Rect) {
+    let theme = get_theme();
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Min(5),
+            Constraint::Length(3),
+        ])
+        .split(area);
+
+    let progress = &app.update_progress;
+
+    // Header
+    let header = Paragraph::new(" Cancel Update? ")
+        .style(theme.warning_style().add_modifier(Modifier::BOLD))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(theme.warning_style()),
+        );
+
+    frame.render_widget(header, chunks[0]);
+
+    // Content
+    let content_text = vec![
+        Line::from(""),
+        Line::from("  Stop updating packages?"),
+        Line::from(""),
+        Line::from(format!(
+            "  {}/{} packages completed.",
+            progress.success_count, progress.total
+        )),
+        Line::from(""),
+    ];
+
+    let content = Paragraph::new(content_text)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(theme.border_style()),
+        )
+        .style(theme.base_style());
+
+    frame.render_widget(content, chunks[1]);
+
+    // Footer
+    let footer = Paragraph::new(" [y] Yes, stop | [n] No, continue ")
+        .style(theme.muted_style())
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(theme.muted_style()),
+        );
+
+    frame.render_widget(footer, chunks[2]);
+}
+
+/// Render update summary view (full-screen in content area)
+pub fn render_update_summary_in_area(frame: &mut Frame, app: &App, area: Rect) {
+    let theme = get_theme();
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Min(5),
+            Constraint::Length(3),
+        ])
+        .split(area);
+
+    let progress = &app.update_progress;
+    let has_errors = !progress.errors.is_empty();
+    let skipped = progress.total.saturating_sub(progress.success_count + progress.errors.len());
+
+    // Header
+    let title = if progress.cancelled {
+        " Update Cancelled "
+    } else {
+        " Update Complete "
+    };
+    let border_style = if has_errors {
+        theme.warning_style()
+    } else {
+        theme.success_style()
+    };
+
+    let header = Paragraph::new(title)
+        .style(border_style.add_modifier(Modifier::BOLD))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(border_style),
+        );
+
+    frame.render_widget(header, chunks[0]);
+
+    // Content
+    let mut content_lines = vec![
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  ✓ Updated: ", theme.success_style()),
+            Span::raw(format!("{} packages", progress.success_count)),
+        ]),
+    ];
+
+    if has_errors {
+        content_lines.push(Line::from(vec![
+            Span::styled("  ✗ Failed:  ", theme.error_style()),
+            Span::raw(format!("{} packages", progress.errors.len())),
+        ]));
+    }
+
+    if progress.cancelled && skipped > 0 {
+        content_lines.push(Line::from(vec![
+            Span::styled("  ○ Skipped: ", theme.muted_style()),
+            Span::raw(format!("{} packages", skipped)),
+        ]));
+    }
+
+    if has_errors {
+        content_lines.push(Line::from(""));
+        content_lines.push(Line::from(Span::styled("  Errors:", theme.error_style())));
+        for (name, err) in progress.errors.iter().take(5) {
+            let error_msg = if err.len() > 40 {
+                format!("{}...", &err[..37])
+            } else {
+                err.clone()
+            };
+            content_lines.push(Line::from(Span::styled(
+                format!("    - {}: {}", name, error_msg),
+                theme.muted_style(),
+            )));
+        }
+        if progress.errors.len() > 5 {
+            content_lines.push(Line::from(Span::styled(
+                format!("    ... and {} more", progress.errors.len() - 5),
+                theme.muted_style(),
+            )));
+        }
+    }
+
+    let content = Paragraph::new(content_lines)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(theme.border_style()),
+        )
+        .style(theme.base_style());
+
+    frame.render_widget(content, chunks[1]);
+
+    // Footer
+    let footer = Paragraph::new(" [Enter] Continue | [q] Quit ")
+        .style(theme.muted_style())
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(theme.muted_style()),
+        );
+
+    frame.render_widget(footer, chunks[2]);
+}
+

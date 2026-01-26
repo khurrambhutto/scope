@@ -2,7 +2,26 @@
 
 use crate::package::{sort_packages, AppTypeFilter, Package, PackageSource, SortCriteria};
 use crate::scanner;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+
+/// Progress tracking for batch updates
+#[derive(Debug, Clone, Default)]
+pub struct UpdateProgress {
+    /// Source being updated (None = All)
+    pub source: Option<PackageSource>,
+    /// Current package index (0-based)
+    pub current: usize,
+    /// Total packages to update
+    pub total: usize,
+    /// Name of current package being updated
+    pub current_package: String,
+    /// Number of successful updates
+    pub success_count: usize,
+    /// List of errors (package_name, error_message)
+    pub errors: Vec<(String, String)>,
+    /// Whether update was cancelled
+    pub cancelled: bool,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum View {
@@ -10,6 +29,10 @@ pub enum View {
     Details,
     Confirm,
     UpdateSelect,
+    UpdateBySource,
+    UpdateProgress,
+    UpdateSummary,
+    CancelConfirm,
     Loading,
     Error,
 }
@@ -151,6 +174,18 @@ pub struct App {
     pub sidebar_section: SidebarSection,
     /// Whether sidebar is focused (for navigation)
     pub sidebar_focused: bool,
+    /// Selected source in update-by-source view (0=APT, 1=Snap, 2=Flatpak, 3=All)
+    pub selected_update_source: usize,
+    /// Update counts per source (None = not checked yet)
+    pub update_source_counts: Option<HashMap<PackageSource, usize>>,
+    /// Current update progress
+    pub update_progress: UpdateProgress,
+    /// Whether updates have been checked
+    pub updates_checked: bool,
+    /// Toast message to display (slides in from right)
+    pub toast_message: Option<String>,
+    /// When the toast should disappear (timestamp in milliseconds)
+    pub toast_expires_at: Option<u128>,
 }
 
 impl Default for App {
@@ -181,7 +216,107 @@ impl App {
             scan_complete: false,
             sidebar_section: SidebarSection::default(),
             sidebar_focused: false,
+            selected_update_source: 0,
+            update_source_counts: None,
+            update_progress: UpdateProgress::default(),
+            updates_checked: false,
+            toast_message: None,
+            toast_expires_at: None,
         }
+    }
+
+    /// Show a toast notification that auto-dismisses after 3 seconds
+    pub fn show_toast(&mut self, message: String) {
+        self.toast_message = Some(message);
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+        self.toast_expires_at = Some(now + 3000); // 3 seconds
+    }
+
+    /// Check if toast should be dismissed
+    pub fn check_toast_expiry(&mut self) {
+        if let Some(expires_at) = self.toast_expires_at {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis();
+            if now >= expires_at {
+                self.toast_message = None;
+                self.toast_expires_at = None;
+            }
+        }
+    }
+
+    /// Show update by source selection view
+    pub fn show_update_by_source(&mut self) {
+        self.selected_update_source = 0;
+        self.view = View::UpdateBySource;
+    }
+
+    /// Get update counts by source (APT, Snap, Flatpak)
+    pub fn calculate_update_counts(&mut self) {
+        let mut counts = HashMap::new();
+        counts.insert(PackageSource::Apt, 0);
+        counts.insert(PackageSource::Snap, 0);
+        counts.insert(PackageSource::Flatpak, 0);
+
+        for pkg in &self.packages {
+            if pkg.has_update == Some(true) {
+                match pkg.source {
+                    PackageSource::Apt | PackageSource::DebFile => {
+                        *counts.get_mut(&PackageSource::Apt).unwrap() += 1;
+                    }
+                    PackageSource::Snap => {
+                        *counts.get_mut(&PackageSource::Snap).unwrap() += 1;
+                    }
+                    PackageSource::Flatpak => {
+                        *counts.get_mut(&PackageSource::Flatpak).unwrap() += 1;
+                    }
+                    PackageSource::AppImage => {} // AppImages don't have central updates
+                }
+            }
+        }
+
+        self.update_source_counts = Some(counts);
+        self.updates_checked = true;
+    }
+
+    /// Get total update count across all sources
+    pub fn get_total_update_count(&self) -> usize {
+        self.update_source_counts
+            .as_ref()
+            .map(|counts| counts.values().sum())
+            .unwrap_or(0)
+    }
+
+    /// Get packages with updates for a specific source (None = all sources)
+    pub fn get_packages_to_update(&self, source: Option<PackageSource>) -> Vec<usize> {
+        self.packages
+            .iter()
+            .enumerate()
+            .filter(|(_, pkg)| {
+                if pkg.has_update != Some(true) {
+                    return false;
+                }
+                match source {
+                    None => true, // All sources
+                    Some(s) => match s {
+                        PackageSource::Apt => {
+                            matches!(pkg.source, PackageSource::Apt | PackageSource::DebFile)
+                        }
+                        _ => pkg.source == s,
+                    },
+                }
+            })
+            .map(|(i, _)| i)
+            .collect()
+    }
+
+    /// Reset update progress
+    pub fn reset_update_progress(&mut self) {
+        self.update_progress = UpdateProgress::default();
     }
 
     /// Add packages from a scanner (used during streaming load)

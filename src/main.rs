@@ -149,6 +149,9 @@ async fn run_app(
             }
         }
 
+        // Check for toast expiry
+        app.check_toast_expiry();
+
         // Handle events with timeout for animation
         if event::poll(Duration::from_millis(50))? {
             if let Event::Key(key) = event::read()? {
@@ -158,6 +161,18 @@ async fn run_app(
                     View::Confirm => handle_confirm_input(app, key.code, terminal).await?,
                     View::UpdateSelect => {
                         handle_update_select_input(app, key.code, terminal).await?
+                    }
+                    View::UpdateBySource => {
+                        handle_update_source_input(app, key.code, terminal).await?
+                    }
+                    View::UpdateProgress => {
+                        handle_update_progress_input(app, key.code)
+                    }
+                    View::UpdateSummary => {
+                        handle_update_summary_input(app, key.code)
+                    }
+                    View::CancelConfirm => {
+                        handle_cancel_confirm_input(app, key.code, terminal).await?
                     }
                     View::Loading => {
                         // Allow quitting during loading
@@ -203,11 +218,8 @@ async fn handle_main_input(app: &mut App, key: KeyCode, modifiers: KeyModifiers)
                         // Delete section - just shows the main package view
                     }
                     SidebarSection::Update => {
-                        // Check for updates first, then show selection
-                        app.check_updates().await?;
-                        if app.get_update_count() > 0 {
-                            app.show_update_selection();
-                        }
+                        // Show update by source selection
+                        app.show_update_by_source();
                     }
                     SidebarSection::Install | SidebarSection::Clean => {
                         // Install and Clean - placeholder for future features
@@ -518,3 +530,161 @@ fn handle_error_input(app: &mut App, key: KeyCode) {
         _ => {}
     }
 }
+
+/// Handle input for update source selection view
+async fn handle_update_source_input(
+    app: &mut App,
+    key: KeyCode,
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+) -> Result<()> {
+    use crate::package::PackageSource;
+    
+    match key {
+        KeyCode::Esc | KeyCode::Char('q') => {
+            app.view = View::Main;
+        }
+        KeyCode::Up | KeyCode::Char('k') => {
+            if app.selected_update_source > 0 {
+                app.selected_update_source -= 1;
+            }
+        }
+        KeyCode::Down | KeyCode::Char('j') => {
+            if app.selected_update_source < 3 {
+                app.selected_update_source += 1;
+            }
+        }
+        KeyCode::Char('c') => {
+            // Check for updates
+            app.loading_message = "Checking for updates...".to_string();
+            let prev_view = app.view;
+            app.view = View::Loading;
+            
+            // Draw loading screen
+            terminal.draw(|f| {
+                let window_area = calculate_window_area(f.area());
+                ui::render_in_area(f, app, window_area);
+            })?;
+            
+            // Perform check
+            let _ = app.check_updates().await;
+            app.calculate_update_counts();
+            app.view = prev_view;
+            
+            // Show toast if no updates available
+            if app.get_total_update_count() == 0 {
+                app.show_toast("No updates available".to_string());
+            }
+        }
+        KeyCode::Enter => {
+            // Get the source to update
+            let source = match app.selected_update_source {
+                0 => Some(PackageSource::Apt),
+                1 => Some(PackageSource::Snap),
+                2 => Some(PackageSource::Flatpak),
+                _ => None, // All
+            };
+            
+            // Get packages to update
+            let packages_to_update = app.get_packages_to_update(source);
+            
+            if packages_to_update.is_empty() {
+                // No updates available - show toast
+                if !app.updates_checked {
+                    app.show_toast("Press 'c' to check first".to_string());
+                } else {
+                    app.show_toast("No updates available".to_string());
+                }
+                return Ok(());
+            }
+            
+            // Setup progress
+            app.reset_update_progress();
+            app.update_progress.source = source;
+            app.update_progress.total = packages_to_update.len();
+            app.view = View::UpdateProgress;
+            
+            // Leave alternate screen for pkexec
+            disable_raw_mode()?;
+            execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+            
+            // Perform updates sequentially
+            for (i, pkg_idx) in packages_to_update.iter().enumerate() {
+                // Check if cancelled
+                if app.update_progress.cancelled {
+                    break;
+                }
+                
+                let pkg = &app.packages[*pkg_idx];
+                app.update_progress.current = i + 1;
+                app.update_progress.current_package = pkg.name.clone();
+                
+                let scanner = scanner::get_scanner(pkg.source);
+                if let Err(e) = scanner.update(pkg).await {
+                    app.update_progress.errors.push((pkg.name.clone(), e.to_string()));
+                } else {
+                    app.update_progress.success_count += 1;
+                }
+            }
+            
+            // Re-enter alternate screen
+            execute!(terminal.backend_mut(), EnterAlternateScreen)?;
+            enable_raw_mode()?;
+            terminal.clear()?;
+            
+            // Show summary
+            app.view = View::UpdateSummary;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// Handle input during update progress (only Esc to cancel)
+fn handle_update_progress_input(app: &mut App, key: KeyCode) {
+    match key {
+        KeyCode::Esc => {
+            // Request cancel confirmation
+            app.view = View::CancelConfirm;
+        }
+        _ => {}
+    }
+}
+
+/// Handle input for cancel confirmation dialog
+async fn handle_cancel_confirm_input(
+    app: &mut App,
+    key: KeyCode,
+    _terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+) -> Result<()> {
+    match key {
+        KeyCode::Char('y') | KeyCode::Char('Y') => {
+            // Mark as cancelled and go to summary
+            app.update_progress.cancelled = true;
+            app.view = View::UpdateSummary;
+        }
+        KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+            // Continue with updates
+            app.view = View::UpdateProgress;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// Handle input for update summary dialog
+fn handle_update_summary_input(app: &mut App, key: KeyCode) {
+    match key {
+        KeyCode::Enter => {
+            // Clear progress and refresh packages
+            app.reset_update_progress();
+            app.updates_checked = false;
+            app.update_source_counts = None;
+            app.view = View::Main;
+        }
+        KeyCode::Char('q') => {
+            app.should_quit = true;
+        }
+        _ => {}
+    }
+}
+

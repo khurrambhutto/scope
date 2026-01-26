@@ -8,8 +8,10 @@ mod sidebar;
 use crate::app::{App, View};
 use crate::theme::get_theme;
 use ratatui::{
-    layout::{Constraint, Direction, Layout, Rect},
-    widgets::{Block, Borders, Clear},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    style::Modifier,
+    text::{Line, Span},
+    widgets::{Block, BorderType, Borders, Clear, Paragraph},
     Frame,
 };
 
@@ -26,6 +28,10 @@ pub fn render(frame: &mut Frame, app: &App) {
         View::UpdateSelect => main_view::render_update_select(frame, app),
         View::Loading => dialogs::render_loading(frame, app),
         View::Error => dialogs::render_error(frame, app),
+        // New views - fallback to main view (this function is deprecated)
+        View::UpdateBySource | View::UpdateProgress | View::UpdateSummary | View::CancelConfirm => {
+            main_view::render(frame, app);
+        }
     }
 }
 
@@ -82,7 +88,52 @@ pub fn render_in_area(frame: &mut Frame, app: &App, area: Rect) {
             dialogs::render_confirm_in_area(frame, app, content_area);
         }
         View::UpdateSelect => main_view::render_update_select_in_area(frame, app, content_area),
+        View::UpdateBySource => main_view::render_update_by_source_in_area(frame, app, content_area),
+        View::UpdateProgress => main_view::render_update_progress_in_area(frame, app, content_area),
+        View::UpdateSummary => main_view::render_update_summary_in_area(frame, app, content_area),
+        View::CancelConfirm => main_view::render_cancel_confirm_in_area(frame, app, content_area),
         View::Loading => dialogs::render_loading_in_area(frame, app, content_area),
         View::Error => dialogs::render_error_in_area(frame, app, content_area),
     }
+
+    // Render toast notification if present
+    if let Some(ref message) = app.toast_message {
+        render_toast(frame, message, area);
+    }
 }
+
+/// Render a toast notification that slides in from the right
+fn render_toast(frame: &mut Frame, message: &str, area: Rect) {
+    let theme = get_theme();
+    
+    let toast_width = (message.len() + 6) as u16;
+    let toast_height = 3u16;
+    
+    // Position at bottom-right of the window
+    let toast_area = Rect {
+        x: area.x + area.width.saturating_sub(toast_width + 2),
+        y: area.y + area.height.saturating_sub(toast_height + 2),
+        width: toast_width.min(area.width.saturating_sub(4)),
+        height: toast_height,
+    };
+
+    frame.render_widget(Clear, toast_area);
+
+    let toast_content = Line::from(vec![
+        Span::styled(" ℹ ", theme.primary_style().add_modifier(Modifier::BOLD)),
+        Span::styled(message, theme.primary_style()),
+    ]);
+
+    let toast = Paragraph::new(toast_content)
+        .alignment(Alignment::Center)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(theme.primary_style())
+                .style(theme.base_style()),
+        );
+
+    frame.render_widget(toast, toast_area);
+}
+

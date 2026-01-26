@@ -330,3 +330,295 @@ fn centered_rect_in_area(percent_x: u16, height: u16, area: Rect) -> Rect {
         ])
         .split(popup_layout[1])[1]
 }
+
+/// Render update by source selection dialog
+pub fn render_update_by_source_in_area(frame: &mut Frame, app: &App, area: Rect) {
+    use crate::package::PackageSource;
+    
+    let theme = get_theme();
+    let dialog_area = centered_rect_in_area(60, 14, area);
+    frame.render_widget(Clear, dialog_area);
+
+    let sources = [
+        (PackageSource::Apt, "APT"),
+        (PackageSource::Snap, "Snap"),
+        (PackageSource::Flatpak, "Flatpak"),
+    ];
+
+    let mut lines: Vec<Line> = vec![Line::from("")];
+
+    for (i, (source, label)) in sources.iter().enumerate() {
+        let is_selected = app.selected_update_source == i;
+        let count = app
+            .update_source_counts
+            .as_ref()
+            .and_then(|c| c.get(source))
+            .copied()
+            .unwrap_or(0);
+
+        let count_str = if app.updates_checked {
+            format!(" ({})", count)
+        } else {
+            " (?)".to_string()
+        };
+
+        let prefix = if is_selected { " > " } else { "   " };
+        let style = if is_selected {
+            theme.selection_style()
+        } else {
+            theme.base_style()
+        };
+
+        lines.push(Line::from(vec![
+            Span::styled(format!("{}{:<10}", prefix, label), style),
+            Span::styled(count_str, theme.muted_style()),
+        ]));
+    }
+
+    // Separator
+    lines.push(Line::from("   ─────────────────────"));
+
+    // All option at bottom
+    let is_all_selected = app.selected_update_source == 3;
+    let total_count = app.get_total_update_count();
+    let total_str = if app.updates_checked {
+        format!(" ({})", total_count)
+    } else {
+        " (?)".to_string()
+    };
+    let all_prefix = if is_all_selected { " > " } else { "   " };
+    let all_style = if is_all_selected {
+        theme.selection_style()
+    } else {
+        theme.base_style()
+    };
+    lines.push(Line::from(vec![
+        Span::styled(format!("{}{:<10}", all_prefix, "All"), all_style),
+        Span::styled(total_str, theme.muted_style()),
+    ]));
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(vec![
+        Span::styled("[c]", theme.primary_style()),
+        Span::raw(" Check  "),
+        Span::styled("[Enter]", theme.primary_style()),
+        Span::raw(" Update"),
+    ]));
+    lines.push(Line::from(vec![
+        Span::styled("[Esc]", theme.muted_style()),
+        Span::raw(" Back"),
+    ]));
+
+    let dialog = Paragraph::new(lines)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .title(" Update Packages ")
+                .title_style(theme.title_style())
+                .border_style(theme.primary_style()),
+        )
+        .style(theme.base_style());
+
+    frame.render_widget(dialog, dialog_area);
+}
+
+/// Render update progress dialog
+pub fn render_update_progress_in_area(frame: &mut Frame, app: &App, area: Rect) {
+    let theme = get_theme();
+    let dialog_area = centered_rect_in_area(60, 8, area);
+    frame.render_widget(Clear, dialog_area);
+
+    let progress = &app.update_progress;
+    let source_name = progress
+        .source
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| "All".to_string());
+
+    // Progress bar
+    let filled = if progress.total > 0 {
+        (progress.current * 20) / progress.total
+    } else {
+        0
+    };
+    let empty = 20 - filled;
+    let progress_bar = format!(
+        "[{}{}] {}/{}",
+        "█".repeat(filled),
+        "░".repeat(empty),
+        progress.current,
+        progress.total
+    );
+
+    let spinner_frames = ['|', '/', '-', '\\'];
+    let spinner_idx = (std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis()
+        / 100) as usize
+        % spinner_frames.len();
+
+    let lines = vec![
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(
+                format!(" {} ", spinner_frames[spinner_idx]),
+                theme.primary_bold(),
+            ),
+            Span::raw(&progress.current_package),
+        ]),
+        Line::from(""),
+        Line::from(vec![Span::styled(
+            format!("  {}", progress_bar),
+            theme.primary_style(),
+        )]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  [Esc]", theme.muted_style()),
+            Span::styled(" Cancel", theme.muted_style()),
+        ]),
+    ];
+
+    let dialog = Paragraph::new(lines)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .title(format!(" Updating {} ", source_name))
+                .title_style(theme.title_style())
+                .border_style(theme.warning_style()),
+        )
+        .style(theme.base_style());
+
+    frame.render_widget(dialog, dialog_area);
+}
+
+/// Render cancel confirmation dialog
+pub fn render_cancel_confirm_in_area(frame: &mut Frame, app: &App, area: Rect) {
+    let theme = get_theme();
+    let dialog_area = centered_rect_in_area(55, 8, area);
+    frame.render_widget(Clear, dialog_area);
+
+    let progress = &app.update_progress;
+
+    let lines = vec![
+        Line::from(""),
+        Line::from("  Stop updating packages?"),
+        Line::from(format!(
+            "  {}/{} packages completed.",
+            progress.success_count, progress.total
+        )),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  [y]", theme.error_style().add_modifier(Modifier::BOLD)),
+            Span::raw(" Yes, stop  "),
+            Span::styled("[n]", theme.success_style().add_modifier(Modifier::BOLD)),
+            Span::raw(" Continue"),
+        ]),
+    ];
+
+    let dialog = Paragraph::new(lines)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .title(" Cancel Update? ")
+                .title_style(theme.title_style())
+                .border_style(theme.warning_style()),
+        )
+        .style(theme.base_style());
+
+    frame.render_widget(dialog, dialog_area);
+}
+
+/// Render update summary dialog
+pub fn render_update_summary_in_area(frame: &mut Frame, app: &App, area: Rect) {
+    let theme = get_theme();
+    
+    let progress = &app.update_progress;
+    let has_errors = !progress.errors.is_empty();
+    let skipped = progress.total.saturating_sub(progress.success_count + progress.errors.len());
+    
+    // Calculate height based on errors
+    let error_lines = progress.errors.len().min(3); // Show max 3 errors
+    let height = 9 + error_lines as u16;
+    
+    let dialog_area = centered_rect_in_area(65, height, area);
+    frame.render_widget(Clear, dialog_area);
+
+    let mut lines = vec![
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  ✓ ", theme.success_style()),
+            Span::raw(format!("Updated: {} packages", progress.success_count)),
+        ]),
+    ];
+
+    if has_errors {
+        lines.push(Line::from(vec![
+            Span::styled("  ✗ ", theme.error_style()),
+            Span::raw(format!("Failed:  {} packages", progress.errors.len())),
+        ]));
+    }
+
+    if progress.cancelled && skipped > 0 {
+        lines.push(Line::from(vec![
+            Span::styled("  ○ ", theme.muted_style()),
+            Span::raw(format!("Skipped: {} packages", skipped)),
+        ]));
+    }
+
+    if has_errors {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled("  Errors:", theme.error_style())));
+        for (name, err) in progress.errors.iter().take(3) {
+            let error_msg = if err.len() > 30 {
+                format!("{}...", &err[..27])
+            } else {
+                err.clone()
+            };
+            lines.push(Line::from(Span::styled(
+                format!("    - {}: {}", name, error_msg),
+                theme.muted_style(),
+            )));
+        }
+        if progress.errors.len() > 3 {
+            lines.push(Line::from(Span::styled(
+                format!("    ... and {} more", progress.errors.len() - 3),
+                theme.muted_style(),
+            )));
+        }
+    }
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(vec![
+        Span::styled("  [Enter]", theme.primary_style()),
+        Span::raw(" Continue"),
+    ]));
+
+    let title = if progress.cancelled {
+        " Update Cancelled "
+    } else {
+        " Update Complete "
+    };
+
+    let border_style = if has_errors {
+        theme.warning_style()
+    } else {
+        theme.success_style()
+    };
+
+    let dialog = Paragraph::new(lines)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .title(title)
+                .title_style(theme.title_style())
+                .border_style(border_style),
+        )
+        .style(theme.base_style());
+
+    frame.render_widget(dialog, dialog_area);
+}
+
