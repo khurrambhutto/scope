@@ -539,9 +539,57 @@ async fn handle_update_source_input(
 ) -> Result<()> {
     use crate::package::PackageSource;
     
+    // Handle sidebar navigation when focused
+    if app.sidebar_focused {
+        match key {
+            KeyCode::Esc | KeyCode::Right | KeyCode::Char('l') => {
+                // Exit sidebar focus, stay on Update view
+                app.sidebar_focused = false;
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                app.prev_sidebar_section();
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                app.next_sidebar_section();
+            }
+            KeyCode::Enter => {
+                // Select current section and switch view
+                let section = app.sidebar_section;
+                app.sidebar_focused = false;
+                
+                match section {
+                    SidebarSection::Delete => {
+                        app.view = View::Main;
+                    }
+                    SidebarSection::Update => {
+                        // Already on Update, do nothing
+                    }
+                    SidebarSection::Install | SidebarSection::Clean => {
+                        // Placeholder for future features
+                    }
+                }
+            }
+            KeyCode::Char('q') => {
+                app.should_quit = true;
+            }
+            _ => {}
+        }
+        return Ok(());
+    }
+    
     match key {
-        KeyCode::Esc | KeyCode::Char('q') => {
+        KeyCode::Char('q') => {
+            // Quit the app
+            app.should_quit = true;
+        }
+        KeyCode::Esc => {
+            // Go back to main view (Delete section)
             app.view = View::Main;
+            app.sidebar_section = SidebarSection::Delete;
+        }
+        KeyCode::Left | KeyCode::Char('h') => {
+            // Focus sidebar but stay on Update view
+            app.sidebar_focused = true;
         }
         KeyCode::Up | KeyCode::Char('k') => {
             if app.selected_update_source > 0 {

@@ -80,15 +80,15 @@ Just start typing to filter packages in real-time. Press `Esc` to clear.
 - [x] Real-time search
 - [x] Uninstall packages (APT, Snap, Flatpak, AppImage)
 - [x] Self-update mechanism
+- [x] Package updates (batch update by source)
 
-### � Planned
-- [ ] Package updates (batch update)
+### 🚧 Planned
 - [ ] Package installation
 - [ ] Cache cleanup
 
 ---
 
-## �📁 Project Structure
+## 📁 Project Structure
 
 ```
 scope/
