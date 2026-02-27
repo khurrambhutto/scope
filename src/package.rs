@@ -1,5 +1,6 @@
 //! Package data structures for scope
 
+use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -100,9 +101,23 @@ impl Package {
 
     /// Check if package matches a search query
     pub fn matches_search(&self, query: &str) -> bool {
+        if query.trim().is_empty() {
+            return true;
+        }
+
         let query_lower = query.to_lowercase();
-        self.name.to_lowercase().contains(&query_lower)
-            || self.description.to_lowercase().contains(&query_lower)
+        let name_lower = self.name.to_lowercase();
+        let desc_lower = self.description.to_lowercase();
+
+        // Keep exact substring matching fast and predictable.
+        if name_lower.contains(&query_lower) || desc_lower.contains(&query_lower) {
+            return true;
+        }
+
+        // Fallback to fuzzy matching for typo-tolerant search.
+        let matcher = SkimMatcherV2::default();
+        matcher.fuzzy_match(&name_lower, &query_lower).is_some()
+            || matcher.fuzzy_match(&desc_lower, &query_lower).is_some()
     }
 }
 

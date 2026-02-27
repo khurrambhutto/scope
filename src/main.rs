@@ -176,7 +176,7 @@ async fn run_app(
                     }
                     View::Loading => {
                         // Allow quitting during loading
-                        if key.code == KeyCode::Char('q') {
+                        if key.code == KeyCode::Esc {
                             app.should_quit = true;
                         }
                     }
@@ -197,14 +197,14 @@ async fn handle_main_input(app: &mut App, key: KeyCode, modifiers: KeyModifiers)
     // Handle sidebar navigation when sidebar is focused
     if app.sidebar_focused {
         match key {
-            KeyCode::Esc | KeyCode::Right | KeyCode::Char('l') => {
+            KeyCode::Esc | KeyCode::Right => {
                 // Exit sidebar focus, go to main content
                 app.sidebar_focused = false;
             }
-            KeyCode::Up | KeyCode::Char('k') => {
+            KeyCode::Up => {
                 app.prev_sidebar_section();
             }
-            KeyCode::Down | KeyCode::Char('j') => {
+            KeyCode::Down => {
                 app.next_sidebar_section();
             }
             KeyCode::Enter => {
@@ -214,8 +214,8 @@ async fn handle_main_input(app: &mut App, key: KeyCode, modifiers: KeyModifiers)
                 
                 // Handle section-specific actions
                 match section {
-                    SidebarSection::Delete => {
-                        // Delete section - just shows the main package view
+                    SidebarSection::Apps => {
+                        // Apps section - main package view
                     }
                     SidebarSection::Update => {
                         // Show update by source selection
@@ -226,9 +226,6 @@ async fn handle_main_input(app: &mut App, key: KeyCode, modifiers: KeyModifiers)
                     }
                 }
             }
-            KeyCode::Char('q') => {
-                app.should_quit = true;
-            }
             _ => {}
         }
         return Ok(());
@@ -237,32 +234,18 @@ async fn handle_main_input(app: &mut App, key: KeyCode, modifiers: KeyModifiers)
     // Normal main view input handling
     match key {
         KeyCode::Esc => {
-            // Esc clears search if there's a query, otherwise quits
-            if !app.search_query.is_empty() {
-                app.clear_search();
-            } else {
-                app.should_quit = true;
-            }
-        }
-        KeyCode::Char('q') if app.search_query.is_empty() => {
-            // Only quit if not searching
+            // Esc always quits the app
             app.should_quit = true;
         }
         // Ctrl+b or Left arrow to focus sidebar
         KeyCode::Char('b') if modifiers.contains(KeyModifiers::CONTROL) => {
             app.sidebar_focused = true;
         }
-        KeyCode::Left | KeyCode::Char('h') if app.search_query.is_empty() => {
+        KeyCode::Left if app.search_query.is_empty() => {
             app.sidebar_focused = true;
-        }
-        KeyCode::Up | KeyCode::Char('k') if app.search_query.is_empty() => {
-            app.select_previous();
         }
         KeyCode::Up => {
             app.select_previous();
-        }
-        KeyCode::Down | KeyCode::Char('j') if app.search_query.is_empty() => {
-            app.select_next();
         }
         KeyCode::Down => {
             app.select_next();
@@ -270,13 +253,7 @@ async fn handle_main_input(app: &mut App, key: KeyCode, modifiers: KeyModifiers)
         KeyCode::Home => {
             app.select_first();
         }
-        KeyCode::Char('g') if app.search_query.is_empty() => {
-            app.select_first();
-        }
         KeyCode::End => {
-            app.select_last();
-        }
-        KeyCode::Char('G') if app.search_query.is_empty() => {
             app.select_last();
         }
         KeyCode::PageUp => {
@@ -325,7 +302,7 @@ async fn handle_main_input(app: &mut App, key: KeyCode, modifiers: KeyModifiers)
 
 async fn handle_details_input(app: &mut App, key: KeyCode) -> Result<()> {
     match key {
-        KeyCode::Esc | KeyCode::Char('q') => {
+        KeyCode::Esc => {
             app.hide_details();
         }
         KeyCode::Char('d') => {
@@ -334,10 +311,10 @@ async fn handle_details_input(app: &mut App, key: KeyCode) -> Result<()> {
         KeyCode::Char('u') => {
             app.request_update();
         }
-        KeyCode::Up | KeyCode::Char('k') => {
+        KeyCode::Up => {
             app.details_scroll = app.details_scroll.saturating_sub(1);
         }
-        KeyCode::Down | KeyCode::Char('j') => {
+        KeyCode::Down => {
             app.details_scroll = app.details_scroll.saturating_add(1);
         }
         _ => {}
@@ -448,19 +425,19 @@ async fn handle_update_select_input(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
 ) -> Result<()> {
     match key {
-        KeyCode::Esc | KeyCode::Char('q') => {
+        KeyCode::Esc => {
             // Clear selections and return to main
             for pkg in &mut app.packages {
                 pkg.selected = false;
             }
             app.view = View::Main;
         }
-        KeyCode::Up | KeyCode::Char('k') => {
+        KeyCode::Up => {
             if app.selected > 0 {
                 app.selected -= 1;
             }
         }
-        KeyCode::Down | KeyCode::Char('j') => {
+        KeyCode::Down => {
             if app.selected < app.update_selection.len().saturating_sub(1) {
                 app.selected += 1;
             }
@@ -520,12 +497,9 @@ async fn handle_update_select_input(
 
 fn handle_error_input(app: &mut App, key: KeyCode) {
     match key {
-        KeyCode::Enter => {
+        KeyCode::Enter | KeyCode::Esc => {
             app.error_message.clear();
             app.view = View::Main;
-        }
-        KeyCode::Char('q') => {
-            app.should_quit = true;
         }
         _ => {}
     }
@@ -542,14 +516,14 @@ async fn handle_update_source_input(
     // Handle sidebar navigation when focused
     if app.sidebar_focused {
         match key {
-            KeyCode::Esc | KeyCode::Right | KeyCode::Char('l') => {
+            KeyCode::Esc | KeyCode::Right => {
                 // Exit sidebar focus, stay on Update view
                 app.sidebar_focused = false;
             }
-            KeyCode::Up | KeyCode::Char('k') => {
+            KeyCode::Up => {
                 app.prev_sidebar_section();
             }
-            KeyCode::Down | KeyCode::Char('j') => {
+            KeyCode::Down => {
                 app.next_sidebar_section();
             }
             KeyCode::Enter => {
@@ -558,7 +532,7 @@ async fn handle_update_source_input(
                 app.sidebar_focused = false;
                 
                 match section {
-                    SidebarSection::Delete => {
+                    SidebarSection::Apps => {
                         app.view = View::Main;
                     }
                     SidebarSection::Update => {
@@ -569,34 +543,27 @@ async fn handle_update_source_input(
                     }
                 }
             }
-            KeyCode::Char('q') => {
-                app.should_quit = true;
-            }
             _ => {}
         }
         return Ok(());
     }
     
     match key {
-        KeyCode::Char('q') => {
-            // Quit the app
-            app.should_quit = true;
-        }
         KeyCode::Esc => {
-            // Go back to main view (Delete section)
+            // Go back to main view (Apps section)
             app.view = View::Main;
-            app.sidebar_section = SidebarSection::Delete;
+            app.sidebar_section = SidebarSection::Apps;
         }
-        KeyCode::Left | KeyCode::Char('h') => {
+        KeyCode::Left => {
             // Focus sidebar but stay on Update view
             app.sidebar_focused = true;
         }
-        KeyCode::Up | KeyCode::Char('k') => {
+        KeyCode::Up => {
             if app.selected_update_source > 0 {
                 app.selected_update_source -= 1;
             }
         }
-        KeyCode::Down | KeyCode::Char('j') => {
+        KeyCode::Down => {
             if app.selected_update_source < 3 {
                 app.selected_update_source += 1;
             }
@@ -722,17 +689,13 @@ async fn handle_cancel_confirm_input(
 /// Handle input for update summary dialog
 fn handle_update_summary_input(app: &mut App, key: KeyCode) {
     match key {
-        KeyCode::Enter => {
+        KeyCode::Enter | KeyCode::Esc => {
             // Clear progress and refresh packages
             app.reset_update_progress();
             app.updates_checked = false;
             app.update_source_counts = None;
             app.view = View::Main;
         }
-        KeyCode::Char('q') => {
-            app.should_quit = true;
-        }
         _ => {}
     }
 }
-

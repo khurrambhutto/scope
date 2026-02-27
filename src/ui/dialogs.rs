@@ -135,8 +135,8 @@ pub fn render_error(frame: &mut Frame, app: &App) {
         Line::from(vec![
             Span::styled("[Enter]", theme.primary_style()),
             Span::raw(" Continue  "),
-            Span::styled("[q]", theme.primary_style()),
-            Span::raw(" Quit"),
+            Span::styled("[Esc]", theme.primary_style()),
+            Span::raw(" Back"),
         ]),
     ])
     .block(
@@ -291,8 +291,8 @@ pub fn render_error_in_area(frame: &mut Frame, app: &App, area: Rect) {
         Line::from(vec![
             Span::styled("[Enter]", theme.primary_style()),
             Span::raw(" Continue  "),
-            Span::styled("[q]", theme.primary_style()),
-            Span::raw(" Quit"),
+            Span::styled("[Esc]", theme.primary_style()),
+            Span::raw(" Back"),
         ]),
     ])
     .block(
@@ -621,4 +621,3 @@ pub fn render_update_summary_in_area(frame: &mut Frame, app: &App, area: Rect) {
 
     frame.render_widget(dialog, dialog_area);
 }
-

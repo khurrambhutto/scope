@@ -47,7 +47,7 @@ pub enum ConfirmAction {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SidebarSection {
     #[default]
-    Delete,
+    Apps,
     Update,
     Install,
     Clean,
@@ -56,17 +56,17 @@ pub enum SidebarSection {
 impl SidebarSection {
     pub fn next(self) -> Self {
         match self {
-            SidebarSection::Delete => SidebarSection::Update,
+            SidebarSection::Apps => SidebarSection::Update,
             SidebarSection::Update => SidebarSection::Install,
             SidebarSection::Install => SidebarSection::Clean,
-            SidebarSection::Clean => SidebarSection::Delete,
+            SidebarSection::Clean => SidebarSection::Apps,
         }
     }
 
     pub fn prev(self) -> Self {
         match self {
-            SidebarSection::Delete => SidebarSection::Clean,
-            SidebarSection::Update => SidebarSection::Delete,
+            SidebarSection::Apps => SidebarSection::Clean,
+            SidebarSection::Update => SidebarSection::Apps,
             SidebarSection::Install => SidebarSection::Update,
             SidebarSection::Clean => SidebarSection::Install,
         }
@@ -74,7 +74,7 @@ impl SidebarSection {
 
     pub fn label(&self) -> &'static str {
         match self {
-            SidebarSection::Delete => "Delete",
+            SidebarSection::Apps => "Apps",
             SidebarSection::Update => "Update",
             SidebarSection::Install => "Install",
             SidebarSection::Clean => "Clean",

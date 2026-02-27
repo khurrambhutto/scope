@@ -178,7 +178,7 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
     frame.render_widget(search_box, footer_chunks[0]);
 
     // Help text on the right - minimal, clean
-    let help_text = " [Enter] Details | [Tab] Source | [q] Quit ";
+    let help_text = " [Enter] Details | [Tab] Source | [Esc] Quit ";
 
     let footer = Paragraph::new(help_text).style(theme.muted_style()).block(
         Block::default()
@@ -824,7 +824,7 @@ pub fn render_update_summary_in_area(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(content, chunks[1]);
 
     // Footer
-    let footer = Paragraph::new(" [Enter] Continue | [q] Quit ")
+    let footer = Paragraph::new(" [Enter] Continue | [Esc] Back ")
         .style(theme.muted_style())
         .block(
             Block::default()
@@ -835,4 +835,3 @@ pub fn render_update_summary_in_area(frame: &mut Frame, app: &App, area: Rect) {
 
     frame.render_widget(footer, chunks[2]);
 }
-

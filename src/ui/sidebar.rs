@@ -39,7 +39,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
 
     // Sidebar sections
     let sections = [
-        SidebarSection::Delete,
+        SidebarSection::Apps,
         SidebarSection::Update,
         SidebarSection::Install,
         SidebarSection::Clean,
@@ -96,7 +96,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         for _ in 0..remaining_height {
             lines.push(Line::from(""));
         }
-        lines.push(Line::from(Span::styled("   [j/k] Nav", theme.muted_style())));
+        lines.push(Line::from(Span::styled("   [↑/↓] Nav", theme.muted_style())));
         lines.push(Line::from(Span::styled(
             "   [Enter] Select",
             theme.muted_style(),
