@@ -143,28 +143,6 @@ pub enum SortCriteria {
     SourceAsc,
 }
 
-impl SortCriteria {
-    pub fn next(self) -> Self {
-        match self {
-            SortCriteria::SizeDesc => SortCriteria::SizeAsc,
-            SortCriteria::SizeAsc => SortCriteria::NameAsc,
-            SortCriteria::NameAsc => SortCriteria::NameDesc,
-            SortCriteria::NameDesc => SortCriteria::SourceAsc,
-            SortCriteria::SourceAsc => SortCriteria::SizeDesc,
-        }
-    }
-
-    pub fn label(&self) -> &'static str {
-        match self {
-            SortCriteria::SizeDesc => "Size (largest first)",
-            SortCriteria::SizeAsc => "Size (smallest first)",
-            SortCriteria::NameAsc => "Name (A-Z)",
-            SortCriteria::NameDesc => "Name (Z-A)",
-            SortCriteria::SourceAsc => "Source",
-        }
-    }
-}
-
 /// Sort packages based on criteria
 pub fn sort_packages(packages: &mut [Package], criteria: SortCriteria) {
     match criteria {
@@ -187,37 +165,3 @@ pub fn sort_packages(packages: &mut [Package], criteria: SortCriteria) {
     }
 }
 
-/// Filter mode for app type
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum AppTypeFilter {
-    #[default]
-    All,
-    GuiOnly,
-    CliOnly,
-}
-
-impl AppTypeFilter {
-    pub fn next(self) -> Self {
-        match self {
-            AppTypeFilter::All => AppTypeFilter::GuiOnly,
-            AppTypeFilter::GuiOnly => AppTypeFilter::CliOnly,
-            AppTypeFilter::CliOnly => AppTypeFilter::All,
-        }
-    }
-
-    pub fn label(&self) -> &'static str {
-        match self {
-            AppTypeFilter::All => "All",
-            AppTypeFilter::GuiOnly => "GUI Only",
-            AppTypeFilter::CliOnly => "CLI Only",
-        }
-    }
-
-    pub fn matches(&self, app_type: AppType) -> bool {
-        match self {
-            AppTypeFilter::All => true,
-            AppTypeFilter::GuiOnly => app_type == AppType::GUI,
-            AppTypeFilter::CliOnly => app_type == AppType::CLI,
-        }
-    }
-}

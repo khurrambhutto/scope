@@ -277,9 +277,6 @@ async fn handle_main_input(app: &mut App, key: KeyCode, modifiers: KeyModifiers)
             // Shift+Tab goes to previous tab
             app.prev_tab();
         }
-        KeyCode::Char('f') if app.search_query.is_empty() => {
-            app.toggle_filter();
-        }
         KeyCode::Char('u') if modifiers.contains(KeyModifiers::CONTROL) => {
             app.clear_search();
         }

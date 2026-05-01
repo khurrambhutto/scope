@@ -1,6 +1,6 @@
 //! Application state management
 
-use crate::package::{sort_packages, AppTypeFilter, Package, PackageSource, SortCriteria};
+use crate::package::{sort_packages, Package, PackageSource, SortCriteria};
 use crate::scanner;
 use fuzzy_matcher::skim::SkimMatcherV2;
 use std::collections::{HashMap, HashSet};
@@ -149,8 +149,6 @@ pub struct App {
     pub search_query: String,
     /// Sort criteria
     pub sort_criteria: SortCriteria,
-    /// App type filter
-    pub app_type_filter: AppTypeFilter,
     /// Source tab filter
     pub source_tab: SourceTab,
     /// Confirmation action pending
@@ -206,7 +204,6 @@ impl App {
             view: View::Main, // Start with Main view, show packages as they load
             search_query: String::new(),
             sort_criteria: SortCriteria::default(), // Size descending
-            app_type_filter: AppTypeFilter::default(),
             source_tab: SourceTab::default(),
             confirm_action: None,
             loading_message: "Scanning...".to_string(),
@@ -346,27 +343,6 @@ impl App {
         self.scanning_sources.clear();
     }
 
-    /// Check if we're still scanning
-    pub fn is_scanning(&self) -> bool {
-        !self.scan_complete || !self.scanning_sources.is_empty()
-    }
-
-    /// Get scanning status message
-    pub fn get_scan_status(&self) -> String {
-        if self.scan_complete {
-            String::new()
-        } else if self.scanning_sources.is_empty() {
-            "Starting scan...".to_string()
-        } else {
-            let sources: Vec<String> = self
-                .scanning_sources
-                .iter()
-                .map(|s| s.to_string())
-                .collect();
-            format!("Scanning: {}", sources.join(", "))
-        }
-    }
-
     /// Scan all package managers and load packages
     pub async fn load_packages(&mut self) -> anyhow::Result<()> {
         self.view = View::Loading;
@@ -412,15 +388,12 @@ impl App {
     /// Apply search and filter to get filtered_packages
     pub fn apply_filters(&mut self) {
         if self.search_query.is_empty() {
-            // No search — just filter by source and type, maintain global sort order
+            // No search — just filter by source, maintain global sort order
             self.filtered_packages = self
                 .packages
                 .iter()
                 .enumerate()
-                .filter(|(_, pkg)| {
-                    self.source_tab.matches(pkg.source)
-                        && self.app_type_filter.matches(pkg.app_type)
-                })
+                .filter(|(_, pkg)| self.source_tab.matches(pkg.source))
                 .map(|(i, _)| i)
                 .collect();
         } else {
@@ -431,9 +404,6 @@ impl App {
                 .enumerate()
                 .filter_map(|(i, pkg)| {
                     if !self.source_tab.matches(pkg.source) {
-                        return None;
-                    }
-                    if !self.app_type_filter.matches(pkg.app_type) {
                         return None;
                     }
                     let relevance = pkg.search_relevance(&self.search_query, &self.matcher)?;
@@ -528,19 +498,6 @@ impl App {
             (self.selected + page_size).min(self.filtered_packages.len().saturating_sub(1));
     }
 
-    /// Toggle sort criteria
-    pub fn toggle_sort(&mut self) {
-        self.sort_criteria = self.sort_criteria.next();
-        self.sort_packages();
-        self.apply_filters();
-    }
-
-    /// Toggle app type filter
-    pub fn toggle_filter(&mut self) {
-        self.app_type_filter = self.app_type_filter.next();
-        self.apply_filters();
-    }
-
     /// Show details for selected package
     pub fn show_details(&mut self) {
         if self.selected_package().is_some() {
@@ -578,58 +535,12 @@ impl App {
         self.view = View::Main;
     }
 
-    /// Show update selection view
-    pub fn show_update_selection(&mut self) {
-        // Collect indices of packages with updates
-        self.update_selection = self
-            .packages
-            .iter()
-            .enumerate()
-            .filter(|(_, pkg)| pkg.has_update == Some(true))
-            .map(|(i, _)| i)
-            .collect();
-
-        if !self.update_selection.is_empty() {
-            // Mark all as selected by default
-            for &idx in &self.update_selection {
-                self.packages[idx].selected = true;
-            }
-            self.view = View::UpdateSelect;
-        }
-    }
-
-    /// Get total count stats
-    pub fn get_stats(&self) -> (usize, usize, usize, usize, usize) {
-        let mut apt = 0;
-        let mut snap = 0;
-        let mut flatpak = 0;
-        let mut appimage = 0;
-
-        for pkg in &self.packages {
-            match pkg.source {
-                crate::package::PackageSource::Apt | crate::package::PackageSource::DebFile => {
-                    apt += 1
-                }
-                crate::package::PackageSource::Snap => snap += 1,
-                crate::package::PackageSource::Flatpak => flatpak += 1,
-                crate::package::PackageSource::AppImage => appimage += 1,
-            }
-        }
-
-        (self.packages.len(), apt, snap, flatpak, appimage)
-    }
-
     /// Get count of packages with updates
     pub fn get_update_count(&self) -> usize {
         self.packages
             .iter()
             .filter(|p| p.has_update == Some(true))
             .count()
-    }
-
-    /// Toggle sidebar focus
-    pub fn toggle_sidebar_focus(&mut self) {
-        self.sidebar_focused = !self.sidebar_focused;
     }
 
     /// Move to next sidebar section

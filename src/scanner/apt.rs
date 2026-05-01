@@ -16,7 +16,7 @@ impl AptScanner {
         Self
     }
 
-    /// Detect if a package is a GUI application
+    /// Detect if a package is a GUI or CLI application
     async fn detect_app_type(package_name: &str) -> AppType {
         // Check for .desktop file
         let desktop_paths = [
@@ -50,17 +50,27 @@ impl AptScanner {
             }
         }
 
-        // Check if it's a known CLI tool pattern
-        let cli_patterns = [
-            "lib", "dev", "doc", "data", "common", "core", "base", "utils",
-        ];
-        for pattern in cli_patterns {
-            if package_name.starts_with(pattern) || package_name.ends_with(pattern) {
-                return AppType::CLI;
-            }
+        // Check for binary in standard paths — if it exists, it's a CLI tool
+        if Self::has_binary(package_name) {
+            return AppType::CLI;
         }
 
         AppType::Unknown
+    }
+
+    /// Check if a binary exists for this package in standard bin paths
+    fn has_binary(name: &str) -> bool {
+        let name_variants = [name.to_string(), name.replace('-', "_")];
+        let paths: &[&str] = &["/usr/bin", "/bin", "/usr/sbin", "/sbin"];
+        for variant in &name_variants {
+            for bin_dir in paths {
+                let path = Path::new(bin_dir).join(variant);
+                if path.is_file() {
+                    return true;
+                }
+            }
+        }
+        false
     }
 }
 
