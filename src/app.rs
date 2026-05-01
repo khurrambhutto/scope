@@ -2,6 +2,7 @@
 
 use crate::package::{sort_packages, AppTypeFilter, Package, PackageSource, SortCriteria};
 use crate::scanner;
+use fuzzy_matcher::skim::SkimMatcherV2;
 use std::collections::{HashMap, HashSet};
 
 /// Progress tracking for batch updates
@@ -186,6 +187,8 @@ pub struct App {
     pub toast_message: Option<String>,
     /// When the toast should disappear (timestamp in milliseconds)
     pub toast_expires_at: Option<u128>,
+    /// Fuzzy matcher for search (reused across queries)
+    pub matcher: SkimMatcherV2,
 }
 
 impl Default for App {
@@ -222,6 +225,7 @@ impl App {
             updates_checked: false,
             toast_message: None,
             toast_expires_at: None,
+            matcher: SkimMatcherV2::default(),
         }
     }
 
@@ -407,25 +411,44 @@ impl App {
 
     /// Apply search and filter to get filtered_packages
     pub fn apply_filters(&mut self) {
-        self.filtered_packages = self
-            .packages
-            .iter()
-            .enumerate()
-            .filter(|(_, pkg)| {
-                // Apply source tab filter
-                let matches_source = self.source_tab.matches(pkg.source);
+        if self.search_query.is_empty() {
+            // No search — just filter by source and type, maintain global sort order
+            self.filtered_packages = self
+                .packages
+                .iter()
+                .enumerate()
+                .filter(|(_, pkg)| {
+                    self.source_tab.matches(pkg.source)
+                        && self.app_type_filter.matches(pkg.app_type)
+                })
+                .map(|(i, _)| i)
+                .collect();
+        } else {
+            // Search active — collect with relevance scores, sort best match first
+            let mut scored: Vec<(usize, u8)> = self
+                .packages
+                .iter()
+                .enumerate()
+                .filter_map(|(i, pkg)| {
+                    if !self.source_tab.matches(pkg.source) {
+                        return None;
+                    }
+                    if !self.app_type_filter.matches(pkg.app_type) {
+                        return None;
+                    }
+                    let relevance = pkg.search_relevance(&self.search_query, &self.matcher)?;
+                    Some((i, relevance))
+                })
+                .collect();
 
-                // Apply search filter
-                let matches_search =
-                    self.search_query.is_empty() || pkg.matches_search(&self.search_query);
+            scored.sort_by(|(i1, r1), (i2, r2)| {
+                r1.cmp(r2).then_with(|| {
+                    self.packages[*i2].size_bytes.cmp(&self.packages[*i1].size_bytes)
+                })
+            });
 
-                // Apply app type filter
-                let matches_type = self.app_type_filter.matches(pkg.app_type);
-
-                matches_source && matches_search && matches_type
-            })
-            .map(|(i, _)| i)
-            .collect();
+            self.filtered_packages = scored.into_iter().map(|(i, _)| i).collect();
+        }
 
         // Reset selection if out of bounds
         if self.selected >= self.filtered_packages.len() {

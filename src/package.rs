@@ -99,25 +99,36 @@ impl Package {
         format_size(self.size_bytes, BINARY)
     }
 
-    /// Check if package matches a search query
-    pub fn matches_search(&self, query: &str) -> bool {
+    /// Calculate search relevance score (lower = better match). Returns None if no match.
+    pub fn search_relevance(&self, query: &str, matcher: &SkimMatcherV2) -> Option<u8> {
         if query.trim().is_empty() {
-            return true;
+            return Some(0);
         }
 
         let query_lower = query.to_lowercase();
         let name_lower = self.name.to_lowercase();
         let desc_lower = self.description.to_lowercase();
 
-        // Keep exact substring matching fast and predictable.
-        if name_lower.contains(&query_lower) || desc_lower.contains(&query_lower) {
-            return true;
+        if name_lower == query_lower {
+            return Some(0);
+        }
+        if name_lower.starts_with(&query_lower) {
+            return Some(1);
+        }
+        if name_lower.contains(&query_lower) {
+            return Some(2);
+        }
+        if desc_lower.contains(&query_lower) {
+            return Some(3);
+        }
+        if matcher.fuzzy_match(&name_lower, &query_lower).is_some() {
+            return Some(4);
+        }
+        if matcher.fuzzy_match(&desc_lower, &query_lower).is_some() {
+            return Some(5);
         }
 
-        // Fallback to fuzzy matching for typo-tolerant search.
-        let matcher = SkimMatcherV2::default();
-        matcher.fuzzy_match(&name_lower, &query_lower).is_some()
-            || matcher.fuzzy_match(&desc_lower, &query_lower).is_some()
+        None
     }
 }
 
