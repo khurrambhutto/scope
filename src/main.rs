@@ -159,9 +159,6 @@ async fn run_app(
                     View::Main => handle_main_input(app, key.code, key.modifiers).await?,
                     View::Details => handle_details_input(app, key.code).await?,
                     View::Confirm => handle_confirm_input(app, key.code, terminal).await?,
-                    View::UpdateSelect => {
-                        handle_update_select_input(app, key.code, terminal).await?
-                    }
                     View::UpdateBySource => {
                         handle_update_source_input(app, key.code, terminal).await?
                     }
@@ -410,82 +407,6 @@ async fn handle_confirm_input(
         }
         KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
             app.cancel_confirm();
-        }
-        _ => {}
-    }
-    Ok(())
-}
-
-async fn handle_update_select_input(
-    app: &mut App,
-    key: KeyCode,
-    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
-) -> Result<()> {
-    match key {
-        KeyCode::Esc => {
-            // Clear selections and return to main
-            for pkg in &mut app.packages {
-                pkg.selected = false;
-            }
-            app.view = View::Main;
-        }
-        KeyCode::Up => {
-            if app.selected > 0 {
-                app.selected -= 1;
-            }
-        }
-        KeyCode::Down => {
-            if app.selected < app.update_selection.len().saturating_sub(1) {
-                app.selected += 1;
-            }
-        }
-        KeyCode::Char(' ') => {
-            // Toggle selection
-            if let Some(&idx) = app.update_selection.get(app.selected) {
-                app.packages[idx].selected = !app.packages[idx].selected;
-            }
-        }
-        KeyCode::Char('a') => {
-            // Select all
-            for &idx in &app.update_selection {
-                app.packages[idx].selected = true;
-            }
-        }
-        KeyCode::Char('n') => {
-            // Select none
-            for &idx in &app.update_selection {
-                app.packages[idx].selected = false;
-            }
-        }
-        KeyCode::Enter => {
-            // Perform updates on selected packages
-            let selected_indices: Vec<usize> = app
-                .update_selection
-                .iter()
-                .filter(|&&idx| app.packages[idx].selected)
-                .copied()
-                .collect();
-
-            // Leave alternate screen for pkexec to show its UI
-            disable_raw_mode()?;
-            execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
-
-            for idx in selected_indices {
-                let pkg = &app.packages[idx];
-                let scanner = scanner::get_scanner(pkg.source);
-                if let Err(e) = scanner.update(pkg).await {
-                    // Store error but continue with other updates
-                    app.error_message = format!("Failed to update {}: {}", pkg.name, e);
-                }
-            }
-
-            // Re-enter alternate screen and restore raw mode
-            execute!(terminal.backend_mut(), EnterAlternateScreen)?;
-            enable_raw_mode()?;
-            terminal.clear()?;
-
-            // Refresh after updates
-            app.load_packages().await?;
         }
         _ => {}
     }

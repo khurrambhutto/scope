@@ -29,7 +29,6 @@ pub enum View {
     Main,
     Details,
     Confirm,
-    UpdateSelect,
     UpdateBySource,
     UpdateProgress,
     UpdateSummary,
@@ -159,8 +158,6 @@ pub struct App {
     pub error_message: String,
     /// Whether we're checking for updates
     pub checking_updates: bool,
-    /// Packages selected for batch update
-    pub update_selection: Vec<usize>,
     /// Scroll offset for details view
     pub details_scroll: u16,
     /// Application should quit
@@ -209,7 +206,6 @@ impl App {
             loading_message: "Scanning...".to_string(),
             error_message: String::new(),
             checking_updates: false,
-            update_selection: Vec::new(),
             details_scroll: 0,
             should_quit: false,
             scanning_sources: HashSet::new(),
@@ -533,14 +529,6 @@ impl App {
     pub fn cancel_confirm(&mut self) {
         self.confirm_action = None;
         self.view = View::Main;
-    }
-
-    /// Get count of packages with updates
-    pub fn get_update_count(&self) -> usize {
-        self.packages
-            .iter()
-            .filter(|p| p.has_update == Some(true))
-            .count()
     }
 
     /// Move to next sidebar section

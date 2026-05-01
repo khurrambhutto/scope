@@ -25,7 +25,6 @@ pub fn render(frame: &mut Frame, app: &App) {
             main_view::render(frame, app);
             dialogs::render_confirm(frame, app);
         }
-        View::UpdateSelect => main_view::render_update_select(frame, app),
         View::Loading => dialogs::render_loading(frame, app),
         View::Error => dialogs::render_error(frame, app),
         // New views - fallback to main view (this function is deprecated)
@@ -87,7 +86,6 @@ pub fn render_in_area(frame: &mut Frame, app: &App, area: Rect) {
             main_view::render_in_area(frame, app, content_area);
             dialogs::render_confirm_in_area(frame, app, content_area);
         }
-        View::UpdateSelect => main_view::render_update_select_in_area(frame, app, content_area),
         View::UpdateBySource => main_view::render_update_by_source_in_area(frame, app, content_area),
         View::UpdateProgress => main_view::render_update_progress_in_area(frame, app, content_area),
         View::UpdateSummary => main_view::render_update_summary_in_area(frame, app, content_area),

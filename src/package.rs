@@ -72,9 +72,8 @@ pub struct Package {
     pub update_version: Option<String>,
     /// Installation path (mainly for AppImages)
     pub install_path: Option<String>,
-    /// Whether this package is selected (for batch operations)
-    #[serde(skip)]
-    pub selected: bool,
+
+
 }
 
 impl Package {
@@ -89,7 +88,6 @@ impl Package {
             has_update: None,
             update_version: None,
             install_path: None,
-            selected: false,
         }
     }
 
@@ -137,31 +135,12 @@ impl Package {
 pub enum SortCriteria {
     #[default]
     SizeDesc,
-    SizeAsc,
-    NameAsc,
-    NameDesc,
-    SourceAsc,
 }
 
 /// Sort packages based on criteria
 pub fn sort_packages(packages: &mut [Package], criteria: SortCriteria) {
     match criteria {
         SortCriteria::SizeDesc => packages.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes)),
-        SortCriteria::SizeAsc => packages.sort_by(|a, b| a.size_bytes.cmp(&b.size_bytes)),
-        SortCriteria::NameAsc => {
-            packages.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
-        }
-        SortCriteria::NameDesc => {
-            packages.sort_by(|a, b| b.name.to_lowercase().cmp(&a.name.to_lowercase()))
-        }
-        SortCriteria::SourceAsc => packages.sort_by(|a, b| {
-            let source_cmp = (a.source as u8).cmp(&(b.source as u8));
-            if source_cmp == std::cmp::Ordering::Equal {
-                a.name.to_lowercase().cmp(&b.name.to_lowercase())
-            } else {
-                source_cmp
-            }
-        }),
     }
 }
 
