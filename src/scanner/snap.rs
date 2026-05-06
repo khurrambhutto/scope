@@ -18,7 +18,8 @@ impl SnapScanner {
     /// Get the size of a snap package from its directory
     async fn get_snap_size(name: &str) -> u64 {
         let snap_path = format!("/snap/{}/current", name);
-        if let Ok(output) = Command::new("du").args(["-sb", &snap_path]).output().await {
+        // -L follows symlinks so we measure the actual directory, not the symlink
+        if let Ok(output) = Command::new("du").args(["-sbL", &snap_path]).output().await {
             if let Ok(stdout) = String::from_utf8(output.stdout) {
                 if let Some(size_str) = stdout.split_whitespace().next() {
                     return size_str.parse().unwrap_or(0);
@@ -128,15 +129,12 @@ impl PackageScanner for SnapScanner {
                     package.app_type = Self::detect_app_type(&name);
                     package.aliases = Self::get_aliases(&name);
 
-                    // Get description from snap info
-                    if let Ok(info_output) =
-                        Command::new("snap").args(["info", &name]).output().await
-                    {
-                        let info = String::from_utf8_lossy(&info_output.stdout);
-                        for line in info.lines() {
-                            if line.starts_with("summary:") {
-                                package.description =
-                                    line.trim_start_matches("summary:").trim().to_string();
+                    // Get description from snap metadata yaml (fast, no subprocess needed)
+                    let yaml_path = format!("/snap/{}/current/meta/snap.yaml", name);
+                    if let Ok(yaml) = tokio::fs::read_to_string(&yaml_path).await {
+                        for line in yaml.lines() {
+                            if let Some(summary) = line.strip_prefix("summary:") {
+                                package.description = summary.trim().to_string();
                                 break;
                             }
                         }
