@@ -72,6 +72,8 @@ pub struct Package {
     pub update_version: Option<String>,
     /// Installation path (mainly for AppImages)
     pub install_path: Option<String>,
+    /// Alternative names commonly used to search for this package
+    pub aliases: Vec<String>,
 
 
 }
@@ -88,6 +90,7 @@ impl Package {
             has_update: None,
             update_version: None,
             install_path: None,
+            aliases: Vec::new(),
         }
     }
 
@@ -115,6 +118,19 @@ impl Package {
         }
         if name_lower.contains(&query_lower) {
             return Some(2);
+        }
+        // Check aliases with same priority tiers as the real name
+        for alias in &self.aliases {
+            let alias_lower = alias.to_lowercase();
+            if alias_lower == query_lower {
+                return Some(0);
+            }
+            if alias_lower.starts_with(&query_lower) {
+                return Some(1);
+            }
+            if alias_lower.contains(&query_lower) {
+                return Some(2);
+            }
         }
         if desc_lower.contains(&query_lower) {
             return Some(3);

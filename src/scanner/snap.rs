@@ -67,6 +67,22 @@ impl SnapScanner {
     }
 }
 
+impl SnapScanner {
+    /// Return known aliases for snap packages whose common name differs
+    /// from the snap name (e.g. "code" is searched as "vscode").
+    fn get_aliases(name: &str) -> Vec<String> {
+        let aliases: &[&str] = match name {
+            "code" => &["vscode", "vs code", "visual studio code"],
+            "nvim" => &["neovim"],
+            "ghostty" => &["ghostty terminal"],
+            "chromium-ffmpeg" => &["chromium"],
+            "firefox" => &["fire fox", "mozilla firefox"],
+            _ => &[],
+        };
+        aliases.iter().map(|s| s.to_string()).collect()
+    }
+}
+
 impl PackageScanner for SnapScanner {
     fn source_type(&self) -> PackageSource {
         PackageSource::Snap
@@ -110,6 +126,7 @@ impl PackageScanner for SnapScanner {
                     package.version = version;
                     package.size_bytes = Self::get_snap_size(&name).await;
                     package.app_type = Self::detect_app_type(&name);
+                    package.aliases = Self::get_aliases(&name);
 
                     // Get description from snap info
                     if let Ok(info_output) =
