@@ -84,6 +84,7 @@ Just start typing to filter packages in real-time. Press `Esc` to clear.
 
 ### 🚧 Planned
 - [ ] Package installation
+- [ ] Disk usage overview
 - [ ] Cache cleanup
 
 ---

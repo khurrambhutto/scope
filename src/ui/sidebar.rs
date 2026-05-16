@@ -41,8 +41,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     let sections = [
         SidebarSection::Apps,
         SidebarSection::Update,
-        SidebarSection::Install,
-        SidebarSection::Clean,
+        SidebarSection::Disk,
     ];
 
     let mut lines: Vec<Line> = Vec::new();

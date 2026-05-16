@@ -49,26 +49,23 @@ pub enum SidebarSection {
     #[default]
     Apps,
     Update,
-    Install,
-    Clean,
+    Disk,
 }
 
 impl SidebarSection {
     pub fn next(self) -> Self {
         match self {
             SidebarSection::Apps => SidebarSection::Update,
-            SidebarSection::Update => SidebarSection::Install,
-            SidebarSection::Install => SidebarSection::Clean,
-            SidebarSection::Clean => SidebarSection::Apps,
+            SidebarSection::Update => SidebarSection::Disk,
+            SidebarSection::Disk => SidebarSection::Apps,
         }
     }
 
     pub fn prev(self) -> Self {
         match self {
-            SidebarSection::Apps => SidebarSection::Clean,
+            SidebarSection::Apps => SidebarSection::Disk,
             SidebarSection::Update => SidebarSection::Apps,
-            SidebarSection::Install => SidebarSection::Update,
-            SidebarSection::Clean => SidebarSection::Install,
+            SidebarSection::Disk => SidebarSection::Update,
         }
     }
 
@@ -76,8 +73,7 @@ impl SidebarSection {
         match self {
             SidebarSection::Apps => "Apps",
             SidebarSection::Update => "Update",
-            SidebarSection::Install => "Install",
-            SidebarSection::Clean => "Clean",
+            SidebarSection::Disk => "Disk",
         }
     }
 }

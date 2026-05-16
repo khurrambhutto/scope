@@ -218,8 +218,8 @@ async fn handle_main_input(app: &mut App, key: KeyCode, modifiers: KeyModifiers)
                         // Show update by source selection
                         app.show_update_by_source();
                     }
-                    SidebarSection::Install | SidebarSection::Clean => {
-                        // Install and Clean - placeholder for future features
+                    SidebarSection::Disk => {
+                        // Disk - placeholder for future feature
                     }
                 }
             }
@@ -456,8 +456,8 @@ async fn handle_update_source_input(
                     SidebarSection::Update => {
                         // Already on Update, do nothing
                     }
-                    SidebarSection::Install | SidebarSection::Clean => {
-                        // Placeholder for future features
+                    SidebarSection::Disk => {
+                        // Placeholder for future feature
                     }
                 }
             }

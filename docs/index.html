@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scope — Unified Linux Package Manager TUI</title>
+  <meta name="description" content="Scope is a beautiful terminal UI app manager that unifies APT, Snap, Flatpak, and AppImage into a single searchable view. Built in Rust. Fast, minimal, and distraction-free.">
+  <meta name="robots" content="index, follow, max-snippet:150, max-image-preview:large">
+  <link rel="canonical" href="https://khurrambhutto.github.io/scope/">
+
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://khurrambhutto.github.io/scope/">
+  <meta property="og:title" content="Scope — Unified Linux Package Manager TUI">
+  <meta property="og:description" content="A beautiful terminal UI that unifies APT, Snap, Flatpak, and AppImage into a single searchable view. Built in Rust.">
+  <meta property="og:image" content="https://khurrambhutto.github.io/scope/image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:site_name" content="Scope">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Scope — Unified Linux Package Manager TUI">
+  <meta name="twitter:description" content="A beautiful terminal UI that unifies APT, Snap, Flatpak, and AppImage into a single searchable view.">
+  <meta name="twitter:image" content="https://khurrambhutto.github.io/scope/image.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Scope",
+    "description": "A beautiful terminal UI that unifies APT, Snap, Flatpak, and AppImage into a single searchable, navigable view.",
+    "url": "https://khurrambhutto.github.io/scope/",
+    "image": "https://khurrambhutto.github.io/scope/image.png",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Linux",
+    "softwareVersion": "0.1.4",
+    "license": "https://opensource.org/licenses/MIT",
+    "author": {
+      "@type": "Person",
+      "name": "Khurram Bhutto",
+      "url": "https://khurrambhutto.tech/",
+      "sameAs": [
+        "https://pk.linkedin.com/in/khurram-bhutto",
+        "https://github.com/khurrambhutto"
+      ]
+    },
+    "codeRepository": "https://github.com/khurrambhutto/scope",
+    "downloadUrl": "https://github.com/khurrambhutto/scope/releases",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "featureList": [
+      "Multi-package manager support (APT, Snap, Flatpak, AppImage)",
+      "Real-time fuzzy search",
+      "Built in Rust with zero runtime dependencies"
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is Scope?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Scope is a terminal user interface (TUI) application for Linux that unifies multiple package managers — APT, Snap, Flatpak, and AppImage — into a single searchable, navigable view."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Which package managers does Scope support?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Scope supports APT (Debian/Ubuntu), Snap, Flatpak, and AppImage. You can filter packages by source with a single keystroke."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is Scope free and open source?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Scope is free and open source software released under the MIT License. The source code is available on GitHub."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I install Scope?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Install from source with Cargo: cargo install --git https://github.com/khurrambhutto/scope. Or download a pre-built binary from the GitHub Releases page."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What are the system requirements for Scope?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Scope runs on Linux. It is built in Rust and distributed as a single static binary with zero runtime dependencies."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg: #fafaf8;
+      --text: #1a1a1a;
+      --text-secondary: #6b7280;
+      --accent: #1a1a1a;
+      --border: #e5e5e0;
+      --code-bg: #f4f4f0;
+      --green: #22c55e;
+      --orange: #f59e0b;
+      --blue: #3b82f6;
+      --purple: #8b5cf6;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1.5rem 2rem;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .logo {
+      font-weight: 700;
+      font-size: 1.4rem;
+      letter-spacing: -0.02em;
+    }
+
+    .logo span {
+      color: var(--text-secondary);
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 1.5rem;
+      align-items: center;
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+    }
+
+    .nav-links a:hover {
+      color: var(--text);
+    }
+
+    .hero {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 6rem 2rem 4rem;
+    }
+
+    .hero h1 {
+      font-size: clamp(2rem, 5vw, 3rem);
+      font-weight: 700;
+      line-height: 1.2;
+      letter-spacing: -0.03em;
+      margin-bottom: 1.5rem;
+    }
+
+    .hero p {
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+      max-width: 520px;
+      margin-bottom: 2rem;
+      line-height: 1.8;
+    }
+
+    .hero-buttons {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.7rem 1.25rem;
+      font-family: inherit;
+      font-size: 0.85rem;
+      font-weight: 500;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: none;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: #333;
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--text);
+      transform: translateY(-1px);
+    }
+
+    .features {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 4rem 2rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 3rem;
+    }
+
+    .feature h3 {
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      letter-spacing: -0.01em;
+    }
+
+    .feature p {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      line-height: 1.7;
+    }
+
+    .divider {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 0 2rem;
+    }
+
+    .divider hr {
+      border: none;
+      border-top: 1px solid var(--border);
+    }
+
+    .screenshot {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 0 2rem 4rem;
+    }
+
+    .screenshot figure {
+      margin: 0;
+    }
+
+    .screenshot img {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+    }
+
+    .faq {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 0 2rem 4rem;
+    }
+
+    .faq h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 1.5rem;
+      letter-spacing: -0.02em;
+    }
+
+    .faq-item {
+      border-bottom: 1px solid var(--border);
+    }
+
+    .faq-question {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 0;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .faq-question h3 {
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin: 0;
+    }
+
+    .faq-icon {
+      font-size: 1.2rem;
+      color: var(--text-secondary);
+      transition: transform 0.2s ease;
+      flex-shrink: 0;
+      margin-left: 1rem;
+    }
+
+    .faq-item.active .faq-icon {
+      transform: rotate(45deg);
+    }
+
+    .faq-answer {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease, padding 0.3s ease;
+    }
+
+    .faq-item.active .faq-answer {
+      max-height: 200px;
+      padding-bottom: 1rem;
+    }
+
+    .faq-answer p {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      line-height: 1.7;
+      margin: 0;
+    }
+
+    .faq-answer code {
+      background: var(--code-bg);
+      padding: 0.1rem 0.3rem;
+      border-radius: 3px;
+      font-size: 0.75rem;
+    }
+
+    footer {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 2rem;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+
+    footer a:hover {
+      color: var(--text);
+    }
+
+    @media (max-width: 600px) {
+      .hero {
+        padding: 4rem 1.5rem 3rem;
+      }
+
+      .features {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+        padding: 3rem 1.5rem;
+      }
+
+      footer {
+        flex-direction: column;
+        gap: 0.5rem;
+        text-align: center;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <div class="logo">scope<span> 🔭</span></div>
+    <div class="nav-links">
+      <a href="https://github.com/khurrambhutto/scope" target="_blank" rel="noopener noreferrer">GitHub →</a>
+    </div>
+  </nav>
+
+  <main>
+    <section class="hero">
+      <h1>One interface for<br>all your packages.</h1>
+      <p>A beautiful terminal UI that unifies APT, Snap, Flatpak, and AppImage into a single searchable, navigable view. No more switching between package managers.</p>
+      <div class="hero-buttons">
+        <a href="https://github.com/khurrambhutto/scope/releases" target="_blank" rel="noopener noreferrer" class="btn btn-primary">Download</a>
+        <a href="https://github.com/khurrambhutto/scope" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">View source</a>
+      </div>
+    </section>
+
+    <section class="features" id="features">
+      <div class="feature">
+        <h3>Multi-source</h3>
+        <p>APT, Snap, Flatpak, and AppImage — all in one place. Filter by source with a single keystroke.</p>
+      </div>
+      <div class="feature">
+        <h3>Real-time search</h3>
+        <p>Fuzzy-match filtering across thousands of installed packages. Results update as you type.</p>
+      </div>
+      <div class="feature">
+        <h3>Built in Rust</h3>
+        <p>Fast startup, zero dependencies at runtime. A single static binary you can drop anywhere.</p>
+      </div>
+    </section>
+
+    <div class="divider"><hr></div>
+
+    <section class="screenshot">
+      <figure>
+        <img src="../image.png" alt="Scope TUI screenshot showing a package list with APT, Snap, Flatpak, and AppImage sources in a terminal interface" loading="eager">
+      </figure>
+    </section>
+
+    <div class="divider"><hr></div>
+
+    <section class="faq" id="faq">
+      <h2>Frequently asked questions</h2>
+      <div class="faq-item">
+        <div class="faq-question" onclick="toggleFaq(this)">
+          <h3>What is Scope?</h3>
+          <span class="faq-icon">+</span>
+        </div>
+        <div class="faq-answer">
+          <p>Scope is a terminal user interface (TUI) application for Linux that unifies multiple package managers — APT, Snap, Flatpak, and AppImage — into a single searchable, navigable view.</p>
+        </div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-question" onclick="toggleFaq(this)">
+          <h3>Which package managers does Scope support?</h3>
+          <span class="faq-icon">+</span>
+        </div>
+        <div class="faq-answer">
+          <p>Scope supports APT (Debian/Ubuntu), Snap, Flatpak, and AppImage. You can filter packages by source with a single keystroke.</p>
+        </div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-question" onclick="toggleFaq(this)">
+          <h3>Is Scope free and open source?</h3>
+          <span class="faq-icon">+</span>
+        </div>
+        <div class="faq-answer">
+          <p>Yes. Scope is free and open source software released under the MIT License. The source code is available on GitHub.</p>
+        </div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-question" onclick="toggleFaq(this)">
+          <h3>How do I install Scope?</h3>
+          <span class="faq-icon">+</span>
+        </div>
+        <div class="faq-answer">
+          <p>Install from source with Cargo: <code>cargo install --git https://github.com/khurrambhutto/scope</code>. Or download a pre-built binary from the GitHub Releases page.</p>
+        </div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-question" onclick="toggleFaq(this)">
+          <h3>What are the system requirements?</h3>
+          <span class="faq-icon">+</span>
+        </div>
+        <div class="faq-answer">
+          <p>Scope runs on Linux. It is built in Rust and distributed as a single static binary with zero runtime dependencies.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>MIT License · <a href="https://khurrambhutto.tech/" target="_blank" rel="noopener noreferrer">Khurram Bhutto</a></span>
+    <div style="display:flex;gap:1rem;">
+      <a href="https://github.com/khurrambhutto/scope" target="_blank" rel="noopener noreferrer">GitHub →</a>
+      <a href="https://pk.linkedin.com/in/khurram-bhutto" target="_blank" rel="noopener noreferrer">LinkedIn →</a>
+    </div>
+  </footer>
+
+  <script>
+    function toggleFaq(el) {
+      const item = el.parentElement;
+      const isActive = item.classList.contains('active');
+      
+      document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('active'));
+      
+      if (!isActive) {
+        item.classList.add('active');
+      }
+    }
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,34 @@
+# Scope — Unified Linux Package & App Manager TUI
+
+Scope is a terminal user interface (TUI) app manager for Linux that unifies multiple package managers (APT, Snap, Flatpak, AppImage).
+
+## Pages
+
+- [Homepage](https://khurrambhutto.github.io/scope/) — Overview, features, download links, and FAQ for the Linux app manager.
+- [GitHub Repository](https://github.com/khurrambhutto/scope) — Source code, issues, and releases.
+- [Releases](https://github.com/khurrambhutto/scope/releases) — Pre-built binaries for download.
+
+## Key Information
+
+- **License**: MIT
+- **Language**: Rust
+- **Platform**: Linux
+- **Author**: Khurram Bhutto (https://khurrambhutto.tech/)
+- **Features**: Multi-source package management, real-time fuzzy search, zero runtime dependencies
+
+## Installation
+
+```bash
+cargo install --git https://github.com/khurrambhutto/scope
+```
+
+## FAQ
+
+**What is Scope?**
+A TUI app manager that unifies APT, Snap, Flatpak, and AppImage into a single searchable view.
+
+**Which package managers are supported?**
+APT (Debian/Ubuntu), Snap, Flatpak, and AppImage.
+
+**Is it free?**
+Yes, MIT licensed open source software.

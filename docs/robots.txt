@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://khurrambhutto.github.io/scope/sitemap.xml
