@@ -1,6 +1,5 @@
 //! Package data structures for scope
 
-use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -23,12 +22,6 @@ impl fmt::Display for PackageSource {
             PackageSource::AppImage => write!(f, "appimage"),
             PackageSource::DebFile => write!(f, "deb"),
         }
-    }
-}
-
-impl PackageSource {
-    pub fn color(&self) -> ratatui::style::Color {
-        crate::theme::get_theme().source_color(self)
     }
 }
 
@@ -94,56 +87,6 @@ impl Package {
         }
     }
 
-    /// Get human-readable size string
-    pub fn size_human(&self) -> String {
-        use humansize::{format_size, BINARY};
-        format_size(self.size_bytes, BINARY)
-    }
-
-    /// Calculate search relevance score (lower = better match). Returns None if no match.
-    pub fn search_relevance(&self, query: &str, matcher: &SkimMatcherV2) -> Option<u8> {
-        if query.trim().is_empty() {
-            return Some(0);
-        }
-
-        let query_lower = query.to_lowercase();
-        let name_lower = self.name.to_lowercase();
-        let desc_lower = self.description.to_lowercase();
-
-        if name_lower == query_lower {
-            return Some(0);
-        }
-        if name_lower.starts_with(&query_lower) {
-            return Some(1);
-        }
-        if name_lower.contains(&query_lower) {
-            return Some(2);
-        }
-        // Check aliases with same priority tiers as the real name
-        for alias in &self.aliases {
-            let alias_lower = alias.to_lowercase();
-            if alias_lower == query_lower {
-                return Some(0);
-            }
-            if alias_lower.starts_with(&query_lower) {
-                return Some(1);
-            }
-            if alias_lower.contains(&query_lower) {
-                return Some(2);
-            }
-        }
-        if desc_lower.contains(&query_lower) {
-            return Some(3);
-        }
-        if matcher.fuzzy_match(&name_lower, &query_lower).is_some() {
-            return Some(4);
-        }
-        if matcher.fuzzy_match(&desc_lower, &query_lower).is_some() {
-            return Some(5);
-        }
-
-        None
-    }
 }
 
 /// Sort criteria for packages
@@ -159,4 +102,3 @@ pub fn sort_packages(packages: &mut [Package], criteria: SortCriteria) {
         SortCriteria::SizeDesc => packages.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes)),
     }
 }
-

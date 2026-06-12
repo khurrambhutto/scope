@@ -2,7 +2,7 @@
 
 use crate::package::{AppType, Package, PackageSource};
 use crate::scanner::PackageScanner;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
@@ -117,10 +117,6 @@ impl AppImageScanner {
 }
 
 impl PackageScanner for AppImageScanner {
-    fn source_type(&self) -> PackageSource {
-        PackageSource::AppImage
-    }
-
     fn is_available(&self) -> Pin<Box<dyn Future<Output = bool> + Send + '_>> {
         Box::pin(async { true }) // Always available - just scans filesystem
     }
@@ -183,50 +179,4 @@ impl PackageScanner for AppImageScanner {
         })
     }
 
-    fn uninstall(
-        &self,
-        package: &Package,
-    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
-        let path = package.install_path.clone();
-        Box::pin(async move {
-            if let Some(path) = path {
-                fs::remove_file(&path)
-                    .await
-                    .context("Failed to delete AppImage file")?;
-
-                // Also try to remove associated .desktop file if it exists
-                if let Ok(home) = std::env::var("HOME") {
-                    let desktop_dir = PathBuf::from(&home).join(".local/share/applications");
-                    if let Ok(mut entries) = fs::read_dir(&desktop_dir).await {
-                        use tokio::io::AsyncReadExt;
-                        while let Ok(Some(entry)) = entries.next_entry().await {
-                            let entry_path = entry.path();
-                            if entry_path
-                                .extension()
-                                .map(|e| e == "desktop")
-                                .unwrap_or(false)
-                            {
-                                if let Ok(mut file) = fs::File::open(&entry_path).await {
-                                    let mut contents = String::new();
-                                    if file.read_to_string(&mut contents).await.is_ok() {
-                                        if contents.contains(&path) {
-                                            let _ = fs::remove_file(&entry_path).await;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Ok(())
-            } else {
-                anyhow::bail!("No path specified for AppImage")
-            }
-        })
-    }
-
-    fn update(&self, _package: &Package) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
-        Box::pin(async { anyhow::bail!("AppImage updates are not supported") })
-    }
 }

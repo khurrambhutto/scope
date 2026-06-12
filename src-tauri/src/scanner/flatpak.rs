@@ -17,10 +17,6 @@ impl FlatpakScanner {
 }
 
 impl PackageScanner for FlatpakScanner {
-    fn source_type(&self) -> PackageSource {
-        PackageSource::Flatpak
-    }
-
     fn is_available(&self) -> Pin<Box<dyn Future<Output = bool> + Send + '_>> {
         Box::pin(async { Path::new("/usr/bin/flatpak").exists() })
     }
@@ -100,42 +96,6 @@ impl PackageScanner for FlatpakScanner {
         })
     }
 
-    fn uninstall(
-        &self,
-        package: &Package,
-    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
-        let app_id = package.install_path.clone().unwrap_or(package.name.clone());
-        Box::pin(async move {
-            let status = Command::new("flatpak")
-                .args(["uninstall", "-y", &app_id])
-                .status()
-                .await
-                .context("Failed to run flatpak uninstall")?;
-
-            if status.success() {
-                Ok(())
-            } else {
-                anyhow::bail!("Flatpak uninstall failed")
-            }
-        })
-    }
-
-    fn update(&self, package: &Package) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
-        let app_id = package.install_path.clone().unwrap_or(package.name.clone());
-        Box::pin(async move {
-            let status = Command::new("flatpak")
-                .args(["update", "-y", &app_id])
-                .status()
-                .await
-                .context("Failed to run flatpak update")?;
-
-            if status.success() {
-                Ok(())
-            } else {
-                anyhow::bail!("Flatpak update failed")
-            }
-        })
-    }
 }
 
 /// Parse human-readable size string to bytes

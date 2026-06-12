@@ -75,10 +75,6 @@ impl AptScanner {
 }
 
 impl PackageScanner for AptScanner {
-    fn source_type(&self) -> PackageSource {
-        PackageSource::Apt
-    }
-
     fn is_available(&self) -> Pin<Box<dyn Future<Output = bool> + Send + '_>> {
         Box::pin(async {
             Command::new("dpkg-query")
@@ -188,40 +184,4 @@ impl PackageScanner for AptScanner {
         })
     }
 
-    fn uninstall(
-        &self,
-        package: &Package,
-    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
-        let name = package.name.clone();
-        Box::pin(async move {
-            let status = Command::new("pkexec")
-                .args(["apt", "remove", "-y", &name])
-                .status()
-                .await
-                .context("Failed to run uninstall command")?;
-
-            if status.success() {
-                Ok(())
-            } else {
-                anyhow::bail!("Uninstall failed with exit code: {:?}", status.code())
-            }
-        })
-    }
-
-    fn update(&self, package: &Package) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
-        let name = package.name.clone();
-        Box::pin(async move {
-            let status = Command::new("pkexec")
-                .args(["apt", "install", "-y", "--only-upgrade", &name])
-                .status()
-                .await
-                .context("Failed to run update command")?;
-
-            if status.success() {
-                Ok(())
-            } else {
-                anyhow::bail!("Update failed with exit code: {:?}", status.code())
-            }
-        })
-    }
 }

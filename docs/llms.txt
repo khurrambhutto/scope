@@ -1,6 +1,6 @@
-# Scope — Unified Linux Package & App Manager TUI
+# Scope — Unified Linux Package & Maintenance App
 
-Scope is a terminal user interface (TUI) app manager for Linux that unifies multiple package managers (APT, Snap, Flatpak, AppImage).
+Scope is a Tauri desktop app for Linux package visibility, cleanup planning, and safe maintenance workflows.
 
 ## Pages
 
@@ -14,18 +14,16 @@ Scope is a terminal user interface (TUI) app manager for Linux that unifies mult
 - **Language**: Rust
 - **Platform**: Linux
 - **Author**: Khurram Bhutto (https://khurrambhutto.tech/)
-- **Features**: Multi-source package management, real-time fuzzy search, zero runtime dependencies
+- **Features**: Multi-source package scanning, update visibility, cleanup planning, safe maintenance roadmap
 
 ## Installation
 
-```bash
-cargo install --git https://github.com/khurrambhutto/scope
-```
+Use the Tauri app from source with `npm install` and `npm run tauri dev`.
 
 ## FAQ
 
 **What is Scope?**
-A TUI app manager that unifies APT, Snap, Flatpak, and AppImage into a single searchable view.
+A desktop app that scans APT, Snap, Flatpak, and AppImage packages from one searchable view.
 
 **Which package managers are supported?**
 APT (Debian/Ubuntu), Snap, Flatpak, and AppImage.

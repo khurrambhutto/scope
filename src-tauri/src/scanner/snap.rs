@@ -85,10 +85,6 @@ impl SnapScanner {
 }
 
 impl PackageScanner for SnapScanner {
-    fn source_type(&self) -> PackageSource {
-        PackageSource::Snap
-    }
-
     fn is_available(&self) -> Pin<Box<dyn Future<Output = bool> + Send + '_>> {
         Box::pin(async { Path::new("/usr/bin/snap").exists() })
     }
@@ -173,40 +169,4 @@ impl PackageScanner for SnapScanner {
         })
     }
 
-    fn uninstall(
-        &self,
-        package: &Package,
-    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
-        let name = package.name.clone();
-        Box::pin(async move {
-            let status = Command::new("pkexec")
-                .args(["snap", "remove", &name])
-                .status()
-                .await
-                .context("Failed to run snap remove")?;
-
-            if status.success() {
-                Ok(())
-            } else {
-                anyhow::bail!("Snap uninstall failed")
-            }
-        })
-    }
-
-    fn update(&self, package: &Package) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
-        let name = package.name.clone();
-        Box::pin(async move {
-            let status = Command::new("pkexec")
-                .args(["snap", "refresh", &name])
-                .status()
-                .await
-                .context("Failed to run snap refresh")?;
-
-            if status.success() {
-                Ok(())
-            } else {
-                anyhow::bail!("Snap update failed")
-            }
-        })
-    }
 }

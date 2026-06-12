@@ -3,24 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Scope — Unified Linux Package Manager TUI</title>
+  <title>Scope — Unified Linux Package Manager</title>
   <meta name="google-site-verification" content="msIjf5-oHmJg_58yKXFLPUWxh03z06n0ON6FUat3KZ4" />
-  <meta name="description" content="Scope is a beautiful terminal UI app manager that unifies APT, Snap, Flatpak, and AppImage into a single searchable view. Built in Rust. Fast, minimal, and distraction-free.">
+  <meta name="description" content="Scope is a Linux desktop app for package visibility, cleanup planning, and safe maintenance workflows across APT, Snap, Flatpak, and AppImage.">
   <meta name="robots" content="index, follow, max-snippet:150, max-image-preview:large">
   <link rel="canonical" href="https://khurrambhutto.github.io/scope/">
 
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://khurrambhutto.github.io/scope/">
-  <meta property="og:title" content="Scope — Unified Linux Package Manager TUI">
-  <meta property="og:description" content="A beautiful terminal UI that unifies APT, Snap, Flatpak, and AppImage into a single searchable view. Built in Rust.">
+  <meta property="og:title" content="Scope — Unified Linux Package Manager">
+  <meta property="og:description" content="A Linux desktop app for package visibility, cleanup planning, and safe maintenance workflows.">
   <meta property="og:image" content="https://khurrambhutto.github.io/scope/image.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:site_name" content="Scope">
 
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Scope — Unified Linux Package Manager TUI">
-  <meta name="twitter:description" content="A beautiful terminal UI that unifies APT, Snap, Flatpak, and AppImage into a single searchable view.">
+  <meta name="twitter:title" content="Scope — Unified Linux Package Manager">
+  <meta name="twitter:description" content="A Linux desktop app for package visibility, cleanup planning, and safe maintenance workflows.">
   <meta name="twitter:image" content="https://khurrambhutto.github.io/scope/image.png">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -32,7 +32,7 @@
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     "name": "Scope",
-    "description": "A beautiful terminal UI that unifies APT, Snap, Flatpak, and AppImage into a single searchable, navigable view.",
+    "description": "A Linux desktop app for package visibility, cleanup planning, and safe maintenance workflows.",
     "url": "https://khurrambhutto.github.io/scope/",
     "image": "https://khurrambhutto.github.io/scope/image.png",
     "applicationCategory": "DeveloperApplication",
@@ -57,8 +57,8 @@
     },
     "featureList": [
       "Multi-package manager support (APT, Snap, Flatpak, AppImage)",
-      "Real-time fuzzy search",
-      "Built in Rust with zero runtime dependencies"
+      "Searchable package table",
+      "Built with Rust, Tauri, and React"
     ]
   }
   </script>
@@ -73,7 +73,7 @@
         "name": "What is Scope?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Scope is a terminal user interface (TUI) application for Linux that unifies multiple package managers — APT, Snap, Flatpak, and AppImage — into a single searchable, navigable view."
+          "text": "Scope is a Linux desktop app that scans multiple package managers — APT, Snap, Flatpak, and AppImage — into a single searchable view."
         }
       },
       {
@@ -81,7 +81,7 @@
         "name": "Which package managers does Scope support?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Scope supports APT (Debian/Ubuntu), Snap, Flatpak, and AppImage. You can filter packages by source with a single keystroke."
+          "text": "Scope supports APT (Debian/Ubuntu), Snap, Flatpak, and AppImage. You can filter packages by source in the desktop app."
         }
       },
       {
@@ -97,7 +97,7 @@
         "name": "How do I install Scope?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Install from source with Cargo: cargo install --git https://github.com/khurrambhutto/scope. Or download a pre-built binary from the GitHub Releases page."
+          "text": "Run the Tauri app from source with npm install and npm run tauri dev. Release packaging will follow the GUI migration."
         }
       },
       {
@@ -105,7 +105,7 @@
         "name": "What are the system requirements for Scope?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Scope runs on Linux. It is built in Rust and distributed as a single static binary with zero runtime dependencies."
+          "text": "Scope runs on Linux and uses the Tauri desktop stack with Rust backend commands."
         }
       }
     ]
@@ -411,7 +411,7 @@
   <main>
     <section class="hero">
       <h1>One interface for<br>all your packages.</h1>
-      <p>A beautiful terminal UI that unifies APT, Snap, Flatpak, and AppImage into a single searchable, navigable view. No more switching between package managers.</p>
+      <p>A Linux desktop app for package visibility, cleanup planning, and safe maintenance workflows across APT, Snap, Flatpak, and AppImage.</p>
       <div class="hero-buttons">
         <a href="https://github.com/khurrambhutto/scope/releases" target="_blank" rel="noopener noreferrer" class="btn btn-primary">Download</a>
         <a href="https://github.com/khurrambhutto/scope" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">View source</a>
@@ -421,15 +421,15 @@
     <section class="features" id="features">
       <div class="feature">
         <h3>Multi-source</h3>
-        <p>APT, Snap, Flatpak, and AppImage — all in one place. Filter by source with a single keystroke.</p>
+        <p>APT, Snap, Flatpak, and AppImage — all in one place. Filter by source from a desktop package table.</p>
       </div>
       <div class="feature">
         <h3>Real-time search</h3>
-        <p>Fuzzy-match filtering across thousands of installed packages. Results update as you type.</p>
+        <p>Search across installed packages, descriptions, versions, paths, and common aliases.</p>
       </div>
       <div class="feature">
-        <h3>Built in Rust</h3>
-        <p>Fast startup, zero dependencies at runtime. A single static binary you can drop anywhere.</p>
+        <h3>Built with Tauri</h3>
+        <p>Rust backend commands, a React interface, and explicit Tauri capabilities.</p>
       </div>
     </section>
 
@@ -437,7 +437,7 @@
 
     <section class="screenshot">
       <figure>
-        <img src="image.png" alt="Scope TUI screenshot showing a package list with APT, Snap, Flatpak, and AppImage sources in a terminal interface" loading="eager">
+        <img src="image.png" alt="Scope package list preview with APT, Snap, Flatpak, and AppImage sources" loading="eager">
       </figure>
     </section>
 
@@ -451,7 +451,7 @@
           <span class="faq-icon">+</span>
         </div>
         <div class="faq-answer">
-          <p>Scope is a terminal user interface (TUI) application for Linux that unifies multiple package managers — APT, Snap, Flatpak, and AppImage — into a single searchable, navigable view.</p>
+          <p>Scope is a Linux desktop app that scans multiple package managers — APT, Snap, Flatpak, and AppImage — into a single searchable view.</p>
         </div>
       </div>
       <div class="faq-item">
@@ -460,7 +460,7 @@
           <span class="faq-icon">+</span>
         </div>
         <div class="faq-answer">
-          <p>Scope supports APT (Debian/Ubuntu), Snap, Flatpak, and AppImage. You can filter packages by source with a single keystroke.</p>
+          <p>Scope supports APT (Debian/Ubuntu), Snap, Flatpak, and AppImage. You can filter packages by source in the desktop app.</p>
         </div>
       </div>
       <div class="faq-item">
@@ -478,7 +478,7 @@
           <span class="faq-icon">+</span>
         </div>
         <div class="faq-answer">
-          <p>Install from source with Cargo: <code>cargo install --git https://github.com/khurrambhutto/scope</code>. Or download a pre-built binary from the GitHub Releases page.</p>
+          <p>Run the Tauri app from source with <code>npm install</code> and <code>npm run tauri dev</code>. Release packaging will follow the GUI migration.</p>
         </div>
       </div>
       <div class="faq-item">
@@ -487,7 +487,7 @@
           <span class="faq-icon">+</span>
         </div>
         <div class="faq-answer">
-          <p>Scope runs on Linux. It is built in Rust and distributed as a single static binary with zero runtime dependencies.</p>
+          <p>Scope runs on Linux and uses the Tauri desktop stack with Rust backend commands.</p>
         </div>
       </div>
     </section>
