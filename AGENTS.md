@@ -1,33 +1,92 @@
 # Scope Agent Notes
 
-## Current Direction
+## What Is Scope
 
-Scope is now a root Tauri v2 desktop app. Do not restore the old Rust TUI architecture.
+Scope is a desktop app for Linux — inspired by [Mole](https://github.com/tw93/Mole) for macOS — that gives users a single place to see, update, and uninstall every app on their system regardless of how it was installed.
 
-- Frontend: React + TypeScript in `src/`.
-- Desktop/backend: Tauri v2 + Rust in `src-tauri/`.
-- Package scanning logic lives under `src-tauri/src/scanner/`.
-- Package models live in `src-tauri/src/package.rs`.
-- The roadmap and safety model live in `plan.md`.
+Linux distributions spread packages across APT, Snap, Flatpak, AppImage, and manual installs. Users have no unified view and must remember which tool installed what. Scope solves that.
 
-## Phase Guardrails
+**Target platform:** Ubuntu (`.deb` first), with plans to support other Debian-based distros and eventually Fedora/Arch families.
 
-The app is currently in phase one of the GUI migration:
+## Architecture
 
-- Package scanning is allowed.
-- Update availability scanning is allowed.
-- Destructive commands must not be exposed from the frontend yet.
-- Do not add uninstall, cleanup, delete, purge, or privileged commands until `OperationPlan`, path policy, logs, timeout handling, and auth boundaries exist.
-- If destructive behavior is implemented later, it must be preview-first and backend-validated.
+- **Frontend:** React + TypeScript in `src/`.
+- **Desktop shell:** Tauri v2 + Rust in `src-tauri/`.
+- **Package scanning & operations:** Rust backend in `src-tauri/src/`.
+- **Website / docs:** static files in `docs/`.
+
+## Phase 1 — Unified Package View, Update & Uninstall
+
+Phase 1 is the current focus. It covers three capabilities:
+
+### 1. See All Installed Packages in One Place
+
+Scan every package source and display a unified list:
+
+| Source   | How to list installed packages                  |
+| -------- | ----------------------------------------------- |
+| APT/dpkg | `dpkg-query -W -f '${Package}\t${Version}\t${Status}\n'` |
+| Snap     | `snap list`                                     |
+| Flatpak  | `flatpak list --app --columns=application,name,version,origin` |
+| AppImage | Scan `~/Applications/` and `~/.local/bin/` for `.AppImage` files |
+
+Each entry shows: name, version, source, installed size, and description.
+
+### 2. Uninstall Packages Directly from Scope
+
+Each package source has its own uninstall command:
+
+| Source   | Uninstall command                              | Auth required |
+| -------- | ---------------------------------------------- | ------------- |
+| APT/dpkg | `sudo apt remove -y <package>`                 | Yes (sudo)    |
+| Snap     | `sudo snap remove <package>`                   | Yes (sudo)    |
+| Flatpak  | `flatpak uninstall -y <application-id>`        | No (user)     |
+| AppImage | Move `.AppImage` file to trash                 | No            |
+
+**Implementation approach:**
+
+- The Rust backend runs the appropriate package-manager command for the source.
+- Commands that need `sudo` use `pkexec` (Polkit) to request graphical privilege escalation — the user sees a standard system password dialog. We never store or handle passwords ourselves.
+- Every uninstall goes through a **preview step** first: the user sees exactly what will be removed before confirming.
+- Essential / system-critical packages (like `ubuntu-desktop`, `systemd`, `linux-image-*`) are protected by a deny-list and cannot be removed through Scope.
+
+### 3. Update Packages from Scope
+
+| Source   | Check for updates                  | Apply update                        |
+| -------- | ---------------------------------- | ----------------------------------- |
+| APT/dpkg | `apt list --upgradable`            | `sudo apt install -y <package>`     |
+| Snap     | `snap refresh --list`              | `sudo snap refresh <package>`       |
+| Flatpak  | `flatpak update --appstream && flatpak remote-ls --updates` | `flatpak update -y <application-id>` |
+| AppImage | Check upstream URL / AppImageUpdate if available | Download new `.AppImage` and replace |
+
+Updates also use `pkexec` for privilege escalation where needed, and show a preview of version changes before applying.
+
+## Future Phases (After Phase 1 Is Solid)
+
+These features come later, inspired by Mole's broader toolkit:
+
+- **Clean:** Deep-clean system caches, orphaned dependencies, old kernels, browser caches, and leftover config from uninstalled apps.
+- **Analyze:** Disk usage visualization — find what is eating space.
+- **Status:** Real-time system health — CPU, RAM, disk, network.
+- **Leftover Removal:** After uninstall, scan for and remove orphan config files, cache dirs, `~/.config/<app>/`, `~/.local/share/<app>/`, etc.
 
 ## Safety Rules
 
-- The frontend must call typed Tauri commands with `invoke`.
-- Do not expose raw shell, filesystem, or broad Tauri plugin authority to the webview.
-- Do not pass frontend-provided strings to `sh -c`.
-- Package-manager changes must go through package-manager commands, not direct package database edits.
-- User-owned file deletion should route through Trash by default once deletion exists.
-- Protected Linux roots and credentials directories must be rejected by shared path policy before any apply path exists.
+- The frontend calls typed Tauri commands via `invoke`. No raw shell access from the webview.
+- Never pass frontend-provided strings directly to `sh -c`.
+- Package-manager changes go through package-manager commands — never edit dpkg/apt databases directly.
+- Privilege escalation uses `pkexec` (Polkit) — Scope never handles passwords.
+- File deletion (e.g. AppImage removal) routes through Trash by default.
+- A deny-list of protected packages and paths is enforced in the backend before any destructive operation.
+- Every destructive action is preview-first: scan → show plan → user confirms → execute.
+
+## Phase Guardrails
+
+- Package scanning: allowed.
+- Update availability scanning: allowed.
+- Package update/uninstall preview: allowed.
+- Package update/uninstall apply: allowed only with preview-first flow, `pkexec` auth, package protection deny-list, timeout handling, and backend revalidation.
+- Do **not** add clean, analyze, status, leftover removal, broad file deletion, or arbitrary privileged commands until phase 1 (view + uninstall + update) is correct and tested.
 
 ## Commands
 
@@ -37,7 +96,13 @@ Install frontend dependencies:
 npm install
 ```
 
-Build frontend:
+Run the desktop app (frontend + backend together):
+
+```bash
+npm run tauri dev
+```
+
+Build frontend only:
 
 ```bash
 npm run build
@@ -49,23 +114,9 @@ Check Rust backend:
 cargo check --manifest-path src-tauri/Cargo.toml
 ```
 
-Run the desktop app:
-
-```bash
-npm run tauri dev
-```
-
-## Editing Notes
-
-- Keep generated folders out of git: `node_modules/`, `dist/`, and Rust `target/`.
-- Keep root `package.json`, `package-lock.json`, and `src-tauri/Cargo.lock` committed for reproducible app builds.
-- Prefer small, typed Tauri commands over broad generic command handlers.
-- Keep UI screens operational and app-like; do not turn the first screen into a marketing page.
-- Keep docs aligned with the GUI direction. Avoid describing Scope as a TUI.
-
 ## Verification Before Handoff
 
-For normal app changes, run:
+For normal app changes:
 
 ```bash
 npm run build
@@ -73,3 +124,11 @@ cargo check --manifest-path src-tauri/Cargo.toml
 ```
 
 For safety-sensitive backend changes, add targeted Rust tests before exposing any new command to the frontend.
+
+## Editing Notes
+
+- Keep generated folders out of git: `node_modules/`, `dist/`, and Rust `target/`.
+- Keep root `package.json`, `package-lock.json`, and `src-tauri/Cargo.lock` committed.
+- Prefer small, typed Tauri commands over broad generic command handlers.
+- Keep UI screens operational and app-like; do not turn the first screen into a marketing page.
+- Keep docs aligned with the GUI direction.

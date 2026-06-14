@@ -1,16 +1,11 @@
 [package]
 name = "scope"
-version = "0.1.4"
-description = "Linux-first cleanup and package maintenance desktop app"
+version = "0.1.5"
+description = "See, update, and uninstall every app on your Linux system — all in one place"
 authors = ["Khurram"]
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [lib]
-# The `_lib` suffix may seem redundant but it is necessary
-# to make the lib name unique and wouldn't conflict with the bin name.
-# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
 name = "scope_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
@@ -21,8 +16,3 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-anyhow = "1.0"
-glob = "0.3"
-regex = "1.10"
-tokio = { version = "1.40", features = ["full"] }
-walkdir = "2.5"

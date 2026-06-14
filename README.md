@@ -1,36 +1,39 @@
 # Scope
 
-Scope is a Linux-first Tauri desktop app for package visibility, cleanup planning, and safe maintenance workflows.
+> **Note:** Scope was previously a TUI app. The TUI is no longer maintained — the last TUI release ([v0.1.4](https://github.com/khurrambhutto/scope/releases/tag/v0.1.4)) is still available to download.
 
-The current app is in phase one of the GUI migration:
+**See, update, and uninstall every app on your Linux system — all in one place.**
 
-- Tauri v2 desktop shell at the repository root.
-- React frontend in `src/`.
-- Rust backend in `src-tauri/src/`.
-- Reused package scanners for APT, Snap, Flatpak, and AppImage.
-- Read-only package and update scanning commands.
-- No destructive cleanup or uninstall command is exposed yet.
+Scope is a desktop app for Linux inspired by [Mole](https://github.com/tw93/Mole) for macOS. It gives you a unified view of packages from APT, Snap, Flatpak, and AppImage so you can manage them all without switching between terminals and tools.
+
+## Features (Phase 1 — In Development)
+
+- 📦 **Unified Package List** — See everything installed from APT, Snap, Flatpak, and AppImage in a single view.
+- 🗑️ **One-Click Uninstall** — Remove any package directly from Scope with preview-first safety.
+- 🔄 **Update from Scope** — Check for and apply updates across all package sources.
+
+## Future Phases
+
+- 🧹 **Clean** — Deep-clean caches, orphaned dependencies, and leftover config files.
+- 📊 **Analyze** — Disk usage visualization to find what is eating your space.
+- 💻 **Status** — Real-time system health monitoring (CPU, RAM, disk, network).
 
 ## Run
 
-Install the Tauri Linux prerequisites for your distro, then run:
+Install the [Tauri v2 prerequisites](https://tauri.app/start/prerequisites/) for your distro, then:
 
 ```bash
 npm install
 npm run tauri dev
 ```
 
-For a frontend-only build:
+## Tech Stack
 
-```bash
-npm run build
-```
-
-For backend verification:
-
-```bash
-cargo check --manifest-path src-tauri/Cargo.toml
-```
+| Layer    | Technology          |
+| -------- | ------------------- |
+| Frontend | React + TypeScript  |
+| Backend  | Tauri v2 + Rust     |
+| Target   | Ubuntu (.deb) first |
 
 ## Project Structure
 
@@ -38,17 +41,13 @@ cargo check --manifest-path src-tauri/Cargo.toml
 scope/
 ├── package.json
 ├── src/                  # React frontend
-├── src-tauri/            # Tauri v2 backend
+├── src-tauri/            # Tauri v2 + Rust backend
 │   └── src/
-│       ├── lib.rs        # Tauri commands
-│       ├── package.rs    # Package model
-│       └── scanner/      # APT, Snap, Flatpak, AppImage scanners
-├── plan.md               # GUI migration and safety roadmap
-└── docs/                 # Static website/docs
+├── docs/                 # Project website
+└── AGENTS.md             # Agent development notes
 ```
 
-## Safety Direction
 
-Scope should use preview plans before any destructive operation. Package-manager state should be changed through package-manager commands, and file deletion should route through shared path policy plus Trash-backed operations by default.
+## License
 
-See [plan.md](plan.md) for the phase roadmap.
+[MIT](LICENSE)
