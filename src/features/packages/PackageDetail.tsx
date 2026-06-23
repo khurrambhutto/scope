@@ -13,16 +13,7 @@ export function PackageDetail({
   onUninstalled?: (pkg: InstalledPackage) => void;
 }) {
   const [uninstallTarget, setUninstallTarget] = useState<InstalledPackage | null>(null);
-  if (!pkg) {
-    return (
-      <aside className="detail detail--empty">
-        <div className="detail__placeholder">
-          <div className="detail__logo">ocular</div>
-          <p>Select an installed app to see its details.</p>
-        </div>
-      </aside>
-    );
-  }
+  if (!pkg) return null;
 
   const title = pkg.display_name ?? pkg.name;
   const rows: { label: string; value: string }[] = [
@@ -38,7 +29,7 @@ export function PackageDetail({
   ];
 
   return (
-    <aside className="detail">
+    <div className="pkg-detail">
       <div className="detail__head">
         <AppIcon pkg={pkg} title={title} size="detail" />
         <div className="detail__title">
@@ -80,6 +71,6 @@ export function PackageDetail({
           }}
         />
       )}
-    </aside>
+    </div>
   );
 }

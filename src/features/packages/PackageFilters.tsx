@@ -1,13 +1,20 @@
-import type { PackageSource } from "../../shared/types/package";
-import { SOURCE_COLORS, SOURCE_LABELS } from "../../shared/types/package";
+import { SOURCE_LABELS } from "../../shared/types/package";
 import type { KindFilter, SourceFilter } from "./usePackages";
+import { Select } from "../../shared/components/Select";
 
-const SOURCES: (PackageSource | "all")[] = ["all", "apt", "snap", "flatpak", "appimage"];
-const KINDS: { id: KindFilter; label: string }[] = [
-  { id: "all", label: "All" },
-  { id: "gui", label: "GUI" },
-  { id: "cli", label: "CLI" },
-  { id: "unknown", label: "Other" },
+const SOURCE_OPTIONS: { value: SourceFilter; label: string }[] = [
+  { value: "all", label: "All sources" },
+  ...(["apt", "snap", "flatpak", "appimage"] as const).map((s) => ({
+    value: s,
+    label: SOURCE_LABELS[s],
+  })),
+];
+
+const KIND_OPTIONS: { value: KindFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "gui", label: "GUI" },
+  { value: "cli", label: "CLI" },
+  { value: "unknown", label: "Other" },
 ];
 
 export function PackageFilters({
@@ -16,18 +23,22 @@ export function PackageFilters({
   kind,
   count,
   total,
+  refreshing,
   onQuery,
   onSource,
   onKind,
+  onRescan,
 }: {
   query: string;
   source: SourceFilter;
   kind: KindFilter;
   count: number;
   total: number;
+  refreshing: boolean;
   onQuery: (q: string) => void;
   onSource: (s: SourceFilter) => void;
   onKind: (k: KindFilter) => void;
+  onRescan: () => void;
 }) {
   return (
     <div className="filters">
@@ -35,46 +46,35 @@ export function PackageFilters({
         <input
           className="filters__search"
           type="search"
-          placeholder="Search installed apps by name, description, category…"
+          placeholder="Search"
           value={query}
           autoFocus
           onChange={(e) => onQuery(e.target.value)}
         />
-      </div>
-      <div className="filters__row filters__row--chips">
-        <div className="chips" role="group" aria-label="Filter by source">
-          {SOURCES.map((s) => {
-            const active = source === s;
-            const color = s === "all" ? undefined : SOURCE_COLORS[s as PackageSource];
-            return (
-              <button
-                key={s}
-                type="button"
-                className={`chip${active ? " chip--active" : ""}`}
-                style={
-                  active && color
-                    ? { background: color, borderColor: color, color: "#fff" }
-                    : undefined
-                }
-                onClick={() => onSource(s)}
-              >
-                {s === "all" ? "All sources" : SOURCE_LABELS[s as PackageSource]}
-              </button>
-            );
-          })}
-        </div>
-        <div className="chips" role="group" aria-label="Filter by kind">
-          {KINDS.map((k) => (
-            <button
-              key={k.id}
-              type="button"
-              className={`chip chip--kind${kind === k.id ? " chip--active" : ""}`}
-              onClick={() => onKind(k.id)}
-            >
-              {k.label}
-            </button>
-          ))}
-        </div>
+        <Select
+          options={SOURCE_OPTIONS}
+          value={source}
+          onChange={onSource}
+          ariaLabel="Filter by source"
+        />
+        <Select
+          options={KIND_OPTIONS}
+          value={kind}
+          onChange={onKind}
+          ariaLabel="Filter by kind"
+        />
+        <span style={{ flex: 1 }} />
+        <button
+          type="button"
+          className="btn btn--ghost btn--icon"
+          onClick={onRescan}
+          disabled={refreshing}
+          title="Rescan"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" className={refreshing ? "spin" : ""}>
+            <path d="M20 11A8.1 8.1 0 0 0 4.5 9M4 5v4h4m-4 4a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
         <span className="filters__count">
           {count} / {total}
         </span>
