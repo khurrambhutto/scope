@@ -96,7 +96,11 @@ pub fn parse(id: &str, path: &Path) -> Option<DesktopApp> {
             .filter(|c| !c.is_empty())
             .map(str::to_string)
             .collect(),
-        terminal: field(entry, "Terminal").map(|v| v.eq_ignore_ascii_case("true")).unwrap_or(false),
-        no_display: field(entry, "NoDisplay").map(|v| v.eq_ignore_ascii_case("true")).unwrap_or(false),
+        terminal: field(entry, "Terminal")
+            .map(|v| v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false),
+        no_display: field(entry, "NoDisplay")
+            .map(|v| v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false),
     })
 }

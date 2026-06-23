@@ -6,12 +6,11 @@
 //! enrichment step matches exactly.
 
 use std::future::Future;
-use std::path::Path;
 use std::pin::Pin;
 
 use anyhow::{Context, Result};
 
-use crate::package::{AppKind, InstalledPackage, PackageSource};
+use crate::package::{AppKind, InstallScope, InstalledPackage, PackageSource};
 use crate::scanner::Scanner;
 use crate::system::{capture_stdout, which, SCAN_TIMEOUT};
 
@@ -23,7 +22,7 @@ impl Scanner for FlatpakScanner {
     }
 
     fn is_available(&self) -> Pin<Box<dyn Future<Output = bool> + Send + '_>> {
-        Box::pin(async { which("flatpak") && Path::new("/var/lib/flatpak").exists() || Path::new(&home_flatpak()).exists() })
+        Box::pin(async { which("flatpak") })
     }
 
     fn scan(&self) -> Pin<Box<dyn Future<Output = Result<Vec<InstalledPackage>>> + Send + '_>> {
@@ -31,19 +30,37 @@ impl Scanner for FlatpakScanner {
     }
 }
 
-fn home_flatpak() -> String {
-    std::env::var("HOME")
-        .map(|h| format!("{h}/.local/share/flatpak"))
-        .unwrap_or_default()
+async fn scan() -> Result<Vec<InstalledPackage>> {
+    let user = scan_scope(InstallScope::User).await;
+    let system = scan_scope(InstallScope::System).await;
+
+    match (user, system) {
+        (Ok(mut user_packages), Ok(mut system_packages)) => {
+            user_packages.append(&mut system_packages);
+            Ok(user_packages)
+        }
+        (Ok(packages), Err(_)) | (Err(_), Ok(packages)) => Ok(packages),
+        (Err(user_err), Err(system_err)) => {
+            Err(user_err).context(format!("flatpak system scan also failed: {system_err}"))
+        }
+    }
 }
 
-async fn scan() -> Result<Vec<InstalledPackage>> {
+async fn scan_scope(scope: InstallScope) -> Result<Vec<InstalledPackage>> {
     // Tab-delimited column output (flatpak columns default to this separator
     // when redirected / non-tty).
     let columns = "application,name,version,origin,size,description";
-    let output = capture_stdout("flatpak", &["list", "--app", &format!("--columns={columns}")], SCAN_TIMEOUT)
-        .await
-        .context("flatpak list")?;
+    let scope_arg = match scope {
+        InstallScope::User => "--user",
+        InstallScope::System => "--system",
+    };
+    let output = capture_stdout(
+        "flatpak",
+        &["list", scope_arg, "--app", &format!("--columns={columns}")],
+        SCAN_TIMEOUT,
+    )
+    .await
+    .context(format!("flatpak list {scope_arg}"))?;
 
     let mut packages = Vec::new();
     for line in output.lines() {
@@ -58,7 +75,7 @@ async fn scan() -> Result<Vec<InstalledPackage>> {
         let size_str = parts.get(4).copied().unwrap_or("0");
         let description = parts.get(5).copied().unwrap_or("");
 
-        let mut pkg = InstalledPackage::new(PackageSource::Flatpak, app_id);
+        let mut pkg = InstalledPackage::new_scoped(PackageSource::Flatpak, app_id, scope);
         pkg.name = display_name.clone();
         pkg.display_name = Some(display_name);
         pkg.version = version;

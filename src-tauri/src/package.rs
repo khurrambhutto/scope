@@ -49,6 +49,23 @@ pub enum AppKind {
     Unknown,
 }
 
+/// Where a package is installed when the package manager has multiple scopes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum InstallScope {
+    User,
+    System,
+}
+
+impl InstallScope {
+    pub fn id(self) -> &'static str {
+        match self {
+            InstallScope::User => "user",
+            InstallScope::System => "system",
+        }
+    }
+}
+
 /// A unified view of one installed package/app regardless of its source.
 ///
 /// GUI metadata (`display_name`, `icon`, `categories`, `terminal`) is an
@@ -63,6 +80,10 @@ pub struct InstalledPackage {
     /// Package id as the package manager knows it (dpkg name, snap name,
     /// flatpak application id, or AppImage absolute path).
     pub package_id: String,
+    /// Install scope for package managers that can install the same id in more
+    /// than one place, such as Flatpak user/system installations.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub install_scope: Option<InstallScope>,
     /// Canonical name shown when no desktop display name is available.
     pub name: String,
     /// Optional human-friendly display name from a `.desktop` entry.
@@ -100,6 +121,32 @@ impl InstalledPackage {
             key,
             source,
             package_id,
+            install_scope: None,
+            name: String::new(),
+            display_name: None,
+            description: None,
+            version: String::new(),
+            size_bytes: 0,
+            app_kind: AppKind::Unknown,
+            icon: None,
+            categories: None,
+            terminal: false,
+            has_update: false,
+        }
+    }
+
+    pub fn new_scoped(
+        source: PackageSource,
+        package_id: impl Into<String>,
+        scope: InstallScope,
+    ) -> Self {
+        let package_id = package_id.into();
+        let key = format!("{}:{}:{}", source.id(), scope.id(), package_id);
+        Self {
+            key,
+            source,
+            package_id,
+            install_scope: Some(scope),
             name: String::new(),
             display_name: None,
             description: None,

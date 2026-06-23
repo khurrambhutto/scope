@@ -8,9 +8,8 @@
 use tauri::State;
 
 use crate::commands::packages::ScanCache;
-use crate::operations::uninstall::{detect_flatpak_installation, preview, revalidate, apply, FlatpakInstallation};
+use crate::operations::uninstall::{apply, preview, revalidate};
 use crate::operations::{OperationPlan, OperationResult, PlanStore};
-use crate::package::PackageSource;
 
 /// Build (and store) a preview plan for uninstalling the package with the given
 /// backend key. Returns the plan for the UI to confirm, or an error if the
@@ -25,13 +24,7 @@ pub async fn preview_uninstall(
         .await
         .ok_or_else(|| format!("Package not found in current scan: {package_key}"))?;
 
-    let flatpak_inst = if pkg.source == PackageSource::Flatpak {
-        detect_flatpak_installation(&pkg.package_id).await
-    } else {
-        FlatpakInstallation::Unknown
-    };
-
-    let plan = preview(&pkg, flatpak_inst);
+    let plan = preview(&pkg);
     if plan.protected {
         // Still return the plan so the UI can show the protection reason, but
         // do not issue it for apply — protected plans cannot be executed.
@@ -57,9 +50,7 @@ pub async fn apply_uninstall(
     // know the package is still present and still passes safety checks. We do
     // a full scan to keep the code path simple and authoritative.
     let (pkgs, _) = crate::scanner::scan_all().await;
-    revalidate(&plan, &pkgs)
-        .await
-        .map_err(|e| e.to_string())?;
+    revalidate(&plan, &pkgs).await.map_err(|e| e.to_string())?;
 
     let result = apply(&plan).await;
     Ok(result)

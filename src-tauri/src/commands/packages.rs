@@ -38,7 +38,11 @@ pub struct CachedScan {
 pub async fn scan_packages(state: State<'_, ScanCache>) -> Result<CachedScan, String> {
     let (packages, availability) = scan_all().await;
     let scanned_at_ms = now_ms();
-    let cached = CachedScan { packages: packages.clone(), availability: availability.clone(), scanned_at_ms };
+    let cached = CachedScan {
+        packages: packages.clone(),
+        availability: availability.clone(),
+        scanned_at_ms,
+    };
     let mut guard = state.inner.lock().await;
     *guard = Some(cached.clone());
     Ok(cached)
@@ -96,11 +100,12 @@ pub async fn search_packages(
 
     let needle = |p: &InstalledPackage| -> String {
         format!(
-            "{} {} {} {} {} {}",
+            "{} {} {} {} {} {} {}",
             p.name,
             p.display_name.as_deref().unwrap_or(""),
             p.description.as_deref().unwrap_or(""),
             p.package_id,
+            p.install_scope.map(|s| s.id()).unwrap_or(""),
             p.categories.as_deref().unwrap_or(""),
             p.version
         )

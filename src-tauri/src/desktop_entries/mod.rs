@@ -58,7 +58,11 @@ fn application_dirs() -> Vec<PathBuf> {
     }
 
     let data_dirs = env::var_os("XDG_DATA_DIRS")
-        .map(|value| env::split_paths(&value).map(|p| p.join("applications")).collect::<Vec<_>>())
+        .map(|value| {
+            env::split_paths(&value)
+                .map(|p| p.join("applications"))
+                .collect::<Vec<_>>()
+        })
         .unwrap_or_else(|| {
             vec![
                 PathBuf::from("/usr/local/share/applications"),
@@ -143,22 +147,37 @@ impl DesktopIndex {
         let mut by_name_lower = HashMap::new();
         for app in apps {
             if let Some(bin) = exec_binary(&app.exec) {
-                by_exec.entry(bin.to_lowercase()).or_insert_with(|| app.clone());
+                by_exec
+                    .entry(bin.to_lowercase())
+                    .or_insert_with(|| app.clone());
             }
             by_name_lower
                 .entry(app.name.to_lowercase())
                 .or_insert_with(|| app.clone());
             by_id.insert(app.id.clone(), app);
         }
-        Self { by_id, by_exec, by_name_lower }
+        Self {
+            by_id,
+            by_exec,
+            by_name_lower,
+        }
     }
 
     pub fn empty() -> Self {
-        Self { by_id: HashMap::new(), by_exec: HashMap::new(), by_name_lower: HashMap::new() }
+        Self {
+            by_id: HashMap::new(),
+            by_exec: HashMap::new(),
+            by_name_lower: HashMap::new(),
+        }
     }
 
     /// Try to find a desktop app for a package given the source and id/name.
-    pub fn lookup(&self, source: crate::package::PackageSource, package_id: &str, name: &str) -> Option<&DesktopApp> {
+    pub fn lookup(
+        &self,
+        source: crate::package::PackageSource,
+        package_id: &str,
+        name: &str,
+    ) -> Option<&DesktopApp> {
         match source {
             crate::package::PackageSource::Flatpak => self.by_id.get(package_id),
             crate::package::PackageSource::Snap => {

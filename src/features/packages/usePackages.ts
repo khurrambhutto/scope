@@ -54,6 +54,7 @@ export function usePackages() {
             p.display_name ?? "",
             p.description ?? "",
             p.package_id,
+            p.install_scope ?? "",
             p.categories ?? "",
             p.version,
           ]

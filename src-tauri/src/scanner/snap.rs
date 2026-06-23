@@ -53,11 +53,13 @@ async fn scan() -> Result<Vec<InstalledPackage>> {
         pkg.name = name;
         pkg.version = version;
         pkg.size_bytes = snap_size(&pkg.package_id).await;
-        pkg.app_kind = AppKind::Gui; // non-runtime snaps are overwhelmingly GUI apps;
-                                     // desktop enrichment will downgrade misclassifications
-                                     // only where a .desktop entry exists (kept Unknown otherwise).
+        pkg.app_kind = if has_snap_command(&pkg.package_id) {
+            AppKind::Cli
+        } else {
+            AppKind::Unknown
+        };
         if notes.contains("classic") {
-            // Keep classic snaps but no metadata change yet; classification stays Gui.
+            // Keep classic snaps; command/desktop metadata still drives classification.
         }
         packages.push(pkg);
     }
@@ -71,6 +73,10 @@ fn is_runtime(name: &str) -> bool {
         || name.starts_with("gtk-")
         || name.starts_with("gnome-")
         || name.ends_with("-gtk3")
+}
+
+fn has_snap_command(name: &str) -> bool {
+    Path::new(&format!("/snap/bin/{name}")).is_file()
 }
 
 /// Bytes used by a snap under /snap/<name>/current. -L follows the symlink.

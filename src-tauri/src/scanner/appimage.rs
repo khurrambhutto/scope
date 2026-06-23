@@ -7,8 +7,8 @@
 //! metadata.
 
 use std::future::Future;
-use std::pin::Pin;
 use std::path::{Path, PathBuf};
+use std::pin::Pin;
 use std::time::Duration;
 
 use anyhow::Result;
@@ -57,10 +57,7 @@ pub fn search_directories() -> Vec<String> {
 }
 
 fn dirs() -> Vec<PathBuf> {
-    let mut out = vec![
-        PathBuf::from("/opt"),
-        PathBuf::from("/usr/local/bin"),
-    ];
+    let mut out = vec![PathBuf::from("/opt"), PathBuf::from("/usr/local/bin")];
     if let Some(home) = std::env::var_os("HOME") {
         let home = PathBuf::from(home);
         out.push(home.join("Applications"));
@@ -133,7 +130,10 @@ async fn is_appimage(path: &Path) -> bool {
     if file.read_exact(&mut buf).await.is_err() {
         return false;
     }
-    &buf[0..4] == b"\x7fELF" && buf[8] == 0x41 && buf[9] == 0x49 && (buf[10] == 0x01 || buf[10] == 0x02)
+    &buf[0..4] == b"\x7fELF"
+        && buf[8] == 0x41
+        && buf[9] == 0x49
+        && (buf[10] == 0x01 || buf[10] == 0x02)
 }
 
 async fn build_package(path: &Path) -> Option<InstalledPackage> {
@@ -143,7 +143,8 @@ async fn build_package(path: &Path) -> Option<InstalledPackage> {
 
     let size_bytes = fs::metadata(path).await.map(|m| m.len()).unwrap_or(0);
 
-    let mut pkg = InstalledPackage::new(PackageSource::AppImage, path.to_string_lossy().to_string());
+    let mut pkg =
+        InstalledPackage::new(PackageSource::AppImage, path.to_string_lossy().to_string());
     pkg.name = name.clone();
     pkg.display_name = Some(name);
     pkg.version = version;
@@ -181,7 +182,9 @@ fn extract_version(filename: &str) -> String {
 }
 
 fn trim_appimage_suffix(filename: &str) -> &str {
-    filename.trim_end_matches(".AppImage").trim_end_matches(".appimage")
+    filename
+        .trim_end_matches(".AppImage")
+        .trim_end_matches(".appimage")
 }
 
 #[allow(dead_code)]

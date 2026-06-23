@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
-use crate::package::PackageSource;
+use crate::package::{InstallScope, PackageSource};
 
 /// What kind of operation a plan describes. `Update` is reserved for a later
 /// phase and not yet wired to the frontend.
@@ -54,6 +54,7 @@ pub struct OperationPlan {
     pub operation: Operation,
     pub source: PackageSource,
     pub package_id: String,
+    pub install_scope: Option<InstallScope>,
     pub display_name: String,
     pub current_version: String,
     pub requires_auth: bool,
@@ -93,7 +94,13 @@ impl PlanStore {
     pub async fn issue(&self, plan: OperationPlan) {
         let id = plan.plan_id.clone();
         let mut guard = self.inner.lock().await;
-        guard.insert(id, StoredPlan { plan, created: Instant::now() });
+        guard.insert(
+            id,
+            StoredPlan {
+                plan,
+                created: Instant::now(),
+            },
+        );
         // Opportunistic cleanup of expired entries.
         guard.retain(|_, v| v.created.elapsed() < PLAN_TTL);
     }
@@ -102,7 +109,10 @@ impl PlanStore {
     /// which the apply command treats as a stale-plan rejection.
     pub async fn take(&self, plan_id: &str) -> Option<OperationPlan> {
         let mut guard = self.inner.lock().await;
-        let exists = guard.get(plan_id).map(|v| v.created.elapsed() < PLAN_TTL).unwrap_or(false);
+        let exists = guard
+            .get(plan_id)
+            .map(|v| v.created.elapsed() < PLAN_TTL)
+            .unwrap_or(false);
         if exists {
             guard.remove(plan_id).map(|v| v.plan)
         } else {

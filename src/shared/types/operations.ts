@@ -1,7 +1,7 @@
 // TypeScript models matching the Rust DTOs in src-tauri/src/operations/mod.rs.
 // Keep in sync with the backend.
 
-import type { PackageSource } from "./package";
+import type { InstallScope, PackageSource } from "./package";
 
 export type Operation = "uninstall";
 export type AuthMethod = "none" | "pkexec";
@@ -16,6 +16,7 @@ export interface OperationPlan {
   operation: Operation;
   source: PackageSource;
   package_id: string;
+  install_scope?: InstallScope;
   display_name: string;
   current_version: string;
   requires_auth: boolean;

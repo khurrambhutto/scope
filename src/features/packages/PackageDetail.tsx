@@ -27,6 +27,7 @@ export function PackageDetail({
   const title = pkg.display_name ?? pkg.name;
   const rows: { label: string; value: string }[] = [
     { label: "Source", value: SOURCE_LABELS[pkg.source] },
+    { label: "Install scope", value: pkg.install_scope ?? "—" },
     { label: "Package id", value: pkg.package_id },
     { label: "Version", value: pkg.version || "—" },
     { label: "Installed size", value: formatSize(pkg.size_bytes) },

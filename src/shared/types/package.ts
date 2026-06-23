@@ -5,10 +5,13 @@ export type PackageSource = "apt" | "snap" | "flatpak" | "appimage";
 
 export type AppKind = "gui" | "cli" | "unknown";
 
+export type InstallScope = "user" | "system";
+
 export interface InstalledPackage {
   key: string;
   source: PackageSource;
   package_id: string;
+  install_scope?: InstallScope;
   name: string;
   display_name?: string;
   description?: string;

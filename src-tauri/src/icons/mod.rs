@@ -27,15 +27,7 @@ use std::sync::{Mutex, OnceLock};
 
 /// Size directories searched, largest-useful first. `scalable` covers SVGs.
 const ICON_SIZES: &[&str] = &[
-    "512x512",
-    "256x256",
-    "128x128",
-    "64x64",
-    "48x48",
-    "32x32",
-    "24x24",
-    "22x22",
-    "16x16",
+    "512x512", "256x256", "128x128", "64x64", "48x48", "32x32", "24x24", "22x22", "16x16",
     "scalable",
 ];
 
@@ -374,7 +366,10 @@ mod tests {
     #[test]
     fn url_encodes_spaces_and_keeps_slashes() {
         let url = icon_url(Path::new("/usr/share/icons/a b/firefox.svg"));
-        assert_eq!(url, "scope-icon://localhost/usr/share/icons/a%20b/firefox.svg");
+        assert_eq!(
+            url,
+            "scope-icon://localhost/usr/share/icons/a%20b/firefox.svg"
+        );
     }
 
     #[test]

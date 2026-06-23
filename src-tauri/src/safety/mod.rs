@@ -15,10 +15,16 @@ pub struct Protection {
 
 impl Protection {
     pub fn allowed() -> Self {
-        Self { protected: false, reason: None }
+        Self {
+            protected: false,
+            reason: None,
+        }
     }
     pub fn denied(reason: impl Into<String>) -> Self {
-        Self { protected: true, reason: Some(reason.into()) }
+        Self {
+            protected: true,
+            reason: Some(reason.into()),
+        }
     }
 }
 
@@ -37,29 +43,73 @@ pub fn check_package(source: PackageSource, package_id: &str) -> Protection {
 
 fn check_apt(name: &str) -> Protection {
     let lower = name.to_lowercase();
-    let stripped = lower.strip_suffix(":amd64").or_else(|| lower.strip_suffix(":i386")).unwrap_or(&lower);
+    let stripped = lower
+        .strip_suffix(":amd64")
+        .or_else(|| lower.strip_suffix(":i386"))
+        .unwrap_or(&lower);
     let n = stripped;
 
     // Core system packages whose removal would break the OS or the GUI session.
     const CRITICAL: &[&str] = &[
-        "ubuntu-desktop", "ubuntu-standard", "ubuntu-minimal", "ubuntu-release-upgrader-core",
-        "systemd", "systemd-sysv", "systemd-timesyncd", "systemd-resolved", "systemd-logind",
-        "polkitd", "policykit-1", "polkit", "pkexec",
-        "apt", "apt-utils", "dpkg", "base-files", "base-passwd", "bash", "coreutils",
-        "linux-image-generic", "linux-headers-generic", "linux-generic",
-        "gnome-shell", "gnome-session", "gnome-control-center", "gdm3", "gdm",
-        "xorg", "xserver-xorg-core", "xserver-xorg", "wayland",
-        "network-manager", "network-manager-gnome", "netplan.io", "iproute2",
-        "sudo", "login", "passwd", "shadow", "adduser",
-        "snapd", "flatpak",
-        "libc6", "libssl3", "libgtk-3-0", "libgtk-4-1",
+        "ubuntu-desktop",
+        "ubuntu-standard",
+        "ubuntu-minimal",
+        "ubuntu-release-upgrader-core",
+        "systemd",
+        "systemd-sysv",
+        "systemd-timesyncd",
+        "systemd-resolved",
+        "systemd-logind",
+        "polkitd",
+        "policykit-1",
+        "polkit",
+        "pkexec",
+        "apt",
+        "apt-utils",
+        "dpkg",
+        "base-files",
+        "base-passwd",
+        "bash",
+        "coreutils",
+        "linux-image-generic",
+        "linux-headers-generic",
+        "linux-generic",
+        "gnome-shell",
+        "gnome-session",
+        "gnome-control-center",
+        "gdm3",
+        "gdm",
+        "xorg",
+        "xserver-xorg-core",
+        "xserver-xorg",
+        "wayland",
+        "network-manager",
+        "network-manager-gnome",
+        "netplan.io",
+        "iproute2",
+        "sudo",
+        "login",
+        "passwd",
+        "shadow",
+        "adduser",
+        "snapd",
+        "flatpak",
+        "libc6",
+        "libssl3",
+        "libgtk-3-0",
+        "libgtk-4-1",
     ];
 
     if CRITICAL.iter().any(|c| n == *c) {
-        return Protection::denied(format!("'{n}' is a system-critical package and cannot be removed through Scope."));
+        return Protection::denied(format!(
+            "'{n}' is a system-critical package and cannot be removed through Scope."
+        ));
     }
     // Kernel images and headers (any version).
-    if n.starts_with("linux-image-") || n.starts_with("linux-headers-") || n.starts_with("linux-modules-") {
+    if n.starts_with("linux-image-")
+        || n.starts_with("linux-headers-")
+        || n.starts_with("linux-modules-")
+    {
         return Protection::denied(format!("'{n}' is a kernel package and is protected."));
     }
     // Libraries: removing a shared lib through a GUI is risky and rarely what
@@ -68,7 +118,9 @@ fn check_apt(name: &str) -> Protection {
         let after_lib = &n[3..];
         // Allow things like "libreoffice-*" (apps, not libs) — they start with "lib" but aren't libs.
         if !n.starts_with("libreoffice") && !n.starts_with("libre2") && is_library_name(after_lib) {
-            return Protection::denied(format!("'{n}' is a shared library; Scope removes applications, not libraries."));
+            return Protection::denied(format!(
+                "'{n}' is a shared library; Scope removes applications, not libraries."
+            ));
         }
     }
     Protection::allowed()
@@ -82,8 +134,14 @@ fn is_library_name(s: &str) -> bool {
 fn check_snap(name: &str) -> Protection {
     let n = name.to_lowercase();
     // Runtime/base snaps that other snaps depend on.
-    const RUNTIME: &[&str] = &["snapd", "bare", "core", "core18", "core20", "core22", "core24"];
-    if RUNTIME.iter().any(|c| n == *c) || n.starts_with("gtk-") || n.starts_with("gnome-") || n.ends_with("-gtk3") {
+    const RUNTIME: &[&str] = &[
+        "snapd", "bare", "core", "core18", "core20", "core22", "core24",
+    ];
+    if RUNTIME.iter().any(|c| n == *c)
+        || n.starts_with("gtk-")
+        || n.starts_with("gnome-")
+        || n.ends_with("-gtk3")
+    {
         return Protection::denied(format!("'{n}' is a Snap runtime/base and is protected."));
     }
     Protection::allowed()
@@ -109,9 +167,7 @@ pub fn check_path(path: &str) -> Protection {
 
     // Never allow operations outside expected AppImage locations or on system dirs.
     let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
-    let mut allowed_roots: Vec<std::path::PathBuf> = vec![
-        std::path::PathBuf::from("/opt"),
-    ];
+    let mut allowed_roots: Vec<std::path::PathBuf> = vec![std::path::PathBuf::from("/opt")];
     if let Some(h) = &home {
         allowed_roots.push(h.join("Applications"));
         allowed_roots.push(h.join("apps"));
@@ -119,7 +175,9 @@ pub fn check_path(path: &str) -> Protection {
         allowed_roots.push(h.join("Downloads"));
         allowed_roots.push(h.join(".local/bin"));
     }
-    let inside_allowed = allowed_roots.iter().any(|root| s.starts_with(&format!("{}/", root.display())) || s == root.display().to_string());
+    let inside_allowed = allowed_roots.iter().any(|root| {
+        s.starts_with(&format!("{}/", root.display())) || s == root.display().to_string()
+    });
     if !inside_allowed {
         return Protection::denied("File is outside the allowed AppImage directories.");
     }

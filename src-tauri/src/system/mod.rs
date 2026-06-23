@@ -12,7 +12,11 @@ use tokio::process::Command;
 ///
 /// Returns the trimmed stdout on success. If the command is missing, exits
 /// non-zero, or exceeds the timeout, this returns `Err` with a readable cause.
-pub async fn capture_stdout(program: &str, args: &[&str], timeout: Duration) -> anyhow::Result<String> {
+pub async fn capture_stdout(
+    program: &str,
+    args: &[&str],
+    timeout: Duration,
+) -> anyhow::Result<String> {
     let output = tokio::time::timeout(timeout, Command::new(program).args(args).output()).await;
     match output {
         Ok(Ok(out)) if out.status.success() => Ok(String::from_utf8_lossy(&out.stdout).to_string()),
@@ -44,13 +48,12 @@ fn which_lookup(program: &str) -> Option<std::path::PathBuf> {
             return Some(candidate);
         }
     }
-    std::env::var_os("PATH")
-        .and_then(|paths| {
-            std::env::split_paths(&paths).find_map(|dir| {
-                let candidate = dir.join(program);
-                candidate.is_file().then_some(candidate)
-            })
+    std::env::var_os("PATH").and_then(|paths| {
+        std::env::split_paths(&paths).find_map(|dir| {
+            let candidate = dir.join(program);
+            candidate.is_file().then_some(candidate)
         })
+    })
 }
 
 /// Default per-command timeout for package scans.

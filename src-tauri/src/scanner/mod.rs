@@ -26,26 +26,46 @@ mod tests {
     #[tokio::test]
     async fn scan_all_runs_on_live_system() {
         let (pkgs, avail) = scan_all().await;
-        assert!(pkgs.iter().all(|p| !p.key.is_empty()), "every package needs a key");
+        assert!(
+            pkgs.iter().all(|p| !p.key.is_empty()),
+            "every package needs a key"
+        );
 
         let mut keys = std::collections::HashSet::new();
         for p in &pkgs {
-            assert!(keys.insert(p.key.clone()), "duplicate package key: {}", p.key);
+            assert!(
+                keys.insert(p.key.clone()),
+                "duplicate package key: {}",
+                p.key
+            );
         }
 
         if avail.apt {
-            let apt = pkgs.iter().filter(|p| p.source == PackageSource::Apt).count();
+            let apt = pkgs
+                .iter()
+                .filter(|p| p.source == PackageSource::Apt)
+                .count();
             assert!(apt > 0, "APT available but no packages returned");
         }
         if avail.flatpak {
-            let fp = pkgs.iter().filter(|p| p.source == PackageSource::Flatpak).count();
+            let fp = pkgs
+                .iter()
+                .filter(|p| p.source == PackageSource::Flatpak)
+                .count();
             assert!(fp > 0, "Flatpak available but no packages returned");
         }
 
         // Enrichment smoke: at least some packages should carry display names.
         let enriched = pkgs.iter().filter(|p| p.display_name.is_some()).count();
-        println!("scan_all: {} packages, enriched={}, avail apt={}/snap={}/flatpak={}/appimage={}",
-                 pkgs.len(), enriched, avail.apt, avail.snap, avail.flatpak, avail.appimage);
+        println!(
+            "scan_all: {} packages, enriched={}, avail apt={}/snap={}/flatpak={}/appimage={}",
+            pkgs.len(),
+            enriched,
+            avail.apt,
+            avail.snap,
+            avail.flatpak,
+            avail.appimage
+        );
         let _ = AppKind::Gui;
     }
 }
@@ -93,9 +113,11 @@ struct ScanOutcome {
 /// packages and reports `available = false`.
 pub async fn scan_all() -> (Vec<InstalledPackage>, ScanAvailability) {
     // Discover desktop apps on a blocking thread (synchronous fs walk).
-    let desktop = tokio::task::spawn_blocking(|| DesktopIndex::from_apps(crate::desktop_entries::discover_desktop_apps()))
-        .await
-        .unwrap_or_else(|_| DesktopIndex::empty());
+    let desktop = tokio::task::spawn_blocking(|| {
+        DesktopIndex::from_apps(crate::desktop_entries::discover_desktop_apps())
+    })
+    .await
+    .unwrap_or_else(|_| DesktopIndex::empty());
 
     let mut join = JoinSet::new();
     for scanner in scanners() {
@@ -103,11 +125,26 @@ pub async fn scan_all() -> (Vec<InstalledPackage>, ScanAvailability) {
         join.spawn(async move {
             if scanner.is_available().await {
                 match scanner.scan().await {
-                    Ok(packages) => ScanOutcome { source, available: true, packages, error: None },
-                    Err(e) => ScanOutcome { source, available: true, packages: Vec::new(), error: Some(e.to_string()) },
+                    Ok(packages) => ScanOutcome {
+                        source,
+                        available: true,
+                        packages,
+                        error: None,
+                    },
+                    Err(e) => ScanOutcome {
+                        source,
+                        available: true,
+                        packages: Vec::new(),
+                        error: Some(e.to_string()),
+                    },
                 }
             } else {
-                ScanOutcome { source, available: false, packages: Vec::new(), error: None }
+                ScanOutcome {
+                    source,
+                    available: false,
+                    packages: Vec::new(),
+                    error: None,
+                }
             }
         });
     }
@@ -148,8 +185,11 @@ pub async fn scan_all() -> (Vec<InstalledPackage>, ScanAvailability) {
         merged.sort_by(|a, b| {
             let ka = kind_rank(a.app_kind);
             let kb = kind_rank(b.app_kind);
-            ka.cmp(&kb)
-                .then_with(|| display_name(a).to_lowercase().cmp(&display_name(b).to_lowercase()))
+            ka.cmp(&kb).then_with(|| {
+                display_name(a)
+                    .to_lowercase()
+                    .cmp(&display_name(b).to_lowercase())
+            })
         });
         (merged, availability)
     })
@@ -196,7 +236,7 @@ fn enrich(pkg: &mut InstalledPackage, desktop: &DesktopIndex) {
             pkg.categories = Some(app.categories.join(", "));
         }
         pkg.terminal = app.terminal;
-        if pkg.app_kind == AppKind::Unknown && !app.terminal {
+        if !app.terminal {
             // A .desktop (Type=Application) entry implies a GUI app unless it
             // explicitly launches in a terminal.
             pkg.app_kind = AppKind::Gui;

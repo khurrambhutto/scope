@@ -57,22 +57,29 @@ Phase one (unified package view with icon resolution) and the uninstall capabili
 
 The active product surface covers three capabilities:
 
-### 1. See All Installed Packages And Apps In One Place
+### 1. See Installed Packages And Apps In One Place
 
-Scope is not only a launcher. It must show everything installed that the supported package sources can report, including GUI apps, CLI tools, libraries, services, runtimes, and system packages.
+Scope is not only a launcher. It should show packages and apps from supported package sources, including GUI apps and CLI tools, while keeping the main uninstall surface focused on user-relevant packages. Do not surface low-level OS dependencies or package-manager runtimes as normal uninstall targets.
 
 Scan every package source and display a unified package list:
 
 | Source   | How to list installed packages                  |
 | -------- | ----------------------------------------------- |
-| APT/dpkg | `dpkg-query -W -f '${Package}\t${Version}\t${Status}\n'` |
-| Snap     | `snap list`                                     |
-| Flatpak  | `flatpak list --app --columns=application,name,version,origin` |
+| APT/dpkg | `apt-mark showmanual`, then `dpkg-query` for those package names |
+| Snap     | `snap list`, excluding runtime/base snaps       |
+| Flatpak  | `flatpak list --user --app --columns=application,name,version,origin,size,description` and `flatpak list --system --app --columns=application,name,version,origin,size,description` |
 | AppImage | Scan `~/Applications/` and `~/.local/bin/` for `.AppImage` files |
 
 Each entry should show the best available metadata: name, package id, version, source, installed size, description, update status, protection status, and uninstall capability.
 
-GUI app metadata is an enrichment layer, not the source of truth. Use Linux `.desktop` entries to add display names, launch metadata, categories, and icons for packages that have a GUI app, but do not hide non-GUI packages from the unified package list.
+Current scanner product choices:
+
+- APT intentionally reports manually installed packages only. This avoids filling the app with auto-installed dependencies and OS internals that users should not treat as normal apps.
+- Snap intentionally hides runtime/base snaps such as `core*`, `snapd`, `bare`, `gtk-*`, and `gnome-*`.
+- Snap packages should not default to GUI. Classify them conservatively from command/desktop metadata; desktop-entry enrichment can promote a matching non-terminal `.desktop` entry to GUI.
+- Flatpak user and system installs must be modeled separately with install scope in the backend DTO. Package keys should remain unambiguous, e.g. `flatpak:user:<application-id>` and `flatpak:system:<application-id>`.
+
+GUI app metadata is an enrichment layer, not the source of truth. Use Linux `.desktop` entries to add display names, launch metadata, categories, and icons for packages that have a GUI app. Non-GUI user-relevant packages must still appear with a generic package/source icon and clear source metadata.
 
 Use `/home/khurram/Projects/klauncher` as the local reference for Linux GUI app discovery and icon rendering:
 
@@ -84,7 +91,7 @@ Use `/home/khurram/Projects/klauncher` as the local reference for Linux GUI app 
 
 Adapt this for Scope instead of copying launcher behavior:
 
-- Package scanners find all installed packages/items from supported sources.
+- Package scanners find installed packages/items from supported sources according to the current product filters above.
 - Desktop-entry scanning finds visible GUI app metadata and icons.
 - A merge layer combines package-manager data with desktop-entry data into one `InstalledPackage` or `InstalledApp` DTO.
 - Non-GUI packages must still appear with a generic package/source icon and clear source metadata.
@@ -96,9 +103,10 @@ Each package source has its own uninstall command:
 
 | Source   | Uninstall command                              | Auth required |
 | -------- | ---------------------------------------------- | ------------- |
-| APT/dpkg | `sudo apt remove -y <package>`                 | Yes (sudo)    |
-| Snap     | `sudo snap remove <package>`                   | Yes (sudo)    |
-| Flatpak  | `flatpak uninstall -y <application-id>`        | No (user)     |
+| APT/dpkg | `pkexec env DEBIAN_FRONTEND=noninteractive apt remove -y <package>` | Yes (Polkit) |
+| Snap     | `pkexec snap remove <package>`                 | Yes (Polkit)  |
+| Flatpak user | `flatpak uninstall -y --user <application-id>` | No         |
+| Flatpak system | `pkexec flatpak uninstall -y --system <application-id>` | Yes (Polkit) |
 | AppImage | Move `.AppImage` file to trash                 | No            |
 
 **Implementation approach:**
@@ -107,6 +115,7 @@ Each package source has its own uninstall command:
 - Commands that need `sudo` use `pkexec` (Polkit) to request graphical privilege escalation — the user sees a standard system password dialog. We never store or handle passwords ourselves.
 - Every uninstall goes through a **preview step** first: the user sees exactly what will be removed before confirming.
 - Essential / system-critical packages (like `ubuntu-desktop`, `systemd`, `linux-image-*`) are protected by a deny-list and cannot be removed through Scope.
+- Flatpak uninstall must use the scanned install scope from the package DTO, not a late guess during preview/apply. Preview and revalidation must preserve the same user/system scope.
 
 ### 3. Update Packages from Scope
 

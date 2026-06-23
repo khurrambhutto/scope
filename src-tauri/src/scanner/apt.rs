@@ -39,14 +39,20 @@ async fn scan() -> Result<Vec<InstalledPackage>> {
     let manual = capture_stdout("apt-mark", &["showmanual"], SCAN_TIMEOUT)
         .await
         .context("read manually-installed packages")?;
-    let manual: HashSet<String> = manual.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect();
+    let manual: HashSet<String> = manual
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect();
     if manual.is_empty() {
         return Ok(Vec::new());
     }
 
     // One dpkg-query over all manual names. Installed-Size is in KiB.
     // ${binary:Summary} truncates the description to one line; perfect for the UI.
-    let format = format!("${{Package}}{SEP}${{Version}}{SEP}${{Installed-Size}}{SEP}${{binary:Summary}}{SEP}\\n");
+    let format = format!(
+        "${{Package}}{SEP}${{Version}}{SEP}${{Installed-Size}}{SEP}${{binary:Summary}}{SEP}\\n"
+    );
     let mut args: Vec<String> = vec!["-W".into(), format!("-f={format}")];
     args.extend(manual.into_iter());
 

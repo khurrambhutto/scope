@@ -113,6 +113,12 @@ export function UninstallDialog({ pkg, onClose, onUninstalled }: Props) {
                     <dt>Package</dt>
                     <dd>{plan.package_id}</dd>
                   </div>
+                  {plan.install_scope && (
+                    <div className="plan__row">
+                      <dt>Scope</dt>
+                      <dd>{plan.install_scope}</dd>
+                    </div>
+                  )}
                   <div className="plan__row">
                     <dt>Version</dt>
                     <dd>{plan.current_version || "—"}</dd>
