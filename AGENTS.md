@@ -13,15 +13,55 @@ Linux distributions spread packages across APT, Snap, Flatpak, AppImage, and man
 - **Frontend:** React + TypeScript in `src/`.
 - **Desktop shell:** Tauri v2 + Rust in `src-tauri/`.
 - **Package scanning & operations:** Rust backend in `src-tauri/src/`.
+- **Package scanning logic:** source-specific modules under `src-tauri/src/scanner/`.
+- **Package/app models:** shared typed models in `src-tauri/src/package.rs`.
 - **Website / docs:** static files in `docs/`.
 
-## Phase 1 — Unified Package View, Update & Uninstall
+Do not restore the old Rust TUI architecture. Scope is now a root Tauri v2 desktop app.
 
-Phase 1 is the current focus. It covers three capabilities:
+## Modular Codebase Rules
 
-### 1. See All Installed Packages in One Place
+Scope must be developed as a modular app. Do not put feature logic directly in `App.tsx`, `lib.rs`, `main.rs`, or one large catch-all file.
 
-Scan every package source and display a unified list:
+Backend code should be split by responsibility:
+
+- `src-tauri/src/commands/` — small typed Tauri command handlers only.
+- `src-tauri/src/package.rs` — shared package/app models and source enums.
+- `src-tauri/src/scanner/` — package-source scanners such as APT/dpkg, Snap, Flatpak, AppImage, and future package managers.
+- `src-tauri/src/desktop_entries/` — Linux `.desktop` entry discovery and parsing.
+- `src-tauri/src/icons/` — Linux icon theme lookup, icon resolution, icon protocol support, fallbacks, and caching.
+- `src-tauri/src/operations/` — update/uninstall preview and apply flows.
+- `src-tauri/src/safety/` — protected packages, protected paths, stale-plan checks, and backend validation.
+- `src-tauri/src/system/` — shared command execution, timeouts, environment detection, and process helpers.
+
+`lib.rs` should wire modules, manage Tauri state, register commands, and start Tauri. It must not contain scanner, icon, update, uninstall, or UI-specific logic.
+
+Frontend code should be split by feature:
+
+- `src/app/` — app shell, layout, providers, and top-level composition.
+- `src/features/packages/` — unified installed package list, package rows/cards, filters, search, and package details.
+- `src/features/apps/` — GUI app metadata and icon presentation when needed.
+- `src/features/updates/` — update preview and update flow.
+- `src/features/uninstall/` — uninstall preview and confirmation flow.
+- `src/shared/api/` — typed Tauri `invoke` wrappers.
+- `src/shared/components/` — reusable UI components.
+- `src/shared/types/` — TypeScript models matching backend DTOs.
+
+`App.tsx` should only compose the main shell. It must not contain scanner calls, command strings scattered inline, large UI sections, or business logic.
+
+Every new feature must enter through an appropriate module boundary. If a feature does not clearly belong in one of the existing modules, add a small focused module rather than expanding a large file.
+
+## Current Phase — Unified Package View & Uninstall
+
+Phase one (unified package view with icon resolution) and the uninstall capability are complete. The current focus is phase two remainder: make package **updates** work correctly (preview + apply) before building whole-system cleanup.
+
+The active product surface covers three capabilities:
+
+### 1. See All Installed Packages And Apps In One Place
+
+Scope is not only a launcher. It must show everything installed that the supported package sources can report, including GUI apps, CLI tools, libraries, services, runtimes, and system packages.
+
+Scan every package source and display a unified package list:
 
 | Source   | How to list installed packages                  |
 | -------- | ----------------------------------------------- |
@@ -30,7 +70,25 @@ Scan every package source and display a unified list:
 | Flatpak  | `flatpak list --app --columns=application,name,version,origin` |
 | AppImage | Scan `~/Applications/` and `~/.local/bin/` for `.AppImage` files |
 
-Each entry shows: name, version, source, installed size, and description.
+Each entry should show the best available metadata: name, package id, version, source, installed size, description, update status, protection status, and uninstall capability.
+
+GUI app metadata is an enrichment layer, not the source of truth. Use Linux `.desktop` entries to add display names, launch metadata, categories, and icons for packages that have a GUI app, but do not hide non-GUI packages from the unified package list.
+
+Use `/home/khurram/Projects/klauncher` as the local reference for Linux GUI app discovery and icon rendering:
+
+- Borrow the architecture of `src-tauri/src/platform/linux/desktop_entries.rs` for `.desktop` discovery.
+- Borrow the architecture of `src-tauri/src/platform/linux/icon_resolver.rs` for Linux icon theme resolution.
+- Borrow the idea of a narrow provider/service layer from `src-tauri/src/providers/apps.rs`.
+- Borrow the idea of small typed Tauri commands from `src-tauri/src/commands/launcher.rs`.
+- Borrow the custom icon protocol approach from `src-tauri/src/app.rs` so frontend image tags can render validated local icon paths without broad filesystem access.
+
+Adapt this for Scope instead of copying launcher behavior:
+
+- Package scanners find all installed packages/items from supported sources.
+- Desktop-entry scanning finds visible GUI app metadata and icons.
+- A merge layer combines package-manager data with desktop-entry data into one `InstalledPackage` or `InstalledApp` DTO.
+- Non-GUI packages must still appear with a generic package/source icon and clear source metadata.
+- The frontend must never scan the filesystem directly and must never receive broad filesystem permissions.
 
 ### 2. Uninstall Packages Directly from Scope
 
@@ -61,9 +119,9 @@ Each package source has its own uninstall command:
 
 Updates also use `pkexec` for privilege escalation where needed, and show a preview of version changes before applying.
 
-## Future Phases (After Phase 1 Is Solid)
+## Future Phases
 
-These features come later, inspired by Mole's broader toolkit:
+These features come later, after package view, update preview/apply, and uninstall preview/apply are correct and tested:
 
 - **Clean:** Deep-clean system caches, orphaned dependencies, old kernels, browser caches, and leftover config from uninstalled apps.
 - **Analyze:** Disk usage visualization — find what is eating space.
@@ -84,9 +142,11 @@ These features come later, inspired by Mole's broader toolkit:
 
 - Package scanning: allowed.
 - Update availability scanning: allowed.
-- Package update/uninstall preview: allowed.
-- Package update/uninstall apply: allowed only with preview-first flow, `pkexec` auth, package protection deny-list, timeout handling, and backend revalidation.
-- Do **not** add clean, analyze, status, leftover removal, broad file deletion, or arbitrary privileged commands until phase 1 (view + uninstall + update) is correct and tested.
+- Package uninstall previews + apply: **implemented** — backed by `OperationPlan`, `PlanStore` (stale-plan rejection), `safety` deny-list, `pkexec` auth boundaries, timeouts, logs, and backend revalidation. Keep extending only through `operations/` + `commands/operations.rs` + `safety/`.
+- Package update previews: allowed once backed by `OperationPlan`.
+- Package update apply: allowed only after `OperationPlan`, logs, timeout handling, auth boundaries, stale-plan rejection, and backend revalidation exist.
+- Do **not** add whole-system clean, analyze deletion, purge, installer cleanup, arbitrary file deletion, broad privileged commands, status dashboards, or leftover removal until updates are correct and tested.
+- Any destructive behavior must be preview-first and backend-validated.
 
 ## Commands
 

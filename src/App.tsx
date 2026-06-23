@@ -1,7 +1,8 @@
 import "./App.css";
+import { AppShell } from "./app/AppShell";
 
 function App() {
-  return <></>;
+  return <AppShell />;
 }
 
 export default App;

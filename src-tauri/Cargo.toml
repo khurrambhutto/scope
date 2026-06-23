@@ -16,3 +16,8 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+tokio = { version = "1", features = ["process", "fs", "rt-multi-thread", "time", "macros", "sync"] }
+anyhow = "1"
+walkdir = "2"
+glob = "0.3"
+regex = "1"
