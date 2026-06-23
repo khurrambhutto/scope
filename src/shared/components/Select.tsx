@@ -11,12 +11,14 @@ export function Select<T extends string>({
   onChange,
   className,
   ariaLabel,
+  iconTrigger,
 }: {
   options: SelectOption<T>[];
   value: T;
   onChange: (v: T) => void;
   className?: string;
   ariaLabel?: string;
+  iconTrigger?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [focusIdx, setFocusIdx] = useState(-1);
@@ -95,7 +97,13 @@ export function Select<T extends string>({
         aria-expanded={open}
         aria-label={ariaLabel}
       >
-        <span className="select__value">{selected?.label ?? value}</span>
+        {iconTrigger ? (
+          <svg className="select__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M4 4h16v2.172a2 2 0 0 1-.586 1.414L15 12v7l-6 2v-8.5L4.52 7.572A2 2 0 0 1 4 6.227z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        ) : (
+          <span className="select__value">{selected?.label ?? value}</span>
+        )}
         <svg className="select__arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="m6 9 6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>

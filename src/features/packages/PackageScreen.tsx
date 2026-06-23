@@ -41,7 +41,7 @@ export function PackageScreen() {
     <section className="screen">
       <header className="topbar">
         <div className="topbar__brand">
-          <h1>Apps</h1>
+          <h1>apps</h1>
         </div>
       </header>
 
@@ -49,8 +49,6 @@ export function PackageScreen() {
         query={query}
         source={sourceFilter}
         kind={kindFilter}
-        count={packages.length}
-        total={lastScan?.packages.length ?? 0}
         refreshing={refreshing}
         onQuery={setQuery}
         onSource={setSourceFilter}
@@ -80,6 +78,8 @@ export function PackageScreen() {
           />
         )}
       </div>
+
+      <footer className="footer" />
     </section>
   );
 }

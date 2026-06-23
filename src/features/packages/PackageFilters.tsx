@@ -3,7 +3,7 @@ import type { KindFilter, SourceFilter } from "./usePackages";
 import { Select } from "../../shared/components/Select";
 
 const SOURCE_OPTIONS: { value: SourceFilter; label: string }[] = [
-  { value: "all", label: "All sources" },
+  { value: "all", label: "Any source" },
   ...(["apt", "snap", "flatpak", "appimage"] as const).map((s) => ({
     value: s,
     label: SOURCE_LABELS[s],
@@ -11,7 +11,7 @@ const SOURCE_OPTIONS: { value: SourceFilter; label: string }[] = [
 ];
 
 const KIND_OPTIONS: { value: KindFilter; label: string }[] = [
-  { value: "all", label: "All" },
+  { value: "all", label: "Any kind" },
   { value: "gui", label: "GUI" },
   { value: "cli", label: "CLI" },
   { value: "unknown", label: "Other" },
@@ -21,8 +21,6 @@ export function PackageFilters({
   query,
   source,
   kind,
-  count,
-  total,
   refreshing,
   onQuery,
   onSource,
@@ -32,8 +30,6 @@ export function PackageFilters({
   query: string;
   source: SourceFilter;
   kind: KindFilter;
-  count: number;
-  total: number;
   refreshing: boolean;
   onQuery: (q: string) => void;
   onSource: (s: SourceFilter) => void;
@@ -51,6 +47,7 @@ export function PackageFilters({
           autoFocus
           onChange={(e) => onQuery(e.target.value)}
         />
+        <span style={{ flex: 1 }} />
         <Select
           options={SOURCE_OPTIONS}
           value={source}
@@ -62,8 +59,8 @@ export function PackageFilters({
           value={kind}
           onChange={onKind}
           ariaLabel="Filter by kind"
+          iconTrigger
         />
-        <span style={{ flex: 1 }} />
         <button
           type="button"
           className="btn btn--ghost btn--icon"
@@ -75,9 +72,6 @@ export function PackageFilters({
             <path d="M20 11A8.1 8.1 0 0 0 4.5 9M4 5v4h4m-4 4a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </button>
-        <span className="filters__count">
-          {count} / {total}
-        </span>
       </div>
     </div>
   );
