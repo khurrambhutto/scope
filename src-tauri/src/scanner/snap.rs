@@ -63,7 +63,35 @@ async fn scan() -> Result<Vec<InstalledPackage>> {
         }
         packages.push(pkg);
     }
+    check_updates(&mut packages).await;
     Ok(packages)
+}
+
+/// Run `snap refresh --list` and mark snaps that have available updates.
+/// Note: the list shows current version, not the target, so we set
+/// `has_update = true` without a specific target version for v1.
+async fn check_updates(packages: &mut Vec<InstalledPackage>) {
+    let output = match capture_stdout("snap", &["refresh", "--list"], SCAN_TIMEOUT).await {
+        Ok(o) => o,
+        Err(_) => return,
+    };
+
+    for line in output.lines().skip(1) {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() < 4 {
+            continue;
+        }
+        let name = parts[0].to_string();
+        if let Some(pkg) = packages.iter_mut().find(|p| p.package_id == name) {
+            pkg.has_update = true;
+            // The Version column in refresh --list is the current version, not
+            // the target. We mark the update as available without a target version.
+        }
+    }
 }
 
 fn is_runtime(name: &str) -> bool {

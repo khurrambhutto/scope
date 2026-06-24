@@ -22,6 +22,7 @@ export interface InstalledPackage {
   categories?: string;
   terminal: boolean;
   has_update: boolean;
+  update_version?: string;
 }
 
 export interface ScanAvailability {
