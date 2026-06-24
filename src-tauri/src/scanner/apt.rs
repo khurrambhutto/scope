@@ -82,6 +82,7 @@ async fn scan() -> Result<Vec<InstalledPackage>> {
         pkg.app_kind = classify(&pkg.name);
         packages.push(pkg);
     }
+    check_updates(&mut packages).await;
     Ok(packages)
 }
 
@@ -101,6 +102,39 @@ fn classify(name: &str) -> AppKind {
         AppKind::Cli
     } else {
         AppKind::Unknown
+    }
+}
+
+/// Run `apt list --upgradable` and mark packages that have available updates.
+async fn check_updates(packages: &mut Vec<InstalledPackage>) {
+    let output = match capture_stdout("apt", &["list", "--upgradable"], Duration::from_secs(30)).await
+    {
+        Ok(o) => o,
+        Err(_) => return,
+    };
+
+    // Line format: "package/suite candidate_version arch [upgradable from: old_version]"
+    // Or:          "package/arch candidate_version arch [held]"
+    let re = match regex::Regex::new(
+        r"^(\S+)/(\S+)\s+(\S+)\s+\S+\s+\[upgradable from: (\S+)\]",
+    ) {
+        Ok(r) => r,
+        Err(_) => return,
+    };
+
+    for line in output.lines() {
+        let line = line.trim();
+        if line.is_empty() || line == "Listing..." || line.starts_with("WARNING:") {
+            continue;
+        }
+        if let Some(caps) = re.captures(line) {
+            let name = caps[1].to_string();
+            let candidate = caps[3].to_string();
+            if let Some(pkg) = packages.iter_mut().find(|p| p.package_id == name) {
+                pkg.has_update = true;
+                pkg.update_version = Some(candidate);
+            }
+        }
     }
 }
 

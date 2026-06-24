@@ -7,6 +7,7 @@
 //! before executing — so a stale or tampered plan is rejected.
 
 pub mod uninstall;
+pub mod update;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -16,12 +17,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::package::{InstallScope, PackageSource};
 
-/// What kind of operation a plan describes. `Update` is reserved for a later
-/// phase and not yet wired to the frontend.
+/// What kind of operation a plan describes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Operation {
     Uninstall,
+    Update,
 }
 
 /// How privilege escalation is handled. Scope never touches passwords — `pkexec`
@@ -57,6 +58,7 @@ pub struct OperationPlan {
     pub install_scope: Option<InstallScope>,
     pub display_name: String,
     pub current_version: String,
+    pub target_version: String,
     pub requires_auth: bool,
     pub auth_method: AuthMethod,
     pub protected: bool,

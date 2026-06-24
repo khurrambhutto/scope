@@ -4,6 +4,7 @@ import { SOURCE_COLORS, SOURCE_LABELS } from "../../shared/types/package";
 import { formatSize, kindIcon } from "./format";
 import { AppIcon } from "../../shared/components/AppIcon";
 import { UninstallDialog } from "../uninstall/UninstallDialog";
+import { UpdateDialog } from "../update/UpdateDialog";
 
 export function PackageDetail({
   pkg,
@@ -13,6 +14,7 @@ export function PackageDetail({
   onUninstalled?: (pkg: InstalledPackage) => void;
 }) {
   const [uninstallTarget, setUninstallTarget] = useState<InstalledPackage | null>(null);
+  const [updateTarget, setUpdateTarget] = useState<InstalledPackage | null>(null);
   if (!pkg) return null;
 
   const title = pkg.display_name ?? pkg.name;
@@ -52,6 +54,15 @@ export function PackageDetail({
         ))}
       </dl>
       <div className="detail__actions">
+        {pkg.has_update && (
+          <button
+            type="button"
+            className="btn btn--primary detail__update"
+            onClick={() => setUpdateTarget(pkg)}
+          >
+            Update{pkg.update_version ? ` to ${pkg.update_version}` : ""}
+          </button>
+        )}
         <button
           type="button"
           className="btn btn--danger detail__uninstall"
@@ -61,6 +72,16 @@ export function PackageDetail({
         </button>
         <span className="detail__actions-hint">Preview-first · protected packages are blocked</span>
       </div>
+      {updateTarget && (
+        <UpdateDialog
+          pkg={updateTarget}
+          onClose={() => setUpdateTarget(null)}
+          onUpdated={(p) => {
+            setUpdateTarget(null);
+            onUninstalled?.(p);
+          }}
+        />
+      )}
       {uninstallTarget && (
         <UninstallDialog
           pkg={uninstallTarget}

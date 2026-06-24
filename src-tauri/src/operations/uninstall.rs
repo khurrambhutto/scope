@@ -11,7 +11,7 @@ use anyhow::Result;
 
 use crate::package::{InstallScope, InstalledPackage, PackageSource};
 use crate::safety;
-use crate::system::which;
+use crate::system::{run_elevated, which};
 
 use super::{new_plan_id, now_ms, AuthMethod, Operation, OperationPlan, OperationResult, PlanStep};
 
@@ -33,6 +33,7 @@ pub fn preview(pkg: &InstalledPackage) -> OperationPlan {
         install_scope: pkg.install_scope,
         display_name: pkg.display_name.clone().unwrap_or_else(|| pkg.name.clone()),
         current_version: pkg.version.clone(),
+        target_version: String::new(),
         requires_auth: matches!(auth, AuthMethod::Pkexec),
         auth_method: auth,
         protected: protection.protected,
@@ -140,114 +141,6 @@ pub async fn apply(plan: &OperationPlan) -> OperationResult {
         PackageSource::Snap => snap_remove(&plan.package_id).await,
         PackageSource::Flatpak => flatpak_uninstall(&plan.package_id, plan.install_scope).await,
         PackageSource::AppImage => appimage_trash(&plan.package_id).await,
-    }
-}
-
-/// Resolve a binary to an absolute path (pkexec and env cleanup prefer this).
-fn abs(bin: &str) -> String {
-    for dir in ["/usr/bin", "/bin", "/usr/local/bin", "/usr/sbin", "/sbin"] {
-        let p = format!("{dir}/{bin}");
-        if std::path::Path::new(&p).is_file() {
-            return p;
-        }
-    }
-    bin.to_string()
-}
-
-/// Run a command with an optional `pkexec env DEBIAN_FRONTEND=noninteractive`
-/// prefix, capturing combined output and enforcing a timeout.
-async fn run_elevated(
-    program: &str,
-    args: &[&str],
-    auth: AuthMethod,
-    timeout: Duration,
-) -> OperationResult {
-    let program_abs = abs(program);
-    let mut argv: Vec<String> = Vec::new();
-    let display_program: String;
-    match auth {
-        AuthMethod::Pkexec => {
-            // `env` lets us carry a minimal non-interactive env through pkexec,
-            // which otherwise strips the environment.
-            argv.push("env".into());
-            argv.push("DEBIAN_FRONTEND=noninteractive".into());
-            argv.push(program_abs.clone());
-            display_program = format!("pkexec env DEBIAN_FRONTEND=noninteractive {program_abs}");
-        }
-        AuthMethod::None => {
-            display_program = program_abs.clone();
-        }
-    }
-    for a in args {
-        argv.push((*a).to_string());
-    }
-    let argv_refs: Vec<&str> = argv.iter().map(String::as_str).collect();
-
-    let mut cmd = match auth {
-        AuthMethod::Pkexec => {
-            let mut c = tokio::process::Command::new("pkexec");
-            c.args(&argv_refs);
-            c
-        }
-        AuthMethod::None => {
-            let mut c = tokio::process::Command::new(&program_abs);
-            c.args(
-                &argv[if matches!(auth, AuthMethod::Pkexec) {
-                    3
-                } else {
-                    0
-                }..],
-            );
-            c
-        }
-    };
-
-    let started = std::time::Instant::now();
-    let output = tokio::time::timeout(timeout, cmd.output()).await;
-
-    let elapsed = started.elapsed();
-    let logs_suffix = format!(
-        "\n[scope] ran: {} {:?} ({}ms)",
-        display_program,
-        args,
-        elapsed.as_millis()
-    );
-
-    match output {
-        Ok(Ok(out)) => {
-            let stdout = String::from_utf8_lossy(&out.stdout).to_string();
-            let stderr = String::from_utf8_lossy(&out.stderr).to_string();
-            let logs = format!("--- stdout ---\n{stdout}\n--- stderr ---\n{stderr}{logs_suffix}");
-            let success = out.status.success();
-            let exit_code = out.status.code();
-            let message = if success {
-                "Uninstall completed successfully.".to_string()
-            } else {
-                let first_err = stderr
-                    .lines()
-                    .find(|l| !l.trim().is_empty())
-                    .unwrap_or("command failed");
-                format!("Uninstall failed (exit {:?}): {}", exit_code, first_err)
-            };
-            OperationResult {
-                success,
-                message,
-                logs,
-                exit_code,
-            }
-        }
-        Ok(Err(e)) => OperationResult {
-            success: false,
-            message: format!("Failed to start command: {e}"),
-            logs: format!("spawn error: {e}{logs_suffix}"),
-            exit_code: None,
-        },
-        Err(_) => OperationResult {
-            success: false,
-            message: format!("Uninstall timed out after {timeout:?}."),
-            logs: format!("timed out after {timeout:?}{logs_suffix}"),
-            exit_code: None,
-        },
     }
 }
 

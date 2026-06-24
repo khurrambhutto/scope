@@ -3,7 +3,7 @@
 
 import type { InstallScope, PackageSource } from "./package";
 
-export type Operation = "uninstall";
+export type Operation = "uninstall" | "update";
 export type AuthMethod = "none" | "pkexec";
 
 export interface PlanStep {
@@ -19,6 +19,7 @@ export interface OperationPlan {
   install_scope?: InstallScope;
   display_name: string;
   current_version: string;
+  target_version: string;
   requires_auth: boolean;
   auth_method: AuthMethod;
   protected: boolean;

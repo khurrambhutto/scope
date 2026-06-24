@@ -418,7 +418,23 @@ body {
   margin-top: 10px;
 }
 
-/* ---------- Danger / OK ---------- */
+/* ---------- Primary / Danger / OK ---------- */
+.btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.btn--primary:hover {
+  filter: brightness(1.12);
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.btn--primary:disabled {
+  background: var(--bg-elev-2);
+  color: var(--text-faint);
+  border-color: var(--border);
+}
 .btn--danger {
   background: var(--danger);
   border-color: var(--danger);

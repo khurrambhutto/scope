@@ -13,7 +13,7 @@ mod safety;
 mod scanner;
 mod system;
 
-use commands::operations::{apply_uninstall, preview_uninstall};
+use commands::operations::{apply_uninstall, preview_uninstall, apply_update, preview_update};
 use commands::packages::{get_cached_scan, scan_packages, scan_status, search_packages, ScanCache};
 use operations::PlanStore;
 use tauri::http::{header, Response, StatusCode};
@@ -49,7 +49,9 @@ pub fn run() {
             scan_status,
             search_packages,
             preview_uninstall,
-            apply_uninstall
+            apply_uninstall,
+            preview_update,
+            apply_update
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

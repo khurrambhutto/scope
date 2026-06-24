@@ -93,7 +93,51 @@ async fn scan_scope(scope: InstallScope) -> Result<Vec<InstalledPackage>> {
         pkg.app_kind = AppKind::Gui;
         packages.push(pkg);
     }
+    // Check for updates after scanning each scope.
+    check_scope_updates(scope, &mut packages).await;
     Ok(packages)
+}
+
+/// Check for Flatpak updates for a given scope by running
+/// `flatpak remote-ls --updates` and matching against the scanned packages.
+async fn check_scope_updates(scope: InstallScope, packages: &mut Vec<InstalledPackage>) {
+    // Refresh appstream metadata first (fast when fresh).
+    let _ = capture_stdout("flatpak", &["update", "--appstream"], SCAN_TIMEOUT).await;
+
+    let scope_flag = match scope {
+        InstallScope::User => "--user",
+        InstallScope::System => "--system",
+    };
+    let output = match capture_stdout(
+        "flatpak",
+        &["remote-ls", "--updates", scope_flag, "--columns=application,version"],
+        SCAN_TIMEOUT,
+    )
+    .await
+    {
+        Ok(o) => o,
+        Err(_) => return,
+    };
+
+    // Tab-delimited: application_id\tversion
+    for line in output.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.is_empty() {
+            continue;
+        }
+        let app_id = parts[0].to_string();
+        let new_version = parts.get(1).filter(|v| !v.is_empty()).map(|s| s.to_string());
+        if let Some(pkg) = packages.iter_mut().find(|p| p.package_id == app_id) {
+            pkg.has_update = true;
+            if let Some(ver) = new_version {
+                pkg.update_version = Some(ver);
+            }
+        }
+    }
 }
 
 /// Parse human sizes like "384.1 MB", "1.2 GB" into bytes.

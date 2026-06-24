@@ -111,6 +111,9 @@ pub struct InstalledPackage {
     pub terminal: bool,
     /// True when an update is known to be available.
     pub has_update: bool,
+    /// The version string of the available update, if known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub update_version: Option<String>,
 }
 
 impl InstalledPackage {
@@ -132,6 +135,7 @@ impl InstalledPackage {
             categories: None,
             terminal: false,
             has_update: false,
+            update_version: None,
         }
     }
 
@@ -157,6 +161,7 @@ impl InstalledPackage {
             categories: None,
             terminal: false,
             has_update: false,
+            update_version: None,
         }
     }
 }
