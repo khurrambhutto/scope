@@ -23,8 +23,7 @@ jobs:
             libappindicator3-dev \
             librsvg2-dev \
             patchelf \
-            rpm \
-            rpm-build
+            rpm
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
