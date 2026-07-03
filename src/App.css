@@ -56,15 +56,23 @@ body {
   padding: 14px 20px;
   background: transparent;
 }
+.topbar__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 .topbar__brand h1 {
   margin: 0;
   font-size: 20px;
   letter-spacing: 0.8px;
   font-weight: 700;
-  background: linear-gradient(135deg, var(--text) 0%, #e8b4b0 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: #ffffff;
+}
+.topbar__logo {
+  display: block;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 
 .btn {

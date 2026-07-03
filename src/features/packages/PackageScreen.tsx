@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { InstalledPackage } from "../../shared/types/package";
+import { Logo } from "../../shared/components/Logo";
 import { PackageList } from "./PackageList";
 import { PackageFilters } from "./PackageFilters";
 import { usePackages } from "./usePackages";
@@ -43,7 +44,8 @@ export function PackageScreen() {
     <section className="screen">
       <header className="topbar">
         <div className="topbar__brand">
-          <h1>apps</h1>
+          <Logo size={28} className="topbar__logo" ariaLabel="Scope" />
+          <h1>Scope</h1>
         </div>
       </header>
 
