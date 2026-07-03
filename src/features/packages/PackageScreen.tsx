@@ -14,10 +14,12 @@ export function PackageScreen() {
     query,
     sourceFilter,
     kindFilter,
+    viewMode,
     refresh,
     setQuery,
     setSourceFilter,
     setKindFilter,
+    setViewMode,
   } = usePackages();
   const [selected, setSelected] = useState<InstalledPackage | null>(null);
 
@@ -49,10 +51,12 @@ export function PackageScreen() {
         query={query}
         source={sourceFilter}
         kind={kindFilter}
+        viewMode={viewMode}
         refreshing={refreshing}
         onQuery={setQuery}
         onSource={setSourceFilter}
         onKind={setKindFilter}
+        onViewMode={setViewMode}
         onRescan={refresh}
       />
 
@@ -73,6 +77,7 @@ export function PackageScreen() {
             packages={packages}
             selectedKey={selectedRow?.key ?? null}
             selectedPkg={selectedRow}
+            viewMode={viewMode}
             onSelect={handleSelect}
             onUninstalled={handleUninstalled}
           />

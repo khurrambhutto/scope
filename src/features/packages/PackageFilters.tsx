@@ -1,5 +1,5 @@
 import { SOURCE_LABELS } from "../../shared/types/package";
-import type { KindFilter, SourceFilter } from "./usePackages";
+import type { KindFilter, SourceFilter, ViewMode } from "./usePackages";
 import { Select } from "../../shared/components/Select";
 
 const SOURCE_OPTIONS: { value: SourceFilter; label: string }[] = [
@@ -21,19 +21,23 @@ export function PackageFilters({
   query,
   source,
   kind,
+  viewMode,
   refreshing,
   onQuery,
   onSource,
   onKind,
+  onViewMode,
   onRescan,
 }: {
   query: string;
   source: SourceFilter;
   kind: KindFilter;
+  viewMode: ViewMode;
   refreshing: boolean;
   onQuery: (q: string) => void;
   onSource: (s: SourceFilter) => void;
   onKind: (k: KindFilter) => void;
+  onViewMode: (v: ViewMode) => void;
   onRescan: () => void;
 }) {
   return (
@@ -47,6 +51,22 @@ export function PackageFilters({
           autoFocus
           onChange={(e) => onQuery(e.target.value)}
         />
+        <div className="view-toggle">
+          <button
+            type="button"
+            className={`view-toggle__btn${viewMode === "uninstall" ? " view-toggle__btn--active" : ""}`}
+            onClick={() => onViewMode("uninstall")}
+          >
+            Uninstall
+          </button>
+          <button
+            type="button"
+            className={`view-toggle__btn${viewMode === "updates" ? " view-toggle__btn--active" : ""}`}
+            onClick={() => onViewMode("updates")}
+          >
+            Updates
+          </button>
+        </div>
         <span style={{ flex: 1 }} />
         <Select
           options={SOURCE_OPTIONS}

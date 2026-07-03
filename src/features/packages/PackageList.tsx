@@ -2,17 +2,20 @@ import { Fragment } from "react";
 import type { InstalledPackage } from "../../shared/types/package";
 import { PackageRow } from "./PackageRow";
 import { PackageDetail } from "./PackageDetail";
+import type { ViewMode } from "./usePackages";
 
 export function PackageList({
   packages,
   selectedKey,
   selectedPkg,
+  viewMode,
   onSelect,
   onUninstalled,
 }: {
   packages: InstalledPackage[];
   selectedKey: string | null;
   selectedPkg: InstalledPackage | null;
+  viewMode: ViewMode;
   onSelect: (pkg: InstalledPackage) => void;
   onUninstalled: (pkg: InstalledPackage) => void;
 }) {
@@ -29,7 +32,7 @@ export function PackageList({
             onClick={onSelect}
           />
           {p.key === selectedKey && selectedPkg && (
-            <PackageDetail pkg={selectedPkg} onUninstalled={onUninstalled} />
+            <PackageDetail pkg={selectedPkg} viewMode={viewMode} onUninstalled={onUninstalled} />
           )}
         </Fragment>
       ))}

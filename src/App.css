@@ -130,6 +130,52 @@ body {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-glow);
 }
+/* ---------- View Mode Toggle ---------- */
+.view-toggle {
+  display: flex;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px;
+  gap: 2px;
+  flex: 0 0 auto;
+  transition: border-color 0.15s, background 0.15s;
+}
+.view-toggle:hover {
+  border-color: var(--text-faint);
+  background: rgba(255, 255, 255, 0.02);
+}
+.view-toggle__btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  padding: 5px 18px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s, box-shadow 0.18s;
+  white-space: nowrap;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+  position: relative;
+}
+.view-toggle__btn:hover {
+  color: var(--text);
+}
+.view-toggle__btn:active {
+  transform: scale(0.96);
+}
+.view-toggle__btn--active {
+  background: linear-gradient(135deg, var(--accent) 0%, #e0605a 100%);
+  color: #fff;
+  box-shadow: 0 1px 4px rgba(212, 80, 74, 0.4);
+}
+.view-toggle__btn--active:hover {
+  background: linear-gradient(135deg, var(--accent) 0%, #e0605a 100%);
+  color: #fff;
+}
 /* ---------- Custom Select ---------- */
 .select {
   position: relative;

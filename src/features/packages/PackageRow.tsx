@@ -23,7 +23,6 @@ export function PackageRow({
       <span className="pkg-row__main">
         <span className="pkg-row__title">
           {title}
-          {pkg.has_update && <span className="pkg-row__update" title="Update available">↑</span>}
         </span>
         <span className="pkg-row__meta-line">
           <span>{pkg.version || "—"}</span>
