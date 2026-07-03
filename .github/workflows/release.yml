@@ -6,47 +6,50 @@ on:
       - "v*.*.*"
 
 jobs:
-  build-deb:
-    name: Build .deb and Release
+  build:
+    name: Build & Release
     runs-on: ubuntu-latest
-
     permissions:
       contents: write
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            rpm \
+            rpm-build
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache cargo registry
-        uses: actions/cache@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
+          node-version: 20
+          cache: npm
 
-      - name: Install cargo-deb
-        run: cargo install cargo-deb
+      - name: Install frontend dependencies
+        run: npm ci
 
-      - name: Build .deb package
-        run: cargo deb
+      - name: Build Tauri bundles
+        run: npx tauri build --bundles deb rpm appimage
 
-      - name: Get package filename
-        id: get_filename
-        run: echo "DEB_FILE=$(ls target/debian/*.deb)" >> $GITHUB_OUTPUT
-
-      - name: Create GitHub Release and upload .deb
+      - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "scope ${{ github.ref_name }}"
+          name: "Scope ${{ github.ref_name }}"
           tag_name: ${{ github.ref_name }}
           draft: false
           prerelease: false
           generate_release_notes: true
-          files: ${{ steps.get_filename.outputs.DEB_FILE }}
+          files: |
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/rpm/*.rpm
+            src-tauri/target/release/bundle/appimage/*.AppImage
