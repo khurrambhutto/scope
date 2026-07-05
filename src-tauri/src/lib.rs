@@ -23,6 +23,8 @@ pub fn run() {
     tauri::Builder::default()
         .manage(ScanCache::default())
         .manage(PlanStore::default())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .register_uri_scheme_protocol("scope-icon", |_app, request| {
             // Serve only the specific local file the URI points at. The
             // frontend never picks arbitrary paths: every URL it sees is

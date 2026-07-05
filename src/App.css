@@ -696,3 +696,77 @@ body {
 .spin {
   animation: scope-spin 0.7s linear infinite;
 }
+
+/* ---------- Updater notification ---------- */
+.updater__overlay {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 200;
+  display: flex;
+  justify-content: center;
+  padding: 16px;
+  pointer-events: none;
+}
+.updater__banner {
+  pointer-events: auto;
+  width: min(480px, 100%);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.5);
+}
+.updater__body {
+  padding: 16px 20px;
+}
+.updater__content {
+  margin-bottom: 12px;
+}
+.updater__content:last-child {
+  margin-bottom: 0;
+}
+.updater__title {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.updater__version {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: var(--accent);
+}
+.updater__date {
+  color: var(--text-faint);
+}
+.updater__notes {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  max-height: 80px;
+  overflow: auto;
+}
+.updater__muted {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.updater__progress {
+  height: 4px;
+  background: var(--bg-elev-2);
+  border-radius: 2px;
+  margin: 10px 0 6px;
+  overflow: hidden;
+}
+.updater__progress-bar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+.updater__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}

@@ -23,7 +23,8 @@ jobs:
             libappindicator3-dev \
             librsvg2-dev \
             patchelf \
-            rpm
+            rpm \
+            jq
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -37,8 +38,56 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Write Tauri signing key
+        run: |
+          mkdir -p ~/.tauri
+          echo "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" > ~/.tauri/scope.key
+
       - name: Build Tauri bundles
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ~/.tauri/scope.key
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         run: npx tauri build --bundles deb rpm appimage
+
+      - name: Generate latest.json
+        run: |
+          RELEASE_DIR="src-tauri/target/release/bundle"
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          APPIMAGE=$(ls "$RELEASE_DIR"/appimage/*.AppImage 2>/dev/null | head -1)
+          APPIMAGE_SIG=$(ls "$RELEASE_DIR"/appimage/*.AppImage.sig 2>/dev/null | head -1)
+          DEB=$(ls "$RELEASE_DIR"/deb/*.deb 2>/dev/null | head -1)
+          DEB_SIG=$(ls "$RELEASE_DIR"/deb/*.deb.sig 2>/dev/null | head -1)
+
+          APPIMAGE_NAME=$(basename "$APPIMAGE")
+          DEB_NAME=$(basename "$DEB")
+
+          APPIMAGE_SIGNATURE=""
+          if [ -f "$APPIMAGE_SIG" ]; then
+            APPIMAGE_SIGNATURE=$(cat "$APPIMAGE_SIG")
+          fi
+
+          DEB_SIGNATURE=""
+          if [ -f "$DEB_SIG" ]; then
+            DEB_SIGNATURE=$(cat "$DEB_SIG")
+          fi
+
+          cat > latest.json << EOF
+          {
+            "version": "${VERSION}",
+            "notes": "See full release notes: https://github.com/khurrambhutto/scope/releases/tag/${TAG}",
+            "pub_date": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "platforms": {
+              "linux-x86_64": {
+                "signature": "${APPIMAGE_SIGNATURE}",
+                "url": "https://github.com/khurrambhutto/scope/releases/download/${TAG}/${APPIMAGE_NAME}"
+              }
+            }
+          }
+          EOF
+
+          echo "Generated latest.json:"
+          cat latest.json
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
@@ -50,5 +99,8 @@ jobs:
           generate_release_notes: true
           files: |
             src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/deb/*.deb.sig
             src-tauri/target/release/bundle/rpm/*.rpm
             src-tauri/target/release/bundle/appimage/*.AppImage
+            src-tauri/target/release/bundle/appimage/*.AppImage.sig
+            latest.json

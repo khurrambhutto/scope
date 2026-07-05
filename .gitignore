@@ -17,5 +17,14 @@ Thumbs.db
 # Logs
 *.log
 
+# Release artifacts
+*.deb
+*.rpm
+*.AppImage
+*.sig
+
+# Tauri generated
+/src-tauri/gen/
+
 # Cargo lock is typically committed for binaries
 # Cargo.lock
