@@ -38,14 +38,9 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Write Tauri signing key
-        run: |
-          mkdir -p ~/.tauri
-          echo "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" > ~/.tauri/scope.key
-
       - name: Build Tauri bundles
         env:
-          TAURI_SIGNING_PRIVATE_KEY: ~/.tauri/scope.key
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         run: npx tauri build --bundles deb rpm appimage
 

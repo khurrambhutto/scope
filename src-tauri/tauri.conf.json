@@ -37,7 +37,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFFMzAwNkYwN0NENzc3QzYKUldUR2Q5ZDg4QVl3SGhRQlJWa1NrUTJ4VGJuY0tiNFU4dVlaQzhxdHNpdkhxb2s2LytIYVE3Y0oK",
+      "pubkey": "untrusted comment: minisign public key: 1E3006F07CD777C6\nRWTGd9d88AYwHhQBRVkSkQ2xTbncKb4U8uYZC8qtsivHqok6/+HaQ7cJ",
       "endpoints": [
         "https://github.com/khurrambhutto/scope/releases/latest/download/latest.json"
       ]
