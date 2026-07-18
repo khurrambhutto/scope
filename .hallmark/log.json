@@ -1,0 +1,11 @@
+[
+  {
+    "date": "2026-07-18",
+    "macrostructure": "Workbench",
+    "theme": "custom Ember (tuned to Scope app UI: paper #131010 dark band, accent #e05240 warm-red, Inter grotesk)",
+    "nav": "N5 floating-pill",
+    "footer": "Ft5 statement",
+    "enrichment": "real app screenshots (main.png, detail.png)",
+    "brief": "Scope · Linux app manager GUI relaunch landing page"
+  }
+]

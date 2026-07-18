@@ -1,34 +1,51 @@
-# Scope — Unified Linux Package & App Manager TUI
+# Scope — See, update & uninstall every Linux app
 
-Scope is a terminal user interfalsce (TUI) app manager for Linux that unifies multiple package managers (APT, Snap, Flatpak, AppImage).
+Scope is a free, open-source desktop app for Linux (GUI, built with Tauri v2 + Rust + React) that unifies APT, Snap, Flatpak, and AppImage into one searchable list. Users can update or uninstall any app with preview-first, Polkit-authorized operations.
 
 ## Pages
 
-- [Homepage](https://khurrambhutto.github.io/scope/) — Overview, features, download links, and FAQ for the Linux app manager.
+- [Homepage](https://khurrambhutto.github.io/scope/) — Overview, screenshots, install instructions, and FAQ for the Linux app manager.
 - [GitHub Repository](https://github.com/khurrambhutto/scope) — Source code, issues, and releases.
-- [Releases](https://github.com/khurrambhutto/scope/releases) — Pre-built binaries for download.
+- [Releases](https://github.com/khurrambhutto/scope/releases) — Pre-built .deb, AppImage, and .rpm packages for x86_64 Linux.
 
 ## Key Information
 
+- **Current version**: 0.1.8
 - **License**: MIT
-- **Language**: Rust
-- **Platform**: Linux
-- **Author**: Khurram Bhutto (https://khurrambhutto.tech/)
-- **Features**: Multi-source package management, real-time fuzzy search, zero runtime dependencies
+- **Stack**: Tauri v2, Rust backend, React + TypeScript frontend
+- **Platform**: Linux (x86_64) — Ubuntu/Debian (.deb) primary, plus AppImage and .rpm
+- **Author**: Khurram Bhutto (https://khurrambhutto.github.io/portfolio-site/)
+- **Features**: Unified package list across APT/Snap/Flatpak/AppImage, real-time search, source filters, preview-first update/uninstall plans, protected-package deny-list, Polkit (pkexec) privilege escalation, background task center with logs
 
 ## Installation
 
+Ubuntu / Debian:
+
 ```bash
-cargo install --git https://github.com/khurrambhutto/scope
+sudo apt install ./Scope_0.1.8_amd64.deb
+```
+
+Or download the AppImage or .rpm from https://github.com/khurrambhutto/scope/releases/latest
+
+From source:
+
+```bash
+git clone https://github.com/khurrambhutto/scope
+cd scope
+npm install
+npm run tauri dev
 ```
 
 ## FAQ
 
 **What is Scope?**
-A TUI app manager that unifies APT, Snap, Flatpak, and AppImage into a single searchable view.
+A Linux desktop app that scans APT, Snap, Flatpak, and AppImage into a single searchable list, with safe preview-first updates and uninstalls.
 
 **Which package managers are supported?**
-APT (Debian/Ubuntu), Snap, Flatpak, and AppImage.
+APT/dpkg (manual packages), Snap (runtime/base snaps hidden), Flatpak (user and system scopes), and AppImage files in ~/Applications and ~/.local/bin.
+
+**Is it safe to uninstall apps with Scope?**
+Yes — every operation shows a preview plan first, a backend deny-list blocks removal of system-critical packages, and privileged operations go through Polkit (pkexec) so Scope never handles passwords.
 
 **Is it free?**
-Yes, MIT licensed open source software.
+Yes, MIT-licensed open source software.

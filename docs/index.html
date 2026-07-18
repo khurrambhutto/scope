@@ -1,48 +1,65 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <script>document.documentElement.classList.add('js');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Scope — Unified Linux Package Manager</title>
+  <title>Scope — See, update &amp; uninstall every Linux app</title>
   <meta name="google-site-verification" content="msIjf5-oHmJg_58yKXFLPUWxh03z06n0ON6FUat3KZ4" />
-  <meta name="description" content="Scope is a Linux desktop app for package visibility, cleanup planning, and safe maintenance workflows across APT, Snap, Flatpak, and AppImage.">
-  <meta name="robots" content="index, follow, max-snippet:150, max-image-preview:large">
+  <meta name="description" content="Scope is a free, open-source Linux desktop app that scans APT, Snap, Flatpak, and AppImage into one searchable list — with safe, preview-first updates and uninstalls.">
+  <meta name="author" content="Khurram Bhutto">
+  <meta name="robots" content="index, follow, max-snippet:160, max-image-preview:large">
+  <meta name="theme-color" content="#131010">
+  <meta name="color-scheme" content="dark">
   <link rel="canonical" href="https://khurrambhutto.github.io/scope/">
+  <link rel="icon" type="image/svg+xml" href="scope-logo.svg">
 
   <meta property="og:type" content="website">
+  <meta property="og:locale" content="en_US">
   <meta property="og:url" content="https://khurrambhutto.github.io/scope/">
-  <meta property="og:title" content="Scope — Unified Linux Package Manager">
-  <meta property="og:description" content="A Linux desktop app for package visibility, cleanup planning, and safe maintenance workflows.">
-  <meta property="og:image" content="https://khurrambhutto.github.io/scope/image.png">
+  <meta property="og:title" content="Scope — See, update &amp; uninstall every Linux app">
+  <meta property="og:description" content="One window for every app on your Linux system. APT, Snap, Flatpak, and AppImage in a single searchable list — with preview-first updates and uninstalls.">
+  <meta property="og:image" content="https://khurrambhutto.github.io/scope/og.jpg">
+  <meta property="og:image:type" content="image/jpeg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="The Scope desktop app showing a unified list of installed Linux apps from APT, Snap, Flatpak, and AppImage">
   <meta property="og:site_name" content="Scope">
 
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Scope — Unified Linux Package Manager">
-  <meta name="twitter:description" content="A Linux desktop app for package visibility, cleanup planning, and safe maintenance workflows.">
-  <meta name="twitter:image" content="https://khurrambhutto.github.io/scope/image.png">
+  <meta name="twitter:title" content="Scope — See, update &amp; uninstall every Linux app">
+  <meta name="twitter:description" content="One window for every app on your Linux system. APT, Snap, Flatpak, and AppImage in a single searchable list — with preview-first updates and uninstalls.">
+  <meta name="twitter:image" content="https://khurrambhutto.github.io/scope/og.jpg">
+  <meta name="twitter:image:alt" content="The Scope desktop app showing a unified list of installed Linux apps from APT, Snap, Flatpak, and AppImage">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     "name": "Scope",
-    "description": "A Linux desktop app for package visibility, cleanup planning, and safe maintenance workflows.",
+    "alternateName": "Scope — Linux app manager",
+    "description": "Scope is a Linux desktop app that scans APT, Snap, Flatpak, and AppImage into one searchable list, with safe preview-first updates and uninstalls.",
     "url": "https://khurrambhutto.github.io/scope/",
-    "image": "https://khurrambhutto.github.io/scope/image.png",
-    "applicationCategory": "DeveloperApplication",
+    "image": "https://khurrambhutto.github.io/scope/og.jpg",
+    "screenshot": [
+      "https://khurrambhutto.github.io/scope/main.png",
+      "https://khurrambhutto.github.io/scope/detail.png"
+    ],
+    "applicationCategory": "UtilitiesApplication",
+    "applicationSubCategory": "Package manager",
     "operatingSystem": "Linux",
-    "softwareVersion": "0.1.4",
+    "softwareVersion": "0.1.8",
+    "fileFormat": ["application/vnd.debian.binary-package", "application/x-rpm", "application/x-executable"],
     "license": "https://opensource.org/licenses/MIT",
+    "isAccessibleForFree": true,
     "author": {
       "@type": "Person",
       "name": "Khurram Bhutto",
-      "url": "https://khurrambhutto.tech/",
+      "url": "https://khurrambhutto.github.io/portfolio-site/",
       "sameAs": [
         "https://pk.linkedin.com/in/khurram-bhutto",
         "https://github.com/khurrambhutto"
@@ -50,15 +67,19 @@
     },
     "codeRepository": "https://github.com/khurrambhutto/scope",
     "downloadUrl": "https://github.com/khurrambhutto/scope/releases",
+    "releaseNotes": "https://github.com/khurrambhutto/scope/releases",
     "offers": {
       "@type": "Offer",
       "price": "0",
       "priceCurrency": "USD"
     },
     "featureList": [
-      "Multi-package manager support (APT, Snap, Flatpak, AppImage)",
-      "Searchable package table",
-      "Built with Rust, Tauri, and React"
+      "Unified list of APT, Snap, Flatpak, and AppImage apps",
+      "Real-time search and source filters",
+      "Preview-first updates and uninstalls",
+      "Protected-package deny-list for system-critical packages",
+      "Polkit (pkexec) privilege escalation — passwords never touch the app",
+      "Background task center with live logs"
     ]
   }
   </script>
@@ -73,7 +94,7 @@
         "name": "What is Scope?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Scope is a Linux desktop app that scans multiple package managers — APT, Snap, Flatpak, and AppImage — into a single searchable view."
+          "text": "Scope is a free, open-source desktop app for Linux that scans APT, Snap, Flatpak, and AppImage into one searchable list — so you can see, update, and uninstall every app on your system from a single window."
         }
       },
       {
@@ -81,15 +102,15 @@
         "name": "Which package managers does Scope support?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Scope supports APT (Debian/Ubuntu), Snap, Flatpak, and AppImage. You can filter packages by source in the desktop app."
+          "text": "Scope supports APT/dpkg (manually installed packages), Snap (with runtime and base snaps hidden), Flatpak (both user and system install scopes), and AppImage files in ~/Applications and ~/.local/bin."
         }
       },
       {
         "@type": "Question",
-        "name": "Is Scope free and open source?",
+        "name": "Is it safe to uninstall apps with Scope?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Yes. Scope is free and open source software released under the MIT License. The source code is available on GitHub."
+          "text": "Every update and uninstall shows a preview plan before anything runs. A backend deny-list blocks removal of system-critical packages, and privileged operations go through Polkit (pkexec), so Scope never handles your password."
         }
       },
       {
@@ -97,15 +118,23 @@
         "name": "How do I install Scope?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Run the Tauri app from source with npm install and npm run tauri dev. Release packaging will follow the GUI migration."
+          "text": "Download the .deb, AppImage, or .rpm for x86_64 from GitHub Releases. On Ubuntu or Debian, install with sudo apt install ./Scope_0.1.8_amd64.deb."
         }
       },
       {
         "@type": "Question",
-        "name": "What are the system requirements for Scope?",
+        "name": "Does Scope work on Fedora or other distros?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Scope runs on Linux and uses the Tauri desktop stack with Rust backend commands."
+          "text": "Releases ship an .rpm for Fedora and RHEL-family distros, and the AppImage runs on most x86_64 distributions. Ubuntu and Debian (.deb) are the primary target today."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is Scope free and open source?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Scope is free and open source software released under the MIT License. The full source code is available on GitHub."
         }
       }
     ]
@@ -113,6 +142,12 @@
   </script>
 
   <style>
+    /* Hallmark · macrostructure: Workbench · nav: N5 floating-pill (width=content-sized, backdrop=blur, anchor=top-centred) · footer: Ft5 statement (sentence-width=38ch, rule=hairline) · sections: S1 left-margin-numbered · features: F3 tabular-spec-sheet (cols=4, rules=every-row) · cta: C4 sticky-bottom-bar (reveal=after-fold, shadow=subtle)
+     * theme: custom "Ember" — tuned to the Scope app UI · paper oklch dark band (#131010) · accent #e05240 warm-red · display: Inter grotesk · mono: JetBrains Mono
+     * enrichment: real app screenshots only (no re-drawn chrome)
+     * pre-emit critique: P4 H4 E4 S4 R4 V4
+     */
+
     *, *::before, *::after {
       margin: 0;
       padding: 0;
@@ -120,28 +155,54 @@
     }
 
     :root {
-      --bg: #fafaf8;
-      --text: #1a1a1a;
-      --text-secondary: #6b7280;
-      --accent: #1a1a1a;
-      --border: #e5e5e0;
-      --code-bg: #f4f4f0;
-      --green: #22c55e;
-      --orange: #f59e0b;
-      --blue: #3b82f6;
-      --purple: #8b5cf6;
+      --paper: #131010;
+      --paper-2: #171210;
+      --elev: #1e1715;
+      --elev-2: #281e1a;
+      --input: #1c1512;
+      --border: #2d231f;
+      --border-strong: #3e2f28;
+      --ink: #f1e9e4;
+      --ink-dim: #ac9d94;
+      --ink-faint: #7c6e66;
+      --accent: #e05240;
+      --accent-hover: #ea6350;
+      --accent-ink: #ff8a76;
+      --accent-strong: #c23b2a;
+      --accent-strong-hover: #d14634;
+      --on-accent: #ffffff;
+      --accent-soft: rgba(224, 82, 64, 0.1);
+      --accent-border: rgba(224, 82, 64, 0.45);
+      --warn: #d9a441;
+      --ok: #46a46c;
+      --ember-glow: #251615;
+      --radius: 8px;
+      --radius-lg: 12px;
+      --font-display: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+      --font-body: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+      --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+      --shell: 1080px;
+      --reading: 720px;
     }
 
     html {
       scroll-behavior: smooth;
+      overflow-x: clip;
     }
 
     body {
-      font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
-      background-color: var(--bg);
-      color: var(--text);
-      line-height: 1.7;
+      font-family: var(--font-body);
+      background-color: var(--paper);
+      color: var(--ink);
+      line-height: 1.6;
+      font-size: 16px;
       -webkit-font-smoothing: antialiased;
+      overflow-x: clip;
+    }
+
+    ::selection {
+      background: var(--accent-border);
+      color: var(--ink);
     }
 
     a {
@@ -149,368 +210,1247 @@
       text-decoration: none;
     }
 
-    nav {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 1.5rem 2rem;
-      max-width: 800px;
-      margin: 0 auto;
+    img {
+      max-width: 100%;
+      height: auto;
     }
 
-    .logo {
-      font-weight: 700;
-      font-size: 1.4rem;
-      letter-spacing: -0.02em;
+    :focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+      border-radius: 4px;
     }
 
-    .logo span {
-      color: var(--text-secondary);
-    }
-
-    .nav-links {
-      display: flex;
-      gap: 1.5rem;
-      align-items: center;
+    .skip-link {
+      position: absolute;
+      left: -999px;
+      top: 0;
+      background: var(--accent);
+      color: var(--ink);
+      padding: 0.6rem 1rem;
+      border-radius: 0 0 var(--radius) 0;
+      z-index: 300;
+      font-weight: 600;
       font-size: 0.85rem;
-      color: var(--text-secondary);
     }
 
-    .nav-links a:hover {
-      color: var(--text);
+    .skip-link:focus {
+      left: 0;
     }
 
+    /* ---------- N5 floating pill nav ---------- */
+    .nav {
+      position: fixed;
+      top: 1rem;
+      left: 0;
+      right: 0;
+      z-index: 200;
+      display: flex;
+      justify-content: center;
+      padding: 0 1rem;
+      pointer-events: none;
+    }
+
+    .nav__pill {
+      pointer-events: auto;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: color-mix(in srgb, var(--elev) 82%, transparent);
+      -webkit-backdrop-filter: blur(14px) saturate(1.3);
+      backdrop-filter: blur(14px) saturate(1.3);
+      border: 1px solid var(--border-strong);
+      border-radius: 999px;
+      padding: 0.4rem 0.5rem 0.4rem 0.9rem;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    }
+
+    .nav__brand {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      font-weight: 700;
+      font-size: 0.95rem;
+      letter-spacing: 0.01em;
+      padding-right: 0.6rem;
+      white-space: nowrap;
+    }
+
+    .nav__brand img {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      display: block;
+    }
+
+    .nav__links {
+      display: flex;
+      align-items: center;
+      gap: 0.1rem;
+    }
+
+    .nav__links a {
+      color: var(--ink-dim);
+      font-size: 0.84rem;
+      font-weight: 500;
+      padding: 0.42rem 0.75rem;
+      border-radius: 999px;
+      transition: color 0.15s, background 0.15s;
+      white-space: nowrap;
+    }
+
+    .nav__links a:hover {
+      color: var(--ink);
+      background: var(--elev-2);
+    }
+
+    .nav__cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      background: var(--accent-strong);
+      color: var(--on-accent);
+      font-size: 0.84rem;
+      font-weight: 600;
+      padding: 0.42rem 0.95rem;
+      border-radius: 999px;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+
+    .nav__cta:hover {
+      background: var(--accent-strong-hover);
+    }
+
+    .nav__cta svg {
+      width: 15px;
+      height: 15px;
+    }
+
+    /* ---------- Hero ---------- */
     .hero {
-      max-width: 800px;
+      max-width: var(--reading);
       margin: 0 auto;
-      padding: 6rem 2rem 4rem;
+      padding: 9.5rem 1.5rem 3.5rem;
+      background: radial-gradient(1100px 480px at 65% -12%, var(--ember-glow) 0%, var(--paper) 58%);
+      background-attachment: fixed;
+    }
+
+    @supports (background-attachment: fixed) {
+      .hero {
+        background-attachment: scroll;
+      }
     }
 
     .hero h1 {
-      font-size: clamp(2rem, 5vw, 3rem);
-      font-weight: 700;
-      line-height: 1.2;
+      font-family: var(--font-display);
+      font-size: clamp(2.1rem, 5.2vw, 3.4rem);
+      font-weight: 800;
+      font-style: normal;
+      line-height: 1.12;
       letter-spacing: -0.03em;
-      margin-bottom: 1.5rem;
+      margin-bottom: 1.1rem;
+      overflow-wrap: anywhere;
+      min-width: 0;
     }
 
-    .hero p {
-      color: var(--text-secondary);
-      font-size: 0.95rem;
-      max-width: 520px;
+    .hero h1 em {
+      font-style: normal;
+      color: var(--accent-ink);
+    }
+
+    .hero__lede {
+      color: var(--ink-dim);
+      font-size: clamp(0.95rem, 1.6vw, 1.05rem);
+      max-width: 56ch;
       margin-bottom: 2rem;
-      line-height: 1.8;
+      line-height: 1.75;
     }
 
-    .hero-buttons {
+    .hero__actions {
       display: flex;
-      gap: 0.75rem;
+      gap: 0.7rem;
       flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 1.1rem;
     }
 
     .btn {
       display: inline-flex;
       align-items: center;
-      gap: 0.5rem;
-      padding: 0.7rem 1.25rem;
-      font-family: inherit;
-      font-size: 0.85rem;
-      font-weight: 500;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      border: none;
-    }
-
-    .btn-primary {
-      background: var(--accent);
-      color: #fff;
-    }
-
-    .btn-primary:hover {
-      background: #333;
-      transform: translateY(-1px);
-    }
-
-    .btn-secondary {
-      background: transparent;
-      color: var(--text);
-      border: 1px solid var(--border);
-    }
-
-    .btn-secondary:hover {
-      border-color: var(--text);
-      transform: translateY(-1px);
-    }
-
-    .features {
-      max-width: 800px;
-      margin: 0 auto;
-      padding: 4rem 2rem;
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 3rem;
-    }
-
-    .feature h3 {
-      font-size: 0.85rem;
+      justify-content: center;
+      gap: 0.55rem;
+      font-family: var(--font-body);
+      font-size: 0.92rem;
       font-weight: 600;
-      margin-bottom: 0.5rem;
-      letter-spacing: -0.01em;
+      padding: 0.75rem 1.4rem;
+      border-radius: var(--radius);
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, transform 0.15s;
+      white-space: nowrap;
+      min-height: 44px;
     }
 
-    .feature p {
-      font-size: 0.8rem;
-      color: var(--text-secondary);
-      line-height: 1.7;
+    .btn svg {
+      width: 17px;
+      height: 17px;
     }
 
-    .divider {
-      max-width: 800px;
+    .btn--primary {
+      background: var(--accent-strong);
+      color: var(--on-accent);
+      border-color: var(--accent-strong);
+    }
+
+    .btn--primary:hover {
+      background: var(--accent-strong-hover);
+      border-color: var(--accent-strong-hover);
+      transform: translateY(-1px);
+    }
+
+    .btn--ghost {
+      background: transparent;
+      color: var(--ink);
+      border-color: var(--border-strong);
+    }
+
+    .btn--ghost:hover {
+      background: var(--elev-2);
+      transform: translateY(-1px);
+    }
+
+    .hero__note {
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      color: var(--ink-dim);
+      letter-spacing: 0.01em;
+    }
+
+    /* ---------- Workbench screenshot blocks ---------- */
+    .tour {
+      max-width: var(--shell);
       margin: 0 auto;
-      padding: 0 2rem;
+      padding: 3rem 1.5rem 4.5rem;
     }
 
-    .divider hr {
-      border: none;
-      border-top: 1px solid var(--border);
-    }
-
-    .screenshot {
-      max-width: 800px;
-      margin: 0 auto;
-      padding: 0 2rem 4rem;
-    }
-
-    .screenshot figure {
+    .tour__frame {
       margin: 0;
     }
 
-    .screenshot img {
+    .tour__frame picture,
+    .tour__frame img {
       display: block;
       width: 100%;
-      height: auto;
-      border-radius: 10px;
-      border: 1px solid var(--border);
-      box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-strong);
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
     }
 
-    .faq {
-      max-width: 800px;
-      margin: 0 auto;
-      padding: 0 2rem 4rem;
+    .tour__caption {
+      display: grid;
+      grid-template-columns: 3.5rem minmax(0, 1fr);
+      gap: 1rem;
+      align-items: baseline;
+      max-width: var(--reading);
+      margin: 1.4rem auto 0;
+      padding: 0 0.25rem;
     }
 
-    .faq h2 {
-      font-size: 1.1rem;
+    .tour__step {
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      font-weight: 500;
+      color: var(--accent-ink);
+      letter-spacing: 0.08em;
+    }
+
+    .tour__caption p {
+      color: var(--ink-dim);
+      font-size: 0.92rem;
+      line-height: 1.7;
+    }
+
+    .tour__caption strong {
+      color: var(--ink);
       font-weight: 600;
-      margin-bottom: 1.5rem;
+    }
+
+    /* ---------- S1 section head ---------- */
+    .section {
+      max-width: var(--shell);
+      margin: 0 auto;
+      padding: 3.5rem 1.5rem;
+    }
+
+    .section__head {
+      display: grid;
+      grid-template-columns: 9rem minmax(0, 1fr);
+      gap: 1.5rem;
+      align-items: baseline;
+      margin-bottom: 2.2rem;
+    }
+
+    .section__label {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      color: var(--accent-ink);
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .section__title {
+      font-family: var(--font-display);
+      font-size: clamp(1.5rem, 3vw, 2.1rem);
+      font-weight: 700;
+      font-style: normal;
       letter-spacing: -0.02em;
+      line-height: 1.2;
+      overflow-wrap: anywhere;
+      min-width: 0;
+    }
+
+    .section__sub {
+      grid-column: 2;
+      color: var(--ink-dim);
+      font-size: 0.95rem;
+      max-width: 58ch;
+      margin-top: 0.6rem;
+    }
+
+    /* ---------- F3 tabular spec sheet ---------- */
+    .spec {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      background: var(--elev);
+      overflow: hidden;
+    }
+
+    .spec__row {
+      display: grid;
+      grid-template-columns: 1.05fr 1.7fr 1fr 0.75fr;
+      gap: 1.2rem;
+      align-items: center;
+      padding: 1.05rem 1.4rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .spec__row:last-child {
+      border-bottom: none;
+    }
+
+    .spec__row--head {
+      padding: 0.7rem 1.4rem;
+      background: var(--paper-2);
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+    }
+
+    .spec__source {
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      font-weight: 600;
+      font-size: 0.95rem;
+      min-width: 0;
+    }
+
+    .spec__source svg {
+      width: 18px;
+      height: 18px;
+      color: var(--accent-ink);
+      flex-shrink: 0;
+    }
+
+    .spec__finds {
+      color: var(--ink-dim);
+      font-size: 0.88rem;
+      line-height: 1.55;
+      min-width: 0;
+    }
+
+    .spec__finds code,
+    .install__card code,
+    .faq-answer code {
+      font-family: var(--font-mono);
+      font-size: 0.78em;
+      background: var(--input);
+      border: 1px solid var(--border);
+      padding: 0.08rem 0.38rem;
+      border-radius: 5px;
+      color: var(--ink);
+      white-space: nowrap;
+    }
+
+    .spec__ops {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+    }
+
+    .chip {
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      border: 1px solid var(--border-strong);
+      color: var(--ink-dim);
+      white-space: nowrap;
+    }
+
+    .chip--go {
+      color: var(--accent-ink);
+      border-color: var(--accent-border);
+      background: var(--accent-soft);
+    }
+
+    .spec__auth {
+      font-size: 0.8rem;
+      color: var(--ink-dim);
+      white-space: nowrap;
+    }
+
+    /* ---------- Safety rows ---------- */
+    .safety {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+    }
+
+    .safety__item {
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+      background: var(--elev);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.3rem 1.4rem;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .safety__item:hover {
+      border-color: var(--border-strong);
+      background: var(--paper-2);
+    }
+
+    .safety__icon {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: var(--accent-soft);
+      border: 1px solid var(--accent-border);
+      color: var(--accent-ink);
+    }
+
+    .safety__icon svg {
+      width: 19px;
+      height: 19px;
+    }
+
+    .safety__item h3 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      font-style: normal;
+      margin-bottom: 0.3rem;
+    }
+
+    .safety__item p {
+      font-size: 0.85rem;
+      color: var(--ink-dim);
+      line-height: 1.65;
+    }
+
+    .safety__item code {
+      font-family: var(--font-mono);
+      font-size: 0.78em;
+      color: var(--ink);
+    }
+
+    /* ---------- Install ---------- */
+    .install {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .install__card {
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+      background: var(--elev);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.4rem;
+      transition: border-color 0.15s, transform 0.15s;
+      min-width: 0;
+    }
+
+    .install__card:hover {
+      border-color: var(--accent-border);
+      transform: translateY(-2px);
+    }
+
+    .install__card--primary {
+      border-color: var(--accent-border);
+      background: linear-gradient(180deg, var(--accent-soft), var(--elev) 55%);
+    }
+
+    .install__fmt {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+
+    .install__fmt h3 {
+      font-family: var(--font-mono);
+      font-size: 1rem;
+      font-weight: 500;
+      font-style: normal;
+    }
+
+    .install__badge {
+      font-size: 0.66rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent-ink);
+      border: 1px solid var(--accent-border);
+      background: var(--accent-soft);
+      border-radius: 999px;
+      padding: 0.16rem 0.55rem;
+      white-space: nowrap;
+    }
+
+    .install__card p {
+      font-size: 0.83rem;
+      color: var(--ink-dim);
+      line-height: 1.6;
+    }
+
+    .install__cmd {
+      margin-top: auto;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--ink);
+      background: var(--paper);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.65rem 0.8rem;
+      overflow-x: auto;
+      white-space: nowrap;
+      line-height: 1.5;
+    }
+
+    .install__cmd span {
+      color: var(--accent-ink);
+      user-select: none;
+    }
+
+    .install__source {
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--ink-dim);
+      margin-top: 1.4rem;
+    }
+
+    .install__source a {
+      color: var(--accent-ink);
+      font-weight: 500;
+      border-bottom: 1px solid var(--accent-border);
+      transition: border-color 0.15s, color 0.15s;
+    }
+
+    .install__source a:hover {
+      color: var(--accent-hover);
+      border-bottom-color: var(--accent-hover);
+    }
+
+    /* ---------- FAQ ---------- */
+    .faq {
+      max-width: var(--reading);
+      margin: 0 auto;
     }
 
     .faq-item {
       border-bottom: 1px solid var(--border);
     }
 
+    .faq-item:first-of-type {
+      border-top: 1px solid var(--border);
+    }
+
     .faq-question {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 1rem 0;
-      cursor: pointer;
-      user-select: none;
-    }
-
-    .faq-question h3 {
-      font-size: 0.85rem;
+      gap: 1rem;
+      width: 100%;
+      padding: 1.05rem 0.25rem;
+      background: none;
+      border: none;
+      color: var(--ink);
+      font-family: var(--font-body);
+      font-size: 0.95rem;
       font-weight: 600;
-      margin: 0;
+      text-align: left;
+      cursor: pointer;
+      min-height: 44px;
     }
 
-    .faq-icon {
-      font-size: 1.2rem;
-      color: var(--text-secondary);
-      transition: transform 0.2s ease;
+    .faq-question svg {
       flex-shrink: 0;
-      margin-left: 1rem;
+      width: 17px;
+      height: 17px;
+      color: var(--ink-faint);
+      transition: transform 0.2s ease, color 0.15s;
     }
 
-    .faq-item.active .faq-icon {
-      transform: rotate(45deg);
+    .faq-question:hover svg {
+      color: var(--accent-ink);
+    }
+
+    .faq-item.active .faq-question svg {
+      transform: rotate(180deg);
+      color: var(--accent-ink);
     }
 
     .faq-answer {
       max-height: 0;
       overflow: hidden;
-      transition: max-height 0.3s ease, padding 0.3s ease;
-    }
-
-    .faq-item.active .faq-answer {
-      max-height: 200px;
-      padding-bottom: 1rem;
+      transition: max-height 0.28s ease;
     }
 
     .faq-answer p {
-      font-size: 0.8rem;
-      color: var(--text-secondary);
-      line-height: 1.7;
-      margin: 0;
+      font-size: 0.88rem;
+      color: var(--ink-dim);
+      line-height: 1.75;
+      padding: 0 0.25rem 1.15rem;
+      max-width: 62ch;
     }
 
-    .faq-answer code {
-      background: var(--code-bg);
-      padding: 0.1rem 0.3rem;
-      border-radius: 3px;
-      font-size: 0.75rem;
-    }
-
+    /* ---------- Ft5 statement footer ---------- */
     footer {
-      max-width: 800px;
+      margin-top: 4rem;
+      background: radial-gradient(900px 320px at 50% 120%, var(--ember-glow) 0%, var(--paper) 62%);
+    }
+
+    .footer__inner {
+      max-width: var(--shell);
       margin: 0 auto;
-      padding: 2rem;
+      padding: 5rem 1.5rem 2.2rem;
+      text-align: center;
+    }
+
+    .footer__statement {
+      font-family: var(--font-display);
+      font-size: clamp(1.9rem, 4.6vw, 3rem);
+      font-weight: 800;
+      font-style: normal;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      max-width: 38ch;
+      margin: 0 auto 2rem;
+    }
+
+    .footer__statement em {
+      font-style: normal;
+      color: var(--accent-ink);
+    }
+
+    .footer__cta {
+      margin-bottom: 4rem;
+    }
+
+    .footer__meta {
       border-top: 1px solid var(--border);
+      padding-top: 1.6rem;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-size: 0.75rem;
-      color: var(--text-secondary);
+      gap: 1rem;
+      flex-wrap: wrap;
+      font-size: 0.78rem;
+      color: var(--ink-dim);
     }
 
-    footer a:hover {
-      color: var(--text);
+    .footer__brand {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      font-weight: 600;
+      color: var(--ink-dim);
     }
 
-    @media (max-width: 600px) {
-      .hero {
-        padding: 4rem 1.5rem 3rem;
+    .footer__brand img {
+      width: 20px;
+      height: 20px;
+      border-radius: 5px;
+    }
+
+    .footer__links {
+      display: flex;
+      gap: 1.3rem;
+      flex-wrap: wrap;
+    }
+
+    .footer__links a {
+      color: var(--ink-dim);
+      transition: color 0.15s;
+      white-space: nowrap;
+      padding: 0.3rem 0;
+    }
+
+    .footer__links a:hover {
+      color: var(--ink);
+    }
+
+    /* ---------- C4 sticky bottom bar ---------- */
+    .sticky-cta {
+      position: fixed;
+      left: 50%;
+      bottom: 1.1rem;
+      transform: translate(-50%, 140%);
+      z-index: 190;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      background: color-mix(in srgb, var(--elev) 88%, transparent);
+      -webkit-backdrop-filter: blur(14px) saturate(1.3);
+      backdrop-filter: blur(14px) saturate(1.3);
+      border: 1px solid var(--border-strong);
+      border-radius: 999px;
+      padding: 0.45rem 0.5rem 0.45rem 1.1rem;
+      box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
+      transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+      max-width: calc(100vw - 2rem);
+    }
+
+    .sticky-cta.visible {
+      transform: translate(-50%, 0);
+    }
+
+    .sticky-cta__text {
+      font-size: 0.82rem;
+      color: var(--ink-dim);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .sticky-cta__text strong {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .sticky-cta__go {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: var(--accent-strong);
+      color: var(--on-accent);
+      font-size: 0.82rem;
+      font-weight: 600;
+      border-radius: 999px;
+      padding: 0.5rem 1rem;
+      transition: background 0.15s;
+      white-space: nowrap;
+      min-height: 44px;
+    }
+
+    .sticky-cta__go:hover {
+      background: var(--accent-strong-hover);
+    }
+
+    .sticky-cta__go svg {
+      width: 15px;
+      height: 15px;
+    }
+
+    .sticky-cta__dismiss {
+      appearance: none;
+      background: none;
+      border: none;
+      color: var(--ink-dim);
+      cursor: pointer;
+      font-size: 1.05rem;
+      line-height: 1;
+      padding: 0.4rem 0.5rem;
+      border-radius: 999px;
+      transition: color 0.15s;
+      min-width: 44px;
+      min-height: 44px;
+    }
+
+    .sticky-cta__dismiss:hover {
+      color: var(--ink);
+    }
+
+    /* ---------- Reveal on scroll (only when JS is active) ---------- */
+    html.js .reveal {
+      opacity: 0;
+      transform: translateY(18px);
+      transition: opacity 0.6s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    html.js .reveal.in {
+      opacity: 1;
+      transform: none;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html {
+        scroll-behavior: auto;
       }
+      html.js .reveal {
+        opacity: 1;
+        transform: none;
+        transition: none;
+      }
+      .sticky-cta,
+      .faq-answer,
+      .faq-question svg {
+        transition: none;
+      }
+    }
 
-      .features {
+    /* ---------- Responsive ---------- */
+    @media (max-width: 60rem) {
+      .section__head {
         grid-template-columns: 1fr;
-        gap: 2rem;
-        padding: 3rem 1.5rem;
+        gap: 0.4rem;
       }
+      .section__sub {
+        grid-column: 1;
+      }
+      .spec__row {
+        grid-template-columns: 1fr 1.4fr;
+        row-gap: 0.55rem;
+      }
+      .spec__row--head {
+        display: none;
+      }
+      .spec__ops {
+        grid-column: 2;
+      }
+      .spec__auth {
+        grid-column: 2;
+      }
+      .safety {
+        grid-template-columns: 1fr;
+      }
+      .install {
+        grid-template-columns: 1fr;
+      }
+    }
 
-      footer {
-        flex-direction: column;
+    @media (max-width: 40rem) {
+      .hero {
+        padding: 7.5rem 1.25rem 2.8rem;
+      }
+      .nav__links {
+        display: none;
+      }
+      .tour {
+        padding: 2.2rem 1.25rem 3.2rem;
+      }
+      .tour__caption {
+        grid-template-columns: 1fr;
+        gap: 0.2rem;
+      }
+      .section {
+        padding: 2.6rem 1.25rem;
+      }
+      .spec__row {
+        grid-template-columns: 1fr;
         gap: 0.5rem;
+        padding: 1rem 1.1rem;
+      }
+      .spec__ops,
+      .spec__auth {
+        grid-column: 1;
+      }
+      .sticky-cta__text {
+        display: none;
+      }
+      .footer__meta {
+        flex-direction: column;
         text-align: center;
+        justify-content: center;
       }
     }
   </style>
 </head>
 <body>
 
-  <nav>
-    <div class="logo">scope<span> 🔭</span></div>
-    <div class="nav-links">
-      <a href="https://github.com/khurrambhutto/scope" target="_blank" rel="noopener noreferrer">GitHub →</a>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <nav class="nav" aria-label="Main navigation">
+    <div class="nav__pill">
+      <a class="nav__brand" href="https://khurrambhutto.github.io/scope/" aria-label="Scope home">
+        <img src="scope-logo.svg" alt="" width="24" height="24">
+        Scope
+      </a>
+      <div class="nav__links">
+        <a href="#tour">Tour</a>
+        <a href="#sources">Sources</a>
+        <a href="#safety">Safety</a>
+        <a href="#install">Install</a>
+        <a href="#faq">FAQ</a>
+      </div>
+      <a class="nav__cta" href="https://github.com/khurrambhutto/scope/releases/latest" target="_blank" rel="noopener noreferrer">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" aria-hidden="true"><path d="M12 15V3m9 12v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10l5 5l5-5"/></svg>
+        Download
+      </a>
     </div>
   </nav>
 
-  <main>
+  <main id="main">
+
     <section class="hero">
-      <h1>One interface for<br>all your packages.</h1>
-      <p>A Linux desktop app for package visibility, cleanup planning, and safe maintenance workflows across APT, Snap, Flatpak, and AppImage.</p>
-      <div class="hero-buttons">
-        <a href="https://github.com/khurrambhutto/scope/releases" target="_blank" rel="noopener noreferrer" class="btn btn-primary">Download</a>
-        <a href="https://github.com/khurrambhutto/scope" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">View source</a>
+      <h1>Every app on your Linux system. <em>One window.</em></h1>
+      <p class="hero__lede">Scope scans APT, Snap, Flatpak, and AppImage into a single searchable list — then updates or uninstalls anything in it, with a preview before anything changes.</p>
+      <div class="hero__actions">
+        <a href="https://github.com/khurrambhutto/scope/releases/latest" target="_blank" rel="noopener noreferrer" class="btn btn--primary">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" aria-hidden="true"><path d="M12 15V3m9 12v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10l5 5l5-5"/></svg>
+          Download for Linux
+        </a>
+        <a href="https://github.com/khurrambhutto/scope" target="_blank" rel="noopener noreferrer" class="btn btn--ghost">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" aria-hidden="true"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5c.08-1.25-.27-2.48-1-3.5c.28-1.15.28-2.35 0-3.5c0 0-1 0-3 1.5c-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 4 9c0 3.5 3 5.5 6 5.5c-.39.49-.68 1.05-.85 1.65S8.93 17.38 9 18v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg>
+          View on GitHub
+        </a>
       </div>
+      <p class="hero__note">.deb · AppImage · .rpm — x86_64 · MIT License</p>
     </section>
 
-    <section class="features" id="features">
-      <div class="feature">
-        <h3>Multi-source</h3>
-        <p>APT, Snap, Flatpak, and AppImage — all in one place. Filter by source from a desktop package table.</p>
-      </div>
-      <div class="feature">
-        <h3>Real-time search</h3>
-        <p>Search across installed packages, descriptions, versions, paths, and common aliases.</p>
-      </div>
-      <div class="feature">
-        <h3>Built with Tauri</h3>
-        <p>Rust backend commands, a React interface, and explicit Tauri capabilities.</p>
-      </div>
-    </section>
-
-    <div class="divider"><hr></div>
-
-    <section class="screenshot">
-      <figure>
-        <img src="image.png" alt="Scope package list preview with APT, Snap, Flatpak, and AppImage sources" loading="eager">
+    <section class="tour reveal" id="tour">
+      <figure class="tour__frame">
+        <picture>
+          <source srcset="main.webp" type="image/webp">
+          <img src="main.png" width="1282" height="843" alt="Scope's main window listing installed apps — App Center and Bitwarden from Snap, btop++ and Camera from APT, Camera from Flatpak — with search, source filters, and an Updates counter" loading="eager" fetchpriority="high">
+        </picture>
+        <figcaption class="tour__caption">
+          <span class="tour__step">01</span>
+          <p><strong>The list.</strong> APT, Snap, Flatpak, and AppImage side by side — with real icons, installed size, and update status for every app. Search and source filters cut through hundreds of packages in place.</p>
+        </figcaption>
       </figure>
     </section>
 
-    <div class="divider"><hr></div>
-
-    <section class="faq" id="faq">
-      <h2>Frequently asked questions</h2>
-      <div class="faq-item">
-        <div class="faq-question" onclick="toggleFaq(this)">
-          <h3>What is Scope?</h3>
-          <span class="faq-icon">+</span>
-        </div>
-        <div class="faq-answer">
-          <p>Scope is a Linux desktop app that scans multiple package managers — APT, Snap, Flatpak, and AppImage — into a single searchable view.</p>
-        </div>
+    <section class="section reveal" id="sources">
+      <div class="section__head">
+        <span class="section__label">02 — Sources</span>
+        <h2 class="section__title">Four package managers, one surface</h2>
+        <p class="section__sub">Scope talks to each source through its own tools — never by editing package databases directly. What it finds, what it can do, and when it asks for permission:</p>
       </div>
-      <div class="faq-item">
-        <div class="faq-question" onclick="toggleFaq(this)">
-          <h3>Which package managers does Scope support?</h3>
-          <span class="faq-icon">+</span>
+      <div class="spec" role="table" aria-label="Supported package sources">
+        <div class="spec__row spec__row--head" role="row">
+          <span role="columnheader">Source</span>
+          <span role="columnheader">What it finds</span>
+          <span role="columnheader">Operations</span>
+          <span role="columnheader">Auth</span>
         </div>
-        <div class="faq-answer">
-          <p>Scope supports APT (Debian/Ubuntu), Snap, Flatpak, and AppImage. You can filter packages by source in the desktop app.</p>
+        <div class="spec__row" role="row">
+          <span class="spec__source" role="cell">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" aria-hidden="true"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M3.29 7L12 12l8.71-5M7.5 4.27l9 5.15M12 22V12"/></svg>
+            APT / dpkg
+          </span>
+          <span class="spec__finds" role="cell">Manually installed packages via <code>apt-mark</code> + <code>dpkg-query</code> — no auto-installed dependency noise</span>
+          <span class="spec__ops" role="cell"><span class="chip chip--go">Update</span><span class="chip chip--go">Uninstall</span></span>
+          <span class="spec__auth" role="cell">Polkit</span>
         </div>
-      </div>
-      <div class="faq-item">
-        <div class="faq-question" onclick="toggleFaq(this)">
-          <h3>Is Scope free and open source?</h3>
-          <span class="faq-icon">+</span>
+        <div class="spec__row" role="row">
+          <span class="spec__source" role="cell">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" aria-hidden="true"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M3.29 7L12 12l8.71-5M7.5 4.27l9 5.15M12 22V12"/></svg>
+            Snap
+          </span>
+          <span class="spec__finds" role="cell"><code>snap list</code>, with runtime and base snaps (<code>core*</code>, <code>snapd</code>, <code>gnome-*</code>) hidden</span>
+          <span class="spec__ops" role="cell"><span class="chip chip--go">Refresh</span><span class="chip chip--go">Remove</span></span>
+          <span class="spec__auth" role="cell">Polkit</span>
         </div>
-        <div class="faq-answer">
-          <p>Yes. Scope is free and open source software released under the MIT License. The source code is available on GitHub.</p>
+        <div class="spec__row" role="row">
+          <span class="spec__source" role="cell">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" aria-hidden="true"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M3.29 7L12 12l8.71-5M7.5 4.27l9 5.15M12 22V12"/></svg>
+            Flatpak
+          </span>
+          <span class="spec__finds" role="cell"><code>flatpak list --app</code> — user and system install scopes tracked separately</span>
+          <span class="spec__ops" role="cell"><span class="chip chip--go">Update</span><span class="chip chip--go">Uninstall</span></span>
+          <span class="spec__auth" role="cell">System only</span>
         </div>
-      </div>
-      <div class="faq-item">
-        <div class="faq-question" onclick="toggleFaq(this)">
-          <h3>How do I install Scope?</h3>
-          <span class="faq-icon">+</span>
-        </div>
-        <div class="faq-answer">
-          <p>Run the Tauri app from source with <code>npm install</code> and <code>npm run tauri dev</code>. Release packaging will follow the GUI migration.</p>
-        </div>
-      </div>
-      <div class="faq-item">
-        <div class="faq-question" onclick="toggleFaq(this)">
-          <h3>What are the system requirements?</h3>
-          <span class="faq-icon">+</span>
-        </div>
-        <div class="faq-answer">
-          <p>Scope runs on Linux and uses the Tauri desktop stack with Rust backend commands.</p>
+        <div class="spec__row" role="row">
+          <span class="spec__source" role="cell">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" aria-hidden="true"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M3.29 7L12 12l8.71-5M7.5 4.27l9 5.15M12 22V12"/></svg>
+            AppImage
+          </span>
+          <span class="spec__finds" role="cell">Files in <code>~/Applications</code> and <code>~/.local/bin</code></span>
+          <span class="spec__ops" role="cell"><span class="chip chip--go">Trash</span></span>
+          <span class="spec__auth" role="cell">None</span>
         </div>
       </div>
     </section>
+
+    <section class="tour reveal">
+      <figure class="tour__frame">
+        <picture>
+          <source srcset="detail.webp" type="image/webp">
+          <img src="detail.png" width="1282" height="843" alt="Scope's package detail drawer for Cursor — showing source, package id, version, installed size, and categories, with Update and Uninstall actions" loading="lazy">
+        </picture>
+        <figcaption class="tour__caption">
+          <span class="tour__step">03</span>
+          <p><strong>The detail.</strong> Version, source, install scope, size, and categories for any package — plus one-click update or uninstall. Every action shows its exact plan before it runs, and protected packages are blocked outright.</p>
+        </figcaption>
+      </figure>
+    </section>
+
+    <section class="section reveal" id="safety">
+      <div class="section__head">
+        <span class="section__label">04 — Safety</span>
+        <h2 class="section__title">Careful by default</h2>
+        <p class="section__sub">Uninstalling the wrong thing on Linux can break a system. Scope is built so that can't happen quietly.</p>
+      </div>
+      <div class="safety">
+        <div class="safety__item">
+          <span class="safety__icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" aria-hidden="true"><path d="M2.062 12.348a1 1 0 0 1 0-.696a10.75 10.75 0 0 1 19.876 0a1 1 0 0 1 0 .696a10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>
+          </span>
+          <div>
+            <h3>Preview before anything runs</h3>
+            <p>Every update and uninstall shows the exact plan — target, version change, and the command behind it — and waits for your confirmation.</p>
+          </div>
+        </div>
+        <div class="safety__item">
+          <span class="safety__icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12l2 2l4-4"/></svg>
+          </span>
+          <div>
+            <h3>Protected packages stay put</h3>
+            <p>A backend deny-list blocks removal of system-critical packages like <code>ubuntu-desktop</code>, <code>systemd</code>, and <code>linux-image-*</code> — no exceptions from the UI.</p>
+          </div>
+        </div>
+        <div class="safety__item">
+          <span class="safety__icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" aria-hidden="true"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5"/></svg>
+          </span>
+          <div>
+            <h3>Your password stays yours</h3>
+            <p>Privilege escalation goes through Polkit (<code>pkexec</code>) — the standard system password dialog. Scope never sees, stores, or handles credentials.</p>
+          </div>
+        </div>
+        <div class="safety__item">
+          <span class="safety__icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" aria-hidden="true"><path d="M21 12a9 9 0 0 0-9-9a9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5m-5 4a9 9 0 0 0 9 9a9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
+          </span>
+          <div>
+            <h3>Never blocks the window</h3>
+            <p>Operations run as background tasks with live logs. Confirm, keep browsing your apps, and the list refreshes itself when the task finishes.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section reveal" id="install">
+      <div class="section__head">
+        <span class="section__label">05 — Install</span>
+        <h2 class="section__title">Get Scope for your distro</h2>
+        <p class="section__sub">Pre-built for x86_64 Linux. Grab a package from GitHub Releases and install it with your usual tools.</p>
+      </div>
+      <div class="install">
+        <a class="install__card install__card--primary" href="https://github.com/khurrambhutto/scope/releases/latest" target="_blank" rel="noopener noreferrer">
+          <div class="install__fmt"><h3>.deb</h3><span class="install__badge">Recommended</span></div>
+          <p>Ubuntu, Debian, and derivatives. Download, then:</p>
+          <div class="install__cmd"><span>$</span> sudo apt install ./Scope_0.1.8_amd64.deb</div>
+        </a>
+        <a class="install__card" href="https://github.com/khurrambhutto/scope/releases/latest" target="_blank" rel="noopener noreferrer">
+          <div class="install__fmt"><h3>.AppImage</h3></div>
+          <p>Any distro — no install, just mark it executable and run:</p>
+          <div class="install__cmd"><span>$</span> chmod +x Scope_0.1.8_amd64.AppImage &amp;&amp; ./Scope_0.1.8_amd64.AppImage</div>
+        </a>
+        <a class="install__card" href="https://github.com/khurrambhutto/scope/releases/latest" target="_blank" rel="noopener noreferrer">
+          <div class="install__fmt"><h3>.rpm</h3></div>
+          <p>Fedora, RHEL, and derivatives. Download, then:</p>
+          <div class="install__cmd"><span>$</span> sudo dnf install ./Scope-0.1.8-1.x86_64.rpm</div>
+        </a>
+      </div>
+      <p class="install__source">Prefer to build it yourself? <a href="https://github.com/khurrambhutto/scope" target="_blank" rel="noopener noreferrer">Clone the repo</a> and run <code style="font-family:var(--font-mono);font-size:0.78em;">npm install &amp;&amp; npm run tauri dev</code>.</p>
+    </section>
+
+    <section class="section reveal" id="faq">
+      <div class="section__head">
+        <span class="section__label">06 — FAQ</span>
+        <h2 class="section__title">Frequently asked questions</h2>
+      </div>
+      <div class="faq">
+        <div class="faq-item">
+          <button class="faq-question" aria-expanded="false" aria-controls="faq-a1">
+            What is Scope?
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" aria-hidden="true"><path d="m6 9l6 6l6-6"/></svg>
+          </button>
+          <div class="faq-answer" id="faq-a1">
+            <p>Scope is a free, open-source desktop app for Linux that scans APT, Snap, Flatpak, and AppImage into one searchable list — so you can see, update, and uninstall every app on your system from a single window.</p>
+          </div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question" aria-expanded="false" aria-controls="faq-a2">
+            Which package managers does Scope support?
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" aria-hidden="true"><path d="m6 9l6 6l6-6"/></svg>
+          </button>
+          <div class="faq-answer" id="faq-a2">
+            <p>Scope supports APT/dpkg (manually installed packages), Snap (with runtime and base snaps hidden), Flatpak (both user and system install scopes), and AppImage files in <code>~/Applications</code> and <code>~/.local/bin</code>.</p>
+          </div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question" aria-expanded="false" aria-controls="faq-a3">
+            Is it safe to uninstall apps with Scope?
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" aria-hidden="true"><path d="m6 9l6 6l6-6"/></svg>
+          </button>
+          <div class="faq-answer" id="faq-a3">
+            <p>Every update and uninstall shows a preview plan before anything runs. A backend deny-list blocks removal of system-critical packages, and privileged operations go through Polkit (<code>pkexec</code>), so Scope never handles your password.</p>
+          </div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question" aria-expanded="false" aria-controls="faq-a4">
+            How do I install Scope?
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" aria-hidden="true"><path d="m6 9l6 6l6-6"/></svg>
+          </button>
+          <div class="faq-answer" id="faq-a4">
+            <p>Download the <code>.deb</code>, AppImage, or <code>.rpm</code> for x86_64 from GitHub Releases. On Ubuntu or Debian, install with <code>sudo apt install ./Scope_0.1.8_amd64.deb</code>.</p>
+          </div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question" aria-expanded="false" aria-controls="faq-a5">
+            Does Scope work on Fedora or other distros?
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" aria-hidden="true"><path d="m6 9l6 6l6-6"/></svg>
+          </button>
+          <div class="faq-answer" id="faq-a5">
+            <p>Releases ship an <code>.rpm</code> for Fedora and RHEL-family distros, and the AppImage runs on most x86_64 distributions. Ubuntu and Debian (<code>.deb</code>) are the primary target today.</p>
+          </div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question" aria-expanded="false" aria-controls="faq-a6">
+            Is Scope free and open source?
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" aria-hidden="true"><path d="m6 9l6 6l6-6"/></svg>
+          </button>
+          <div class="faq-answer" id="faq-a6">
+            <p>Yes. Scope is free and open source software released under the MIT License. The full source code is available on GitHub.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
   </main>
 
   <footer>
-    <span>MIT License · <a href="https://khurrambhutto.tech/" target="_blank" rel="noopener noreferrer">Khurram Bhutto</a></span>
-    <div style="display:flex;gap:1rem;">
-      <a href="https://github.com/khurrambhutto/scope" target="_blank" rel="noopener noreferrer">GitHub →</a>
-      <a href="https://pk.linkedin.com/in/khurram-bhutto" target="_blank" rel="noopener noreferrer">LinkedIn →</a>
+    <div class="footer__inner">
+      <p class="footer__statement">Know what's on your system. <em>All of it.</em></p>
+      <div class="footer__cta">
+        <a href="https://github.com/khurrambhutto/scope/releases/latest" target="_blank" rel="noopener noreferrer" class="btn btn--primary">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" aria-hidden="true"><path d="M12 15V3m9 12v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10l5 5l5-5"/></svg>
+          Download Scope
+        </a>
+      </div>
+      <div class="footer__meta">
+        <span class="footer__brand">
+          <img src="scope-logo.svg" alt="" width="20" height="20">
+          Scope · MIT License · <a href="https://khurrambhutto.github.io/portfolio-site/" target="_blank" rel="noopener noreferrer" style="color:var(--ink-dim);">Khurram Bhutto</a>
+        </span>
+        <div class="footer__links">
+          <a href="https://github.com/khurrambhutto/scope" target="_blank" rel="noopener noreferrer">GitHub</a>
+          <a href="https://github.com/khurrambhutto/scope/releases" target="_blank" rel="noopener noreferrer">Releases</a>
+          <a href="https://github.com/khurrambhutto/scope/issues" target="_blank" rel="noopener noreferrer">Issues</a>
+          <a href="https://pk.linkedin.com/in/khurram-bhutto" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+        </div>
+      </div>
     </div>
   </footer>
 
+  <div class="sticky-cta" id="stickyCta" role="complementary" aria-label="Download Scope">
+    <span class="sticky-cta__text"><strong>Scope v0.1.8</strong> — free &amp; open source for Linux</span>
+    <a class="sticky-cta__go" href="https://github.com/khurrambhutto/scope/releases/latest" target="_blank" rel="noopener noreferrer">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" aria-hidden="true"><path d="M12 15V3m9 12v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10l5 5l5-5"/></svg>
+      Download
+    </a>
+    <button class="sticky-cta__dismiss" id="stickyDismiss" aria-label="Dismiss download bar">&times;</button>
+  </div>
+
   <script>
-    function toggleFaq(el) {
-      const item = el.parentElement;
-      const isActive = item.classList.contains('active');
-      
-      document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('active'));
-      
-      if (!isActive) {
-        item.classList.add('active');
-      }
+    // FAQ accordion
+    document.querySelectorAll('.faq-question').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var item = btn.parentElement;
+        var answer = item.querySelector('.faq-answer');
+        var isOpen = item.classList.contains('active');
+
+        document.querySelectorAll('.faq-item.active').forEach(function (open) {
+          open.classList.remove('active');
+          open.querySelector('.faq-question').setAttribute('aria-expanded', 'false');
+          open.querySelector('.faq-answer').style.maxHeight = null;
+        });
+
+        if (!isOpen) {
+          item.classList.add('active');
+          btn.setAttribute('aria-expanded', 'true');
+          answer.style.maxHeight = answer.scrollHeight + 'px';
+        }
+      });
+    });
+
+    // Sticky CTA — appears after the hero, hides near the footer, dismissible
+    var stickyCta = document.getElementById('stickyCta');
+    var dismissed = false;
+
+    document.getElementById('stickyDismiss').addEventListener('click', function () {
+      dismissed = true;
+      stickyCta.classList.remove('visible');
+    });
+
+    var heroEl = document.querySelector('.hero');
+    var footerEl = document.querySelector('footer');
+    var heroOut = false;
+    var footerIn = false;
+
+    function syncSticky() {
+      stickyCta.classList.toggle('visible', heroOut && !footerIn && !dismissed);
+    }
+
+    new IntersectionObserver(function (entries) {
+      heroOut = !entries[0].isIntersecting;
+      syncSticky();
+    }, { rootMargin: '-40% 0px 0px 0px' }).observe(heroEl);
+
+    new IntersectionObserver(function (entries) {
+      footerIn = entries[0].isIntersecting;
+      syncSticky();
+    }).observe(footerEl);
+
+    // Scroll reveal
+    var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!reduceMotion && 'IntersectionObserver' in window) {
+      var revealObserver = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('in');
+            revealObserver.unobserve(entry.target);
+          }
+        });
+      }, { rootMargin: '0px 0px -8% 0px' });
+
+      document.querySelectorAll('.reveal').forEach(function (el) {
+        revealObserver.observe(el);
+      });
+    } else {
+      document.querySelectorAll('.reveal').forEach(function (el) {
+        el.classList.add('in');
+      });
     }
   </script>
 
