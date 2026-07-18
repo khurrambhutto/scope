@@ -1,40 +1,44 @@
-import { Fragment } from "react";
 import type { InstalledPackage } from "../../shared/types/package";
+import type { Operation } from "../../shared/types/operations";
 import { PackageRow } from "./PackageRow";
-import { PackageDetail } from "./PackageDetail";
 import type { ViewMode } from "./usePackages";
 
 export function PackageList({
   packages,
   selectedKey,
-  selectedPkg,
   viewMode,
+  busyByKey,
   onSelect,
-  onUninstalled,
+  onAction,
 }: {
   packages: InstalledPackage[];
   selectedKey: string | null;
-  selectedPkg: InstalledPackage | null;
   viewMode: ViewMode;
+  busyByKey: Record<string, Operation>;
   onSelect: (pkg: InstalledPackage) => void;
-  onUninstalled: (pkg: InstalledPackage) => void;
+  onAction: (pkg: InstalledPackage, kind: Operation) => void;
 }) {
   if (packages.length === 0) {
-    return <div className="pkg-list pkg-list--empty">No installed apps match your search.</div>;
+    return (
+      <div className="pkg-list pkg-list--empty">
+        {viewMode === "updates"
+          ? "Everything is up to date."
+          : "No installed apps match your search."}
+      </div>
+    );
   }
   return (
     <div className="pkg-list">
       {packages.map((p) => (
-        <Fragment key={p.key}>
-          <PackageRow
-            pkg={p}
-            selected={p.key === selectedKey}
-            onClick={onSelect}
-          />
-          {p.key === selectedKey && selectedPkg && (
-            <PackageDetail pkg={selectedPkg} viewMode={viewMode} onUninstalled={onUninstalled} />
-          )}
-        </Fragment>
+        <PackageRow
+          key={p.key}
+          pkg={p}
+          selected={p.key === selectedKey}
+          viewMode={viewMode}
+          busy={busyByKey[p.key] ?? null}
+          onSelect={onSelect}
+          onAction={onAction}
+        />
       ))}
     </div>
   );

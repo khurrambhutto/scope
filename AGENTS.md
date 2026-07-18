@@ -38,13 +38,12 @@ Backend code should be split by responsibility:
 
 Frontend code should be split by feature:
 
-- `src/app/` — app shell, layout, providers, and top-level composition.
-- `src/features/packages/` — unified installed package list, package rows/cards, filters, search, and package details.
+- `src/app/` — app shell, sidebar layout, providers, and top-level composition.
+- `src/features/packages/` — unified installed package list, package rows/cards, filters, search, and the package detail drawer.
 - `src/features/apps/` — GUI app metadata and icon presentation when needed.
-- `src/features/updates/` — update preview and update flow.
-- `src/features/uninstall/` — uninstall preview and confirmation flow.
+- `src/features/operations/` — shared uninstall/update preview dialog plus the non-blocking background task store and task center. Operations never block the UI: confirm → dialog closes → task runs in the background → scan refreshes on success.
 - `src/shared/api/` — typed Tauri `invoke` wrappers.
-- `src/shared/components/` — reusable UI components.
+- `src/shared/components/` — reusable UI components (icons, select, app icon, logo).
 - `src/shared/types/` — TypeScript models matching backend DTOs.
 
 `App.tsx` should only compose the main shell. It must not contain scanner calls, command strings scattered inline, large UI sections, or business logic.

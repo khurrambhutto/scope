@@ -158,8 +158,12 @@ export function usePackages() {
     []
   );
 
+  const updatesCount =
+    state.lastScan?.packages.filter((p) => p.has_update).length ?? 0;
+
   return {
     ...state,
+    updatesCount,
     refresh,
     setQuery,
     setSourceFilter,

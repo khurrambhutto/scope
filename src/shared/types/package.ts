@@ -63,3 +63,12 @@ export const SOURCE_COLORS: Record<PackageSource, string> = {
   flatpak: "#4a154b",
   appimage: "#0b8a4f",
 };
+
+// Light variants for text/badges on dark backgrounds (SOURCE_COLORS are
+// fallback-icon backgrounds and too dark to read as text).
+export const SOURCE_BADGE_COLORS: Record<PackageSource, string> = {
+  apt: "#ff8f80",
+  snap: "#6ab7ff",
+  flatpak: "#d29bd8",
+  appimage: "#5fd6a2",
+};

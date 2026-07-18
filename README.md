@@ -1,12 +1,18 @@
-<p align="center">
-  <img src="public/scope-logo.svg" alt="Scope" width="96" />
-</p>
-
 # Scope
 
 **See, update, and uninstall every app on your Linux system — all in one place.**
 
-Linux users install software from APT, Snap, Flatpak, and AppImage — then have to remember which tool installed what just to remove it. Scope scans all four sources into one list, enriches entries with desktop metadata and icons, and provides a preview-first uninstall/update flow with Polkit privilege escalation. You never type a package-manager command manually.
+<p align="center">
+  <img src="main.png" alt="Scope — unified app management for Linux" width="650" />
+</p>
+
+Linux users install software from APT, Snap, Flatpak, and AppImage — then have to remember which tool installed what just to remove it. Scope scans all four sources into one unified list, enriches entries with desktop metadata and icons, and provides a preview-first uninstall/update flow with Polkit privilege escalation.
+
+- **Unified package view** — every installed app in one place, regardless of source
+- **Non-blocking operations** — uninstalls and updates run in the background; keep using Scope while they complete
+- **Preview-first safety** — every destructive action shows exactly what will happen before it executes
+- **Icon resolution** — freedesktop.org icon theme spec, with coloured-initials fallback
+- **Protected packages** — 40+ system-critical packages are deny-listed and cannot be removed
 
 ## Architecture
 
@@ -65,6 +71,9 @@ npm run tauri dev
 - [x] Desktop-entry enrichment + freedesktop.org icon resolution
 - [x] Uninstall from Scope (all sources, preview-first, pkexec auth, deny-list protected)
 - [x] Update from Scope (APT/Snap/Flatpak, preview-first, pkexec auth)
+- [x] Non-blocking background operation tasks
+- [x] Right-side detail drawer with master-detail layout
+- [x] Sidebar navigation with future-phase placeholders
 - [x] CI release pipeline builds `.deb`, `.rpm`, `.AppImage`
 - [x] Self-updater with in-app notification and progress bar
 - [ ] AppImage auto-update (preview shows "not yet implemented")
@@ -82,7 +91,7 @@ Concrete areas needing help:
 - **Snap version info** — parse target version from `snap info` in `scanner/snap.rs`
 - **Unit tests for operations** — mock `run_elevated`, test preview → revalidate → apply lifecycle
 - **Arch/Fedora scanners** — add `scanner/pacman.rs` or `scanner/dnf.rs` using the `Scanner` trait
-- **Frontend tests** — Vitest + React Testing Library on `PackageScreen`, `UninstallDialog`, `usePackages`
+- **Frontend tests** — Vitest + React Testing Library on `PackageScreen`, `usePackages`
 
 PRs: keep business logic in domain modules, keep Tauri commands thin, run `npm run build && cargo check --manifest-path src-tauri/Cargo.toml` before submitting.
 

@@ -1,6 +1,6 @@
 [package]
 name = "scope"
-version = "0.1.6"
+version = "0.1.8"
 description = "See, update, and uninstall every app on your Linux system — all in one place"
 authors = ["Khurram"]
 edition = "2021"

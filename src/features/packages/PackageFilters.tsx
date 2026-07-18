@@ -1,9 +1,10 @@
 import { SOURCE_LABELS } from "../../shared/types/package";
 import type { KindFilter, SourceFilter, ViewMode } from "./usePackages";
 import { Select } from "../../shared/components/Select";
+import { RefreshIcon, SearchIcon } from "../../shared/components/icons";
 
 const SOURCE_OPTIONS: { value: SourceFilter; label: string }[] = [
-  { value: "all", label: "Any source" },
+  { value: "all", label: "All Sources" },
   ...(["apt", "snap", "flatpak", "appimage"] as const).map((s) => ({
     value: s,
     label: SOURCE_LABELS[s],
@@ -22,6 +23,7 @@ export function PackageFilters({
   source,
   kind,
   viewMode,
+  updatesCount,
   refreshing,
   onQuery,
   onSource,
@@ -33,6 +35,7 @@ export function PackageFilters({
   source: SourceFilter;
   kind: KindFilter;
   viewMode: ViewMode;
+  updatesCount: number;
   refreshing: boolean;
   onQuery: (q: string) => void;
   onSource: (s: SourceFilter) => void;
@@ -42,57 +45,66 @@ export function PackageFilters({
 }) {
   return (
     <div className="filters">
-      <div className="filters__row">
+      <div className="filters__search-wrap">
+        <SearchIcon size={15} className="filters__search-icon" />
         <input
           className="filters__search"
           type="search"
-          placeholder="Search"
+          placeholder="Search applications…"
           value={query}
           autoFocus
           onChange={(e) => onQuery(e.target.value)}
         />
-        <div className="view-toggle">
-          <button
-            type="button"
-            className={`view-toggle__btn${viewMode === "uninstall" ? " view-toggle__btn--active" : ""}`}
-            onClick={() => onViewMode("uninstall")}
-          >
-            Uninstall
-          </button>
-          <button
-            type="button"
-            className={`view-toggle__btn${viewMode === "updates" ? " view-toggle__btn--active" : ""}`}
-            onClick={() => onViewMode("updates")}
-          >
-            Updates
-          </button>
-        </div>
-        <span style={{ flex: 1 }} />
-        <Select
-          options={SOURCE_OPTIONS}
-          value={source}
-          onChange={onSource}
-          ariaLabel="Filter by source"
-        />
-        <Select
-          options={KIND_OPTIONS}
-          value={kind}
-          onChange={onKind}
-          ariaLabel="Filter by kind"
-          iconTrigger
-        />
+      </div>
+
+      <div className="view-toggle" role="tablist" aria-label="View mode">
         <button
           type="button"
-          className="btn btn--ghost btn--icon"
-          onClick={onRescan}
-          disabled={refreshing}
-          title="Rescan"
+          role="tab"
+          aria-selected={viewMode === "uninstall"}
+          className={`view-toggle__btn${viewMode === "uninstall" ? " view-toggle__btn--active" : ""}`}
+          onClick={() => onViewMode("uninstall")}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" className={refreshing ? "spin" : ""}>
-            <path d="M20 11A8.1 8.1 0 0 0 4.5 9M4 5v4h4m-4 4a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
+          Uninstall
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={viewMode === "updates"}
+          className={`view-toggle__btn${viewMode === "updates" ? " view-toggle__btn--active" : ""}`}
+          onClick={() => onViewMode("updates")}
+        >
+          Updates
+          {updatesCount > 0 && (
+            <span className="view-toggle__count">{updatesCount}</span>
+          )}
         </button>
       </div>
+
+      <span className="filters__spacer" />
+
+      <Select
+        options={SOURCE_OPTIONS}
+        value={source}
+        onChange={onSource}
+        ariaLabel="Filter by source"
+      />
+      <Select
+        options={KIND_OPTIONS}
+        value={kind}
+        onChange={onKind}
+        ariaLabel="Filter by kind"
+        iconTrigger
+      />
+      <button
+        type="button"
+        className="btn btn--ghost btn--icon filters__rescan"
+        onClick={onRescan}
+        disabled={refreshing}
+        title="Rescan installed packages"
+      >
+        <RefreshIcon size={15} className={refreshing ? "spin" : ""} />
+      </button>
     </div>
   );
 }
