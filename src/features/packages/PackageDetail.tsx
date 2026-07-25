@@ -17,10 +17,13 @@ export function PackageDetail({
   onAction: (pkg: InstalledPackage, kind: Operation) => void;
 }) {
   const title = pkg.display_name ?? pkg.name;
+  // Manual package_id may pack "binary\x1fdesktop" — show binary path only.
+  const packageIdDisplay =
+    pkg.source === "manual" ? pkg.package_id.split("\x1f")[0] : pkg.package_id;
   const rows: { label: string; value: string }[] = [
     { label: "Source", value: SOURCE_LABELS[pkg.source] },
     { label: "Install scope", value: pkg.install_scope ?? "—" },
-    { label: "Package id", value: pkg.package_id },
+    { label: "Package id", value: packageIdDisplay },
     { label: "Version", value: pkg.version || "—" },
     { label: "Installed size", value: formatSize(pkg.size_bytes) },
     { label: "Kind", value: `${kindIcon(pkg.app_kind)} ${pkg.app_kind}` },

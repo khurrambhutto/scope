@@ -170,18 +170,39 @@ pub async fn scan_all() -> (Vec<InstalledPackage>, ScanAvailability) {
                 availability.appimage = outcome.available;
                 availability.appimage_dirs = appimage::search_directories();
             }
+            PackageSource::Manual => {
+                // Manual packages are derived after enrichment, not scanned here.
+            }
         }
         merged.extend(outcome.packages);
     }
 
-    // Enrich + classify + resolve icons, then sort apps-first, by display
-    // name. Icon resolution touches the filesystem (theme lookups), so the
-    // whole merge pass runs on a blocking thread to keep the async runtime
-    // responsive. `DesktopIndex` and `InstalledPackage` are both `Send`.
+    // Enrich + classify + resolve icons, then promote unmatched desktop entries
+    // to Manual packages, then sort apps-first by display name. Icon resolution
+    // touches the filesystem (theme lookups), so the whole merge pass runs on a
+    // blocking thread to keep the async runtime responsive.
     let (merged, availability) = tokio::task::spawn_blocking(move || {
         for pkg in merged.iter_mut() {
             enrich(pkg, &desktop);
         }
+        // Paths already owned by a package manager (esp. AppImage absolute paths).
+        // Used to avoid double-listing when desktop lookup failed to match.
+        let claimed_paths: std::collections::HashSet<String> = merged
+            .iter()
+            .filter(|p| {
+                matches!(
+                    p.source,
+                    PackageSource::AppImage | PackageSource::Snap | PackageSource::Manual
+                )
+            })
+            .map(|p| p.package_id.to_lowercase())
+            .collect();
+        for app in desktop.unmatched_apps() {
+            if let Some(pkg) = manual_from_desktop(app, &claimed_paths) {
+                merged.push(pkg);
+            }
+        }
+        availability.manual = true;
         merged.sort_by(|a, b| {
             let ka = kind_rank(a.app_kind);
             let kb = kind_rank(b.app_kind);
@@ -214,9 +235,9 @@ fn display_name(p: &InstalledPackage) -> String {
 /// Apply desktop-entry metadata to a package (display name, icon, categories...).
 fn enrich(pkg: &mut InstalledPackage, desktop: &DesktopIndex) {
     if let Some(app) = desktop.lookup(pkg.source, &pkg.package_id, &pkg.name) {
-        if pkg.display_name.is_none() {
-            pkg.display_name = Some(app.name.clone());
-        }
+        // Prefer the desktop entry name — AppImage filename heuristics can mangle
+        // names like "t3_code_alpha" into "t".
+        pkg.display_name = Some(app.name.clone());
         if pkg.icon.is_none() {
             // `app.icon` is the raw `Icon=` value from the .desktop entry: a
             // theme name (e.g. "firefox") or an absolute path. Resolve it to a
@@ -244,6 +265,83 @@ fn enrich(pkg: &mut InstalledPackage, desktop: &DesktopIndex) {
     }
 }
 
+/// Unit-separator used to pack binary path + desktop path into `package_id`.
+const MANUAL_ID_SEP: char = '\x1f';
+
+/// Build a Manual package from a desktop entry no package manager claimed.
+fn manual_from_desktop(
+    app: &crate::desktop_entries::DesktopApp,
+    claimed_paths: &std::collections::HashSet<String>,
+) -> Option<InstalledPackage> {
+    // Manual installs live in user/opt trees. System /usr apps without a
+    // matching package are usually OS components — keep them out of the list.
+    let binary = crate::desktop_entries::resolve_exec_binary(&app.exec);
+    if let Some(ref bin) = binary {
+        let s = bin.to_string_lossy();
+        // Already listed as AppImage/Snap/etc. — do not double-count.
+        if claimed_paths.contains(&s.to_lowercase()) {
+            return None;
+        }
+        // Snap binaries are owned by the Snap scanner.
+        if s.starts_with("/snap/") {
+            return None;
+        }
+        if s.starts_with("/usr/") && !s.starts_with("/usr/local/") {
+            return None;
+        }
+        if s.starts_with("/bin/") || s.starts_with("/sbin/") {
+            return None;
+        }
+    } else if !app.path.contains("/.local/share/applications/") {
+        // No resolvable binary and not a user-local desktop entry → skip.
+        return None;
+    }
+
+    let size_bytes = binary
+        .as_ref()
+        .and_then(|p| std::fs::metadata(p).ok())
+        .map(|m| m.len())
+        .unwrap_or(0);
+
+    // package_id encodes binary + desktop path so uninstall can trash both.
+    let package_id = match &binary {
+        Some(bin) => format!("{}{}{}", bin.display(), MANUAL_ID_SEP, app.path),
+        None => app.path.clone(),
+    };
+
+    let mut pkg = InstalledPackage::new(PackageSource::Manual, package_id);
+    // Stable key from desktop id (not the path, which may change).
+    pkg.key = format!("manual:{}", app.id);
+    pkg.name = app.name.clone();
+    pkg.display_name = Some(app.name.clone());
+    pkg.description = app.comment.clone();
+    pkg.version = "unknown".into();
+    pkg.size_bytes = size_bytes;
+    pkg.app_kind = if app.terminal {
+        AppKind::Cli
+    } else {
+        AppKind::Gui
+    };
+    pkg.terminal = app.terminal;
+    if !app.categories.is_empty() {
+        pkg.categories = Some(app.categories.join(", "));
+    }
+    if let Some(name) = app.icon.as_deref() {
+        if let Some(path) = crate::icons::resolve(name) {
+            pkg.icon = Some(crate::icons::icon_url(&path));
+        }
+    }
+    Some(pkg)
+}
+
+/// Split a Manual `package_id` into (binary_or_primary, optional_desktop_path).
+pub fn split_manual_id(package_id: &str) -> (&str, Option<&str>) {
+    match package_id.split_once(MANUAL_ID_SEP) {
+        Some((bin, desktop)) => (bin, Some(desktop)),
+        None => (package_id, None),
+    }
+}
+
 /// Per-source availability and search dirs reported to the UI.
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct ScanAvailability {
@@ -251,6 +349,8 @@ pub struct ScanAvailability {
     pub snap: bool,
     pub flatpak: bool,
     pub appimage: bool,
+    #[serde(default)]
+    pub manual: bool,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub apt_error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", default)]

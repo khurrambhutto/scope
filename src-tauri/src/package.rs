@@ -14,6 +14,8 @@ pub enum PackageSource {
     Snap,
     Flatpak,
     AppImage,
+    /// GUI apps discovered via `.desktop` entries that no package manager owns.
+    Manual,
 }
 
 impl PackageSource {
@@ -24,6 +26,7 @@ impl PackageSource {
             PackageSource::Snap => "snap",
             PackageSource::Flatpak => "flatpak",
             PackageSource::AppImage => "appimage",
+            PackageSource::Manual => "manual",
         }
     }
 
@@ -35,6 +38,7 @@ impl PackageSource {
             PackageSource::Snap => "Snap",
             PackageSource::Flatpak => "Flatpak",
             PackageSource::AppImage => "AppImage",
+            PackageSource::Manual => "Manual",
         }
     }
 }

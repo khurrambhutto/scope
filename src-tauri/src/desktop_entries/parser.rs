@@ -9,6 +9,8 @@ use std::path::Path;
 #[derive(Debug, Clone, Serialize)]
 pub struct DesktopApp {
     pub id: String,
+    /// Absolute path to the `.desktop` file on disk.
+    pub path: String,
     pub name: String,
     pub generic_name: Option<String>,
     pub comment: Option<String>,
@@ -79,6 +81,7 @@ pub fn parse(id: &str, path: &Path) -> Option<DesktopApp> {
 
     Some(DesktopApp {
         id: id.to_string(),
+        path: path.to_string_lossy().into_owned(),
         name: field(entry, "Name").unwrap_or(id).to_string(),
         generic_name: field(entry, "GenericName").map(str::to_string),
         comment: field(entry, "Comment").map(str::to_string),

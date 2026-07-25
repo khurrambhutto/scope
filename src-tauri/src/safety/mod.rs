@@ -38,6 +38,7 @@ pub fn check_package(source: PackageSource, package_id: &str) -> Protection {
         PackageSource::Snap => check_snap(package_id),
         PackageSource::Flatpak => check_flatpak(package_id),
         PackageSource::AppImage => check_appimage(package_id),
+        PackageSource::Manual => check_manual(package_id),
     }
 }
 
@@ -154,18 +155,52 @@ fn check_flatpak(_app_id: &str) -> Protection {
 }
 
 fn check_appimage(path: &str) -> Protection {
-    check_path(path)
+    check_path_kind(path, PathKind::AppImage)
 }
 
-/// Guard arbitrary filesystem paths used by AppImage removal.
+fn check_manual(package_id: &str) -> Protection {
+    // package_id may be a packed "binary\x1fdesktop" id, or a single path
+    // (when apply re-checks individual trash targets).
+    let (primary, desktop) = crate::scanner::split_manual_id(package_id);
+    let kind = if primary.ends_with(".desktop") {
+        PathKind::DesktopEntry
+    } else {
+        PathKind::Manual
+    };
+    let primary_check = check_path_kind(primary, kind);
+    if primary_check.protected {
+        return primary_check;
+    }
+    if let Some(desktop_path) = desktop {
+        let desktop_check = check_path_kind(desktop_path, PathKind::DesktopEntry);
+        if desktop_check.protected {
+            return desktop_check;
+        }
+    }
+    Protection::allowed()
+}
+
+#[derive(Clone, Copy)]
+enum PathKind {
+    AppImage,
+    Manual,
+    DesktopEntry,
+}
+
+/// Guard arbitrary filesystem paths used by AppImage removal (public for tests).
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn check_path(path: &str) -> Protection {
+    check_path_kind(path, PathKind::AppImage)
+}
+
+fn check_path_kind(path: &str, kind: PathKind) -> Protection {
     let cleaned = std::path::Path::new(path);
+    // Allow directories for Manual bundle roots (e.g. Foo.app, /opt/idea-*).
     let Ok(abs) = cleaned.canonicalize() else {
         return Protection::denied("Path does not resolve to a real file.");
     };
     let s = abs.to_string_lossy();
 
-    // Never allow operations outside expected AppImage locations or on system dirs.
     let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
     let mut allowed_roots: Vec<std::path::PathBuf> = vec![std::path::PathBuf::from("/opt")];
     if let Some(h) = &home {
@@ -174,19 +209,77 @@ pub fn check_path(path: &str) -> Protection {
         allowed_roots.push(h.join("AppImages"));
         allowed_roots.push(h.join("Downloads"));
         allowed_roots.push(h.join(".local/bin"));
+        allowed_roots.push(h.join(".local/opt"));
+        allowed_roots.push(h.join(".local/share"));
+        allowed_roots.push(h.join(".local/zed.app"));
+        // Claude, hermes, etc. often live under ~/.local/share or ~/.claude
+        allowed_roots.push(h.join(".claude"));
+        allowed_roots.push(h.join(".hermes"));
+        allowed_roots.push(h.join(".config"));
     }
     let inside_allowed = allowed_roots.iter().any(|root| {
-        s.starts_with(&format!("{}/", root.display())) || s == root.display().to_string()
+        let rs = root.display().to_string();
+        s.starts_with(&format!("{rs}/")) || s == rs || {
+            // Also allow the root itself when it is an install bundle
+            // (e.g. ~/.local/zed.app is both root and target).
+            root.file_name().is_some() && s == rs
+        }
     });
-    if !inside_allowed {
-        return Protection::denied("File is outside the allowed AppImage directories.");
+    // Special case: ~/.local/zed.app is listed as a root; also accept any path
+    // whose parent chain is under ~/.local and ends with .app
+    let local_app_ok = home.as_ref().is_some_and(|h| {
+        let local = h.join(".local");
+        s.starts_with(&format!("{}/", local.display())) && s.contains(".app")
+    });
+    if !inside_allowed && !local_app_ok {
+        return Protection::denied("File is outside the allowed install directories.");
     }
-    // Must be an AppImage.
-    if !s.to_lowercase().ends_with(".appimage") {
-        return Protection::denied("Only .AppImage files can be removed this way.");
-    }
-    if !abs.is_file() {
-        return Protection::denied("Path is not a regular file.");
+    match kind {
+        PathKind::AppImage => {
+            if !s.to_lowercase().ends_with(".appimage") {
+                return Protection::denied("Only .AppImage files can be removed this way.");
+            }
+            if !abs.is_file() {
+                return Protection::denied("Path is not a regular file.");
+            }
+        }
+        PathKind::DesktopEntry => {
+            if !s.ends_with(".desktop") {
+                return Protection::denied("Expected a .desktop file path.");
+            }
+            // Only allow trashing user-local desktop entries, never system ones.
+            let user_apps = home
+                .as_ref()
+                .map(|h| h.join(".local/share/applications").display().to_string())
+                .unwrap_or_default();
+            if !user_apps.is_empty() && !s.starts_with(&user_apps) {
+                return Protection::denied(
+                    "Only user-local .desktop entries can be removed this way.",
+                );
+            }
+            if !abs.is_file() {
+                return Protection::denied("Path is not a regular file.");
+            }
+        }
+        PathKind::Manual => {
+            // Binary file or install-bundle directory inside allowed roots.
+            if !abs.is_file() && !abs.is_dir() {
+                return Protection::denied("Path is not a file or directory.");
+            }
+            // Never allow deleting the allowed root itself (e.g. whole /opt,
+            // whole ~/.local/bin) — only children / bundle dirs.
+            if allowed_roots.iter().any(|r| {
+                r.canonicalize()
+                    .map(|c| c == abs)
+                    .unwrap_or(false)
+                    && !s.ends_with(".app")
+            }) {
+                // ~/.local/zed.app is both a root and a valid bundle — allow .app
+                if !s.ends_with(".app") {
+                    return Protection::denied("Refusing to remove an entire system directory.");
+                }
+            }
+        }
     }
     Protection::allowed()
 }
@@ -231,5 +324,11 @@ mod tests {
         assert!(check_path("/etc/passwd").protected);
         assert!(check_path("/usr/bin/bash").protected);
         assert!(check_path("/nonexistent.AppImage").protected);
+    }
+
+    #[test]
+    fn blocks_manual_outside_allowed_dirs() {
+        assert!(check_package(PackageSource::Manual, "/etc/passwd").protected);
+        assert!(check_package(PackageSource::Manual, "/usr/bin/bash").protected);
     }
 }

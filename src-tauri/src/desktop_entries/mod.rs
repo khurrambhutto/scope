@@ -10,6 +10,7 @@
 
 mod parser;
 
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
@@ -138,6 +139,9 @@ pub struct DesktopIndex {
     by_exec: HashMap<String, DesktopApp>,
     /// Lowercased display names for fuzzy fallback matching.
     by_name_lower: HashMap<String, DesktopApp>,
+    /// Desktop ids that matched a package during enrichment. Used to surface
+    /// unmatched entries as manual installs.
+    matched_ids: RefCell<HashSet<String>>,
 }
 
 impl DesktopIndex {
@@ -160,6 +164,7 @@ impl DesktopIndex {
             by_id,
             by_exec,
             by_name_lower,
+            matched_ids: RefCell::new(HashSet::new()),
         }
     }
 
@@ -168,17 +173,19 @@ impl DesktopIndex {
             by_id: HashMap::new(),
             by_exec: HashMap::new(),
             by_name_lower: HashMap::new(),
+            matched_ids: RefCell::new(HashSet::new()),
         }
     }
 
     /// Try to find a desktop app for a package given the source and id/name.
+    /// Successful lookups are recorded so unmatched entries can become Manual packages.
     pub fn lookup(
         &self,
         source: crate::package::PackageSource,
         package_id: &str,
         name: &str,
     ) -> Option<&DesktopApp> {
-        match source {
+        let found = match source {
             crate::package::PackageSource::Flatpak => self.by_id.get(package_id),
             crate::package::PackageSource::Snap => {
                 // Snap desktop ids are often "<snap>_<app>.desktop" or "<app>.desktop".
@@ -190,20 +197,55 @@ impl DesktopIndex {
                     .or_else(|| self.by_id.get(package_id))
                     .or_else(|| self.by_exec.get(&package_id.to_lowercase()))
             }
-            crate::package::PackageSource::Apt | crate::package::PackageSource::AppImage => {
+            crate::package::PackageSource::Apt
+            | crate::package::PackageSource::AppImage
+            | crate::package::PackageSource::Manual => {
                 let lc = package_id.to_lowercase();
+                // AppImage package_id is an absolute path — also try basename
+                // and basename without extension (e.g. t3_code_alpha.appimage).
+                let base = std::path::Path::new(package_id)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or(package_id)
+                    .to_lowercase();
+                let stem = base
+                    .strip_suffix(".appimage")
+                    .unwrap_or(&base)
+                    .to_string();
                 self.by_id
                     .get(&lc)
+                    .or_else(|| self.by_id.get(&base))
+                    .or_else(|| self.by_id.get(&stem))
                     .or_else(|| self.by_exec.get(&lc))
+                    .or_else(|| self.by_exec.get(&base))
+                    .or_else(|| self.by_exec.get(&stem))
                     .or_else(|| self.by_name_lower.get(&name.to_lowercase()))
             }
+        };
+        if let Some(app) = found {
+            self.matched_ids.borrow_mut().insert(app.id.clone());
         }
+        found
+    }
+
+    /// Desktop apps that no package scanner claimed during enrichment.
+    pub fn unmatched_apps(&self) -> Vec<&DesktopApp> {
+        let matched = self.matched_ids.borrow();
+        let mut apps: Vec<&DesktopApp> = self
+            .by_id
+            .values()
+            .filter(|app| !matched.contains(&app.id))
+            .collect();
+        apps.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        apps
     }
 }
 
-/// Extract the executable basename from a `.desktop` `Exec=` value.
-fn exec_binary(exec: &str) -> Option<String> {
-    // Strip leading env assignments (e.g. "env VAR=1 foo --bar").
+/// Extract the first executable token from a `.desktop` `Exec=` value
+/// (absolute path preferred; falls back to basename-only token).
+///
+/// Handles `env VAR=1 …`, quoted paths (`"/opt/App/bin/app"`), and field codes.
+pub fn exec_path(exec: &str) -> Option<String> {
     let mut rest = exec.trim();
     while let Some(stripped) = rest.strip_prefix("env ") {
         rest = stripped;
@@ -216,7 +258,106 @@ fn exec_binary(exec: &str) -> Option<String> {
             break;
         }
     }
-    let first = rest.split_whitespace().next()?;
-    let path = Path::new(first);
+    // Drop field codes like %u, %f, %F, %U, %i, %c, %k.
+    // Support quoted tokens: "/path/with spaces/bin" %f
+    let first = next_exec_token(rest)?;
+    if first.starts_with('%') {
+        return None;
+    }
+    Some(first)
+}
+
+/// Next shell-ish token from an Exec= string, respecting double/single quotes.
+fn next_exec_token(s: &str) -> Option<String> {
+    let s = s.trim_start();
+    if s.is_empty() {
+        return None;
+    }
+    let mut chars = s.chars().peekable();
+    let quote = match chars.peek() {
+        Some('"') | Some('\'') => chars.next(),
+        _ => None,
+    };
+    let mut out = String::new();
+    if let Some(q) = quote {
+        for c in chars.by_ref() {
+            if c == q {
+                break;
+            }
+            out.push(c);
+        }
+        return if out.is_empty() { None } else { Some(out) };
+    }
+    for c in chars {
+        if c.is_whitespace() {
+            break;
+        }
+        out.push(c);
+    }
+    if out.is_empty() || out.starts_with('%') {
+        // Skip field codes and try again on the remainder.
+        let rest = s[out.len()..].trim_start();
+        if out.starts_with('%') && !rest.is_empty() {
+            return next_exec_token(rest);
+        }
+        return None;
+    }
+    Some(out)
+}
+
+/// Extract the executable basename from a `.desktop` `Exec=` value.
+fn exec_binary(exec: &str) -> Option<String> {
+    let first = exec_path(exec)?;
+    let path = Path::new(&first);
     Some(path.file_name()?.to_string_lossy().to_string())
+}
+
+#[cfg(test)]
+mod exec_tests {
+    use super::*;
+
+    #[test]
+    fn strips_quotes_and_field_codes() {
+        assert_eq!(
+            exec_path(r#""/opt/idea/bin/idea" %f"#).as_deref(),
+            Some("/opt/idea/bin/idea")
+        );
+        assert_eq!(
+            exec_path(r#"/home/u/app %U"#).as_deref(),
+            Some("/home/u/app")
+        );
+        assert_eq!(
+            exec_path("env DESKTOPINTEGRATION=1 /tmp/foo.appimage --no-sandbox %U").as_deref(),
+            Some("/tmp/foo.appimage")
+        );
+    }
+}
+
+/// Resolve `Exec=` to an absolute path that exists on disk, when possible.
+pub fn resolve_exec_binary(exec: &str) -> Option<PathBuf> {
+    let token = exec_path(exec)?;
+    let path = PathBuf::from(&token);
+    if path.is_absolute() {
+        if path.is_file() {
+            return Some(path);
+        }
+        // Follow one level of symlink if present.
+        if let Ok(resolved) = path.canonicalize() {
+            if resolved.is_file() {
+                return Some(resolved);
+            }
+        }
+        return None;
+    }
+
+    // Relative / bare name: search PATH.
+    if let Ok(path_var) = env::var("PATH") {
+        for dir in env::split_paths(&path_var) {
+            let candidate = dir.join(&token);
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+    }
+    None
 }

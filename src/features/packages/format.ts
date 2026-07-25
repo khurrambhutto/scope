@@ -19,12 +19,19 @@ export function sourceBadgeColor(source: PackageSource): string {
     snap: "#2196f3",
     flatpak: "#4a154b",
     appimage: "#0b8a4f",
+    manual: "#7c3aed",
   };
   return map[source];
 }
 
 export function sourceLabel(source: PackageSource): string {
-  return { apt: "APT", snap: "Snap", flatpak: "Flatpak", appimage: "AppImage" }[source];
+  return {
+    apt: "APT",
+    snap: "Snap",
+    flatpak: "Flatpak",
+    appimage: "AppImage",
+    manual: "Manual",
+  }[source];
 }
 
 export function kindIcon(kind: AppKind): string {

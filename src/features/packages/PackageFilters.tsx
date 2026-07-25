@@ -5,7 +5,7 @@ import { RefreshIcon, SearchIcon } from "../../shared/components/icons";
 
 const SOURCE_OPTIONS: { value: SourceFilter; label: string }[] = [
   { value: "all", label: "All Sources" },
-  ...(["apt", "snap", "flatpak", "appimage"] as const).map((s) => ({
+  ...(["apt", "snap", "flatpak", "appimage", "manual"] as const).map((s) => ({
     value: s,
     label: SOURCE_LABELS[s],
   })),

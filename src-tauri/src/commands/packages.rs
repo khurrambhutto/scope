@@ -89,6 +89,7 @@ pub async fn search_packages(
         "snap" => Some(crate::package::PackageSource::Snap),
         "flatpak" => Some(crate::package::PackageSource::Flatpak),
         "appimage" => Some(crate::package::PackageSource::AppImage),
+        "manual" => Some(crate::package::PackageSource::Manual),
         _ => None,
     });
     let kind_filter = app_kind.and_then(|s| match s.to_lowercase().as_str() {

@@ -19,7 +19,16 @@ const UPDATE_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// Build a preview plan for updating one package.
 pub fn preview(pkg: &InstalledPackage) -> OperationPlan {
-    let protection = safety::check_package(pkg.source, &pkg.package_id);
+    let mut protection = safety::check_package(pkg.source, &pkg.package_id);
+    if matches!(pkg.source, PackageSource::Manual) {
+        protection = safety::Protection {
+            protected: true,
+            reason: Some(
+                "Manual installs cannot be updated through Scope. Reinstall from the original source."
+                    .into(),
+            ),
+        };
+    }
     let (auth, steps) = build_steps(pkg, protection.protected);
 
     OperationPlan {
@@ -92,6 +101,14 @@ fn build_steps(pkg: &InstalledPackage, protected: bool) -> (AuthMethod, Vec<Plan
                 command_summary: format!("Download and replace {}", pkg.package_id),
             }],
         ),
+        PackageSource::Manual => (
+            AuthMethod::None,
+            vec![PlanStep {
+                description:
+                    "Blocked: manual installs have no package-manager updater.".into(),
+                command_summary: "(no command — manual install)".into(),
+            }],
+        ),
     }
 }
 
@@ -132,6 +149,12 @@ pub async fn apply(plan: &OperationPlan) -> OperationResult {
         PackageSource::Snap => snap_refresh(&plan.package_id).await,
         PackageSource::Flatpak => flatpak_update(&plan.package_id, plan.install_scope).await,
         PackageSource::AppImage => appimage_update(&plan.package_id).await,
+        PackageSource::Manual => OperationResult {
+            success: false,
+            message: "Manual installs cannot be updated through Scope. Reinstall from the original source.".into(),
+            logs: String::new(),
+            exit_code: None,
+        },
     }
 }
 

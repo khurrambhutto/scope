@@ -1,7 +1,7 @@
 // TypeScript models matching the Rust DTOs in src-tauri/src/package.rs and
 // src-tauri/src/scanner/mod.rs. Keep in sync with the backend.
 
-export type PackageSource = "apt" | "snap" | "flatpak" | "appimage";
+export type PackageSource = "apt" | "snap" | "flatpak" | "appimage" | "manual";
 
 export type AppKind = "gui" | "cli" | "unknown";
 
@@ -30,6 +30,7 @@ export interface ScanAvailability {
   snap: boolean;
   flatpak: boolean;
   appimage: boolean;
+  manual: boolean;
   apt_error?: string;
   snap_error?: string;
   flatpak_error?: string;
@@ -55,6 +56,7 @@ export const SOURCE_LABELS: Record<PackageSource, string> = {
   snap: "Snap",
   flatpak: "Flatpak",
   appimage: "AppImage",
+  manual: "Manual",
 };
 
 export const SOURCE_COLORS: Record<PackageSource, string> = {
@@ -62,6 +64,7 @@ export const SOURCE_COLORS: Record<PackageSource, string> = {
   snap: "#2196f3",
   flatpak: "#4a154b",
   appimage: "#0b8a4f",
+  manual: "#7c3aed",
 };
 
 // Light variants for text/badges on dark backgrounds (SOURCE_COLORS are
@@ -71,4 +74,5 @@ export const SOURCE_BADGE_COLORS: Record<PackageSource, string> = {
   snap: "#6ab7ff",
   flatpak: "#d29bd8",
   appimage: "#5fd6a2",
+  manual: "#a78bfa",
 };
