@@ -13,7 +13,7 @@ mod safety;
 mod scanner;
 mod system;
 
-use commands::operations::{apply_uninstall, preview_uninstall, apply_update, preview_update};
+use commands::operations::{apply_uninstall, apply_update, preview_uninstall, preview_update};
 use commands::packages::{get_cached_scan, scan_packages, scan_status, search_packages, ScanCache};
 use operations::PlanStore;
 use tauri::http::{header, Response, StatusCode};
@@ -33,9 +33,13 @@ pub fn run() {
             let raw = request.uri().path();
             let path = percent_decode_path(raw);
 
-            let (data, mime, status) = match std::fs::read(&path) {
-                Ok(bytes) => (bytes, icons::mime_for_path(&path), StatusCode::OK),
-                Err(_) => (Vec::new(), "text/plain", StatusCode::NOT_FOUND),
+            let (data, mime, status) = if !icons::is_registered_path(std::path::Path::new(&path)) {
+                (Vec::new(), "text/plain", StatusCode::FORBIDDEN)
+            } else {
+                match std::fs::read(&path) {
+                    Ok(bytes) => (bytes, icons::mime_for_path(&path), StatusCode::OK),
+                    Err(_) => (Vec::new(), "text/plain", StatusCode::NOT_FOUND),
+                }
             };
 
             Response::builder()

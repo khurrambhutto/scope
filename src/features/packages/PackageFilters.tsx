@@ -1,5 +1,5 @@
 import { SOURCE_LABELS } from "../../shared/types/package";
-import type { KindFilter, SourceFilter, ViewMode } from "./usePackages";
+import type { KindFilter, SortMode, SourceFilter, ViewMode } from "./usePackages";
 import { Select } from "../../shared/components/Select";
 import { RefreshIcon, SearchIcon } from "../../shared/components/icons";
 
@@ -23,24 +23,28 @@ export function PackageFilters({
   source,
   kind,
   viewMode,
+  sortMode,
   updatesCount,
   refreshing,
   onQuery,
   onSource,
   onKind,
   onViewMode,
+  onSortBySize,
   onRescan,
 }: {
   query: string;
   source: SourceFilter;
   kind: KindFilter;
   viewMode: ViewMode;
+  sortMode: SortMode;
   updatesCount: number;
   refreshing: boolean;
   onQuery: (q: string) => void;
   onSource: (s: SourceFilter) => void;
   onKind: (k: KindFilter) => void;
   onViewMode: (v: ViewMode) => void;
+  onSortBySize: () => void;
   onRescan: () => void;
 }) {
   return (
@@ -96,6 +100,15 @@ export function PackageFilters({
         ariaLabel="Filter by kind"
         iconTrigger
       />
+      <button
+        type="button"
+        className={`filters__sort${sortMode === "largest" ? " filters__sort--active" : ""}`}
+        aria-pressed={sortMode === "largest"}
+        onClick={onSortBySize}
+        title="Sort by installed size, largest first"
+      >
+        Largest
+      </button>
       <button
         type="button"
         className="btn btn--ghost btn--icon filters__rescan"

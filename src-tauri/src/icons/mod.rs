@@ -19,7 +19,7 @@
 //! `scope-icon://localhost/<absolute-path>` URLs produced here, and the
 //! [`crate::lib`] URI-scheme protocol serves exactly those resolved paths.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -35,11 +35,16 @@ const ICON_SIZES: &[&str] = &[
 const ICON_EXTENSIONS: &[&str] = &["svg", "png", "xpm"];
 
 static RESOLVED_CACHE: OnceLock<Mutex<HashMap<String, Option<PathBuf>>>> = OnceLock::new();
+static SERVED_PATHS: OnceLock<Mutex<HashSet<PathBuf>>> = OnceLock::new();
 static THEME_NAME: OnceLock<Option<String>> = OnceLock::new();
 static BASE_DIRS: OnceLock<Vec<PathBuf>> = OnceLock::new();
 
 fn cache() -> &'static Mutex<HashMap<String, Option<PathBuf>>> {
     RESOLVED_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn served_paths() -> &'static Mutex<HashSet<PathBuf>> {
+    SERVED_PATHS.get_or_init(|| Mutex::new(HashSet::new()))
 }
 
 fn theme_name() -> &'static Option<String> {
@@ -107,19 +112,70 @@ fn resolve_uncached(icon_value: &str) -> Option<PathBuf> {
 /// Absolute `Icon=` values: use the file as-is, or try common extensions when
 /// the given path has none / does not exist.
 fn resolve_absolute_icon(path: &Path) -> Option<PathBuf> {
-    if path.is_file() {
+    if path.is_file() && is_icon_candidate(path) {
         return Some(path.to_path_buf());
     }
 
     for ext in ICON_EXTENSIONS {
         let mut p = path.to_path_buf();
         p.set_extension(ext);
-        if p.is_file() {
+        if p.is_file() && is_icon_candidate(&p) {
             return Some(p);
         }
     }
 
     None
+}
+
+fn is_icon_candidate(path: &Path) -> bool {
+    let known_extension = matches!(
+        path.extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| ext.to_ascii_lowercase())
+            .as_deref(),
+        Some("png")
+            | Some("svg")
+            | Some("svgz")
+            | Some("xpm")
+            | Some("jpg")
+            | Some("jpeg")
+            | Some("webp")
+            | Some("gif")
+            | Some("bmp")
+            | Some("ico")
+    );
+
+    // AppImage integrations commonly write extensionless icon files into a
+    // `.icons` directory. Do not allow arbitrary extensionless files such as
+    // `/etc/passwd`; only accept them from a recognized icon directory.
+    let extensionless_icon_dir = path.extension().is_none()
+        && path
+            .parent()
+            .and_then(|parent| parent.file_name())
+            .is_some_and(|name| name == ".icons" || name == "pixmaps");
+
+    known_extension || extensionless_icon_dir
+}
+
+/// Register a resolved icon path for the narrow `scope-icon://` protocol.
+///
+/// The protocol does not trust a path supplied by the webview. Only paths that
+/// the backend resolved as actual image files are registered here.
+fn register_served_path(path: &Path) {
+    if is_icon_candidate(path) && path.is_file() {
+        if let Ok(canonical) = path.canonicalize() {
+            served_paths().lock().unwrap().insert(canonical);
+        }
+    }
+}
+
+/// Check whether a requested protocol path was resolved and registered by the
+/// backend. This is the enforcement boundary for local icon file access.
+pub fn is_registered_path(path: &Path) -> bool {
+    let Ok(canonical) = path.canonicalize() else {
+        return false;
+    };
+    served_paths().lock().unwrap().contains(&canonical)
 }
 
 fn collect_base_dirs() -> Vec<PathBuf> {
@@ -279,6 +335,25 @@ fn parse_theme_parents(index_theme_path: &Path) -> Vec<String> {
 
 /// Last-resort fallback: legacy `/usr/share/pixmaps/<name>.<ext>` icons.
 fn lookup_in_pixmaps(icon_name: &str) -> Option<PathBuf> {
+    if let Some(home) = env::var_os("HOME") {
+        for directory in [
+            PathBuf::from(&home).join("AppImages/.icons"),
+            PathBuf::from(&home).join(".local/share/pixmaps"),
+            PathBuf::from(&home).join(".icons"),
+        ] {
+            for ext in ICON_EXTENSIONS {
+                let path = directory.join(format!("{icon_name}.{ext}"));
+                if path.is_file() {
+                    return Some(path);
+                }
+            }
+            let path = directory.join(icon_name);
+            if path.is_file() && is_icon_candidate(&path) {
+                return Some(path);
+            }
+        }
+    }
+
     let pixmaps = PathBuf::from("/usr/share/pixmaps");
 
     for ext in ICON_EXTENSIONS {
@@ -289,7 +364,7 @@ fn lookup_in_pixmaps(icon_name: &str) -> Option<PathBuf> {
     }
 
     let path = pixmaps.join(icon_name);
-    if path.is_file() {
+    if path.is_file() && is_icon_candidate(&path) {
         return Some(path);
     }
 
@@ -315,6 +390,23 @@ pub fn mime_for_path(path: &str) -> &'static str {
         "image/gif"
     } else if lower.ends_with(".bmp") {
         "image/bmp"
+    } else if let Ok(bytes) = fs::read(path) {
+        if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+            "image/png"
+        } else if bytes.starts_with(b"\xff\xd8\xff") {
+            "image/jpeg"
+        } else if bytes.starts_with(b"/* XPM */") {
+            "image/x-xpixmap"
+        } else if std::str::from_utf8(&bytes[..bytes.len().min(256)])
+            .map(|text| {
+                text.trim_start().starts_with("<svg") || text.trim_start().starts_with("<?xml")
+            })
+            .unwrap_or(false)
+        {
+            "image/svg+xml"
+        } else {
+            "application/octet-stream"
+        }
     } else {
         "application/octet-stream"
     }
@@ -326,6 +418,7 @@ pub fn mime_for_path(path: &str) -> &'static str {
 /// percent-encoded so spaces / non-ASCII never break URL parsing; the protocol
 /// handler decodes it back to a filesystem path before reading.
 pub fn icon_url(path: &Path) -> String {
+    register_served_path(path);
     let encoded = percent_encode_path(&path.to_string_lossy());
     format!("scope-icon://localhost{encoded}")
 }
@@ -378,5 +471,20 @@ mod tests {
         assert_eq!(mime_for_path("icon.svg"), "image/svg+xml");
         assert_eq!(mime_for_path("icon.xpm"), "image/x-xpixmap");
         assert_eq!(mime_for_path("icon.unknown"), "application/octet-stream");
+    }
+
+    #[test]
+    fn extensionless_icons_are_limited_to_icon_directories() {
+        assert!(is_icon_candidate(Path::new("/tmp/.icons/app")));
+        assert!(is_icon_candidate(Path::new("/usr/share/pixmaps/app")));
+        assert!(!is_icon_candidate(Path::new("/etc/passwd")));
+    }
+
+    #[test]
+    fn detects_png_content_for_extensionless_icons() {
+        let path = std::env::temp_dir().join("scope-extensionless-icon-test");
+        std::fs::write(&path, b"\x89PNG\r\n\x1a\n").unwrap();
+        assert_eq!(mime_for_path(path.to_str().unwrap()), "image/png");
+        let _ = std::fs::remove_file(path);
     }
 }

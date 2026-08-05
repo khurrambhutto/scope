@@ -187,7 +187,7 @@ pub async fn scan_all() -> (Vec<InstalledPackage>, ScanAvailability) {
         }
         // Paths already owned by a package manager (esp. AppImage absolute paths).
         // Used to avoid double-listing when desktop lookup failed to match.
-        let claimed_paths: std::collections::HashSet<String> = merged
+        let mut claimed_paths: std::collections::HashSet<String> = merged
             .iter()
             .filter(|p| {
                 matches!(
@@ -198,7 +198,7 @@ pub async fn scan_all() -> (Vec<InstalledPackage>, ScanAvailability) {
             .map(|p| p.package_id.to_lowercase())
             .collect();
         for app in desktop.unmatched_apps() {
-            if let Some(pkg) = manual_from_desktop(app, &claimed_paths) {
+            if let Some(pkg) = manual_from_desktop(app, &mut claimed_paths) {
                 merged.push(pkg);
             }
         }
@@ -271,15 +271,26 @@ const MANUAL_ID_SEP: char = '\x1f';
 /// Build a Manual package from a desktop entry no package manager claimed.
 fn manual_from_desktop(
     app: &crate::desktop_entries::DesktopApp,
-    claimed_paths: &std::collections::HashSet<String>,
+    claimed_paths: &mut std::collections::HashSet<String>,
 ) -> Option<InstalledPackage> {
     // Manual installs live in user/opt trees. System /usr apps without a
     // matching package are usually OS components — keep them out of the list.
+    // Manual discovery is for actual GUI applications. Terminal launchers,
+    // stale entries, and desktop-only helpers are not safe uninstall targets.
+    if app.terminal {
+        return None;
+    }
+
     let binary = crate::desktop_entries::resolve_exec_binary(&app.exec);
     if let Some(ref bin) = binary {
         let s = bin.to_string_lossy();
+        let identity = bin
+            .canonicalize()
+            .unwrap_or_else(|_| bin.clone())
+            .to_string_lossy()
+            .to_lowercase();
         // Already listed as AppImage/Snap/etc. — do not double-count.
-        if claimed_paths.contains(&s.to_lowercase()) {
+        if claimed_paths.contains(&s.to_lowercase()) || claimed_paths.contains(&identity) {
             return None;
         }
         // Snap binaries are owned by the Snap scanner.
@@ -292,8 +303,20 @@ fn manual_from_desktop(
         if s.starts_with("/bin/") || s.starts_with("/sbin/") {
             return None;
         }
-    } else if !app.path.contains("/.local/share/applications/") {
-        // No resolvable binary and not a user-local desktop entry → skip.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let Ok(metadata) = std::fs::metadata(bin) else {
+                return None;
+            };
+            if metadata.permissions().mode() & 0o111 == 0 {
+                return None;
+            }
+        }
+        claimed_paths.insert(identity);
+    } else {
+        // Without a real executable, removing the desktop file alone could
+        // destroy a launcher while leaving the application untouched.
         return None;
     }
 
@@ -317,11 +340,7 @@ fn manual_from_desktop(
     pkg.description = app.comment.clone();
     pkg.version = "unknown".into();
     pkg.size_bytes = size_bytes;
-    pkg.app_kind = if app.terminal {
-        AppKind::Cli
-    } else {
-        AppKind::Gui
-    };
+    pkg.app_kind = AppKind::Gui;
     pkg.terminal = app.terminal;
     if !app.categories.is_empty() {
         pkg.categories = Some(app.categories.join(", "));

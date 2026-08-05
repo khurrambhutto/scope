@@ -31,7 +31,7 @@ export function PackageDetail({
     { label: "Runs in terminal", value: pkg.terminal ? "Yes" : "No" },
     {
       label: "Update available",
-      value: pkg.has_update ? pkg.update_version || "Yes" : "—",
+      value: pkg.has_update && pkg.source !== "appimage" ? pkg.update_version || "Yes" : "—",
     },
   ];
 
@@ -51,7 +51,7 @@ export function PackageDetail({
             >
               {SOURCE_LABELS[pkg.source]}
             </span>
-            {pkg.has_update && (
+            {pkg.has_update && pkg.source !== "appimage" && (
               <span className="drawer__update-badge">
                 Update {pkg.update_version ? `→ ${pkg.update_version}` : "available"}
               </span>
@@ -90,7 +90,7 @@ export function PackageDetail({
           </span>
         ) : (
           <>
-            {pkg.has_update && (
+            {pkg.has_update && pkg.source !== "appimage" && (
               <button
                 type="button"
                 className="btn btn--primary"

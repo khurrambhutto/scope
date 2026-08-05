@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   scanPackages,
   getCachedScan,
@@ -6,7 +6,6 @@ import {
 } from "../../shared/api/packages";
 import type {
   CachedScan,
-  InstalledPackage,
   PackageSource,
   AppKind,
 } from "../../shared/types/package";
@@ -14,17 +13,18 @@ import type {
 export type SourceFilter = PackageSource | "all";
 export type KindFilter = AppKind | "all";
 export type ViewMode = "uninstall" | "updates";
+export type SortMode = "default" | "largest";
 
 interface UsePackagesState {
   loading: boolean;
   refreshing: boolean;
   error: string | null;
-  packages: InstalledPackage[];
   lastScan: CachedScan | null;
   query: string;
   sourceFilter: SourceFilter;
   kindFilter: KindFilter;
   viewMode: ViewMode;
+  sortMode: SortMode;
 }
 
 export function usePackages() {
@@ -32,46 +32,13 @@ export function usePackages() {
     loading: true,
     refreshing: false,
     error: null,
-    packages: [],
     lastScan: null,
     query: "",
     sourceFilter: "all",
     kindFilter: "all",
     viewMode: "uninstall",
+    sortMode: "default",
   });
-
-  // Filter happens client-side on the cached full scan (kept fast & offline).
-  const applyFilters = useCallback(
-    (scan: CachedScan | null, query: string, source: SourceFilter, kind: KindFilter, viewMode: ViewMode) => {
-      if (!scan) {
-        setState((s) => ({ ...s, packages: [] }));
-        return;
-      }
-      const q = query.trim().toLowerCase();
-      const filtered = scan.packages.filter((p) => {
-        if (source !== "all" && p.source !== source) return false;
-        if (kind !== "all" && p.app_kind !== kind) return false;
-        if (viewMode === "updates" && !p.has_update) return false;
-        if (q) {
-          const haystack = [
-            p.name,
-            p.display_name ?? "",
-            p.description ?? "",
-            p.package_id,
-            p.install_scope ?? "",
-            p.categories ?? "",
-            p.version,
-          ]
-            .join(" ")
-            .toLowerCase();
-          if (!haystack.includes(q)) return false;
-        }
-        return true;
-      });
-      setState((s) => ({ ...s, packages: filtered }));
-    },
-    []
-  );
 
   const refresh = useCallback(async () => {
     setState((s) => ({ ...s, refreshing: true, error: null }));
@@ -81,7 +48,6 @@ export function usePackages() {
         const next = { ...s, loading: false, refreshing: false, lastScan: cached };
         return next;
       });
-      applyFilters(cached, state.query, state.sourceFilter, state.kindFilter, state.viewMode);
     } catch (e) {
       setState((s) => ({
         ...s,
@@ -90,7 +56,7 @@ export function usePackages() {
         error: String(e),
       }));
     }
-  }, [applyFilters, state.query, state.sourceFilter, state.kindFilter, state.viewMode]);
+  }, []);
 
   // Initial load: reuse a cached scan if present, else scan fresh.
   useEffect(() => {
@@ -101,7 +67,6 @@ export function usePackages() {
         if (cancelled) return;
         if (cached) {
           setState((s) => ({ ...s, loading: false, lastScan: cached }));
-          applyFilters(cached, "", "all", "all", "uninstall");
         } else {
           await refresh();
         }
@@ -114,40 +79,83 @@ export function usePackages() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const setQuery = useCallback(
     (q: string) => {
       setState((s) => ({ ...s, query: q }));
-      applyFilters(state.lastScan, q, state.sourceFilter, state.kindFilter, state.viewMode);
     },
-    [applyFilters, state.lastScan, state.sourceFilter, state.kindFilter, state.viewMode]
+    []
   );
 
   const setSourceFilter = useCallback(
     (src: SourceFilter) => {
       setState((s) => ({ ...s, sourceFilter: src }));
-      applyFilters(state.lastScan, state.query, src, state.kindFilter, state.viewMode);
     },
-    [applyFilters, state.lastScan, state.query, state.kindFilter, state.viewMode]
+    []
   );
 
   const setKindFilter = useCallback(
     (k: KindFilter) => {
       setState((s) => ({ ...s, kindFilter: k }));
-      applyFilters(state.lastScan, state.query, state.sourceFilter, k, state.viewMode);
     },
-    [applyFilters, state.lastScan, state.query, state.sourceFilter, state.viewMode]
+    []
   );
 
   const setViewMode = useCallback(
     (v: ViewMode) => {
       setState((s) => ({ ...s, viewMode: v }));
-      applyFilters(state.lastScan, state.query, state.sourceFilter, state.kindFilter, v);
     },
-    [applyFilters, state.lastScan, state.query, state.sourceFilter, state.kindFilter]
+    []
   );
+
+  const toggleSortBySize = useCallback(() => {
+    setState((s) => ({
+      ...s,
+      sortMode: s.sortMode === "largest" ? "default" : "largest",
+    }));
+  }, []);
+
+  // The visible list is derived from one consistent snapshot. Keeping it out
+  // of state prevents refreshes and filter changes from racing with a stale
+  // closure that still holds the previous render's filter values.
+  const packages = useMemo(() => {
+    const scan = state.lastScan;
+    if (!scan) return [];
+
+    const q = state.query.trim().toLowerCase();
+    const filtered = scan.packages.filter((p) => {
+      if (state.sourceFilter !== "all" && p.source !== state.sourceFilter) return false;
+      if (state.kindFilter !== "all" && p.app_kind !== state.kindFilter) return false;
+      if (state.viewMode === "updates" && (p.source === "appimage" || !p.has_update)) return false;
+      if (!q) return true;
+
+      return [
+        p.name,
+        p.display_name ?? "",
+        p.description ?? "",
+        p.package_id,
+        p.install_scope ?? "",
+        p.categories ?? "",
+        p.version,
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(q);
+    });
+
+    if (state.sortMode === "largest") {
+      return filtered.sort((a, b) => b.size_bytes - a.size_bytes);
+    }
+    return filtered;
+  }, [
+    state.lastScan,
+    state.query,
+    state.sourceFilter,
+    state.kindFilter,
+    state.viewMode,
+    state.sortMode,
+  ]);
 
   // Also expose the server-side search for parity; not used by the default UI
   // flow but available for future "search anywhere" affordances.
@@ -159,16 +167,18 @@ export function usePackages() {
   );
 
   const updatesCount =
-    state.lastScan?.packages.filter((p) => p.has_update).length ?? 0;
+    state.lastScan?.packages.filter((p) => p.has_update && p.source !== "appimage").length ?? 0;
 
   return {
     ...state,
+    packages,
     updatesCount,
     refresh,
     setQuery,
     setSourceFilter,
     setKindFilter,
     setViewMode,
+    toggleSortBySize,
     serverSearch,
   };
 }

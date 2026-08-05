@@ -58,7 +58,7 @@ function RowMenu({
           >
             View details
           </li>
-          {pkg.has_update && (
+          {pkg.has_update && pkg.source !== "appimage" && (
             <li
               role="menuitem"
               className="row-menu__item"
@@ -122,14 +122,14 @@ export function PackageRow({
       <span className="pkg-row__main">
         <span className="pkg-row__title">
           {title}
-          {viewMode === "uninstall" && pkg.has_update && (
+          {viewMode === "uninstall" && pkg.has_update && pkg.source !== "appimage" && (
             <span className="pkg-row__update-badge" title="Update available">
               ↑
             </span>
           )}
         </span>
         <span className="pkg-row__meta-line">
-          {viewMode === "updates" && pkg.has_update ? (
+          {viewMode === "updates" && pkg.has_update && pkg.source !== "appimage" ? (
             <>
               <span>{pkg.version || "—"}</span>
               <span className="pkg-row__arrow">→</span>
@@ -156,7 +156,7 @@ export function PackageRow({
           </span>
         ) : (
           <>
-            {viewMode === "updates" && pkg.has_update ? (
+            {viewMode === "updates" && pkg.has_update && pkg.source !== "appimage" ? (
               <button
                 type="button"
                 className="btn btn--small btn--primary pkg-row__action"

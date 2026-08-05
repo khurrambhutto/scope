@@ -25,6 +25,8 @@ export function PackageScreen() {
     setSourceFilter,
     setKindFilter,
     setViewMode,
+    sortMode,
+    toggleSortBySize,
   } = usePackages();
   const { tasks, busyByKey } = useOperationTasks();
 
@@ -88,6 +90,8 @@ export function PackageScreen() {
         onSource={setSourceFilter}
         onKind={setKindFilter}
         onViewMode={setViewMode}
+        sortMode={sortMode}
+        onSortBySize={toggleSortBySize}
         onRescan={refresh}
       />
 
