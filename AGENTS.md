@@ -16,6 +16,10 @@ Linux distributions spread packages across APT, Snap, Flatpak, AppImage, and man
 - **Package scanning logic:** source-specific modules under `src-tauri/src/scanner/`.
 - **Package/app models:** shared typed models in `src-tauri/src/package.rs`.
 - **Website / docs:** static files in `docs/`.
+- **Qt rewrite (in progress):** native Qt6/C++ port in `scope-qt/` — see
+  `scope-qt/README.md`. Core modules mirror the Rust backend (`core/` for
+  scanners/safety/operations, QML views, whitelisted icon provider). Build and
+  test instructions live in that folder; keep its parity with the Rust backend.
 
 Do not restore the old Rust TUI architecture. Scope is now a root Tauri v2 desktop app.
 
