@@ -203,15 +203,10 @@ pub async fn scan_all() -> (Vec<InstalledPackage>, ScanAvailability) {
             }
         }
         availability.manual = true;
-        merged.sort_by(|a, b| {
-            let ka = kind_rank(a.app_kind);
-            let kb = kind_rank(b.app_kind);
-            ka.cmp(&kb).then_with(|| {
-                display_name(a)
-                    .to_lowercase()
-                    .cmp(&display_name(b).to_lowercase())
-            })
-        });
+        // One lowercase key per package (computed once), not one allocation
+        // per comparison: the old `sort_by` lowercased both names on every
+        // comparison (~N log N allocations).
+        merged.sort_by_cached_key(|p| (kind_rank(p.app_kind), display_name(p).to_lowercase()));
         (merged, availability)
     })
     .await

@@ -20,6 +20,11 @@ Linux distributions spread packages across APT, Snap, Flatpak, AppImage, and man
   `scope-qt/README.md`. Core modules mirror the Rust backend (`core/` for
   scanners/safety/operations, QML views, whitelisted icon provider). Build and
   test instructions live in that folder; keep its parity with the Rust backend.
+- **GTK native frontend:** GTK4/libadwaita port in `scope-gtk/` — see
+  `scope-gtk/README.md`. Reuses the Tauri-free core modules (`package`,
+  `scanner/`, `safety/`, `operations/`, `icons/`, `desktop_entries/`,
+  `system/`) verbatim via `#[path]` includes, so behavior and safety rules stay
+  single-sourced. UI-only code lives in its `src/` modules.
 
 Do not restore the old Rust TUI architecture. Scope is now a root Tauri v2 desktop app.
 

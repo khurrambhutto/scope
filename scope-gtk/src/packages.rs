@@ -1,5 +1,8 @@
 //! Unified package list: scanning, filtering, search, and row building.
 
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use adw::prelude::*;
@@ -366,8 +369,11 @@ fn source_line(pkg: &InstalledPackage) -> String {
 
 /// Load the row icon. The URL path is validated against the backend's icon
 /// whitelist before any filesystem read, and the file read happens off-thread.
+/// Decoded pixbufs are cached by (path, size) so list rebuilds (search,
+/// filters, rescans) never re-read or re-decode icons from disk.
 #[allow(deprecated)]
 fn load_icon(image: &gtk::Image, pkg: &InstalledPackage) {
+    const SIZE: i32 = 72;
     let path = pkg
         .icon
         .as_deref()
@@ -376,31 +382,83 @@ fn load_icon(image: &gtk::Image, pkg: &InstalledPackage) {
 
     match path {
         Some(path) => {
+            if let Some(pixbuf) = cached_pixbuf(&path, SIZE) {
+                image.set_from_pixbuf(Some(&pixbuf));
+                return;
+            }
             let image = image.clone();
             let fallback = fallback_name(pkg).to_string();
+            let cache_key = path.clone();
             bridge::spawn(
                 async move {
-                    tokio::task::spawn_blocking(move || std::fs::read(&path).ok())
-                        .await
-                        .unwrap_or(None)
+                    let bytes =
+                        tokio::task::spawn_blocking(move || std::fs::read(&path).ok())
+                            .await
+                            .unwrap_or(None);
+                    (cache_key, bytes)
                 },
-                move |bytes| match bytes {
-                    Some(bytes) => {
-                        let loader = gtk::gdk_pixbuf::PixbufLoader::new();
-                        loader.set_size(72, 72);
-                        if loader.write(&bytes).is_ok() {
-                            if let Some(pixbuf) = loader.pixbuf() {
-                                image.set_from_pixbuf(Some(&pixbuf));
-                            }
-                        }
-                        let _ = loader.close();
+                move |(cache_key, bytes)| {
+                    let Some(bytes) = bytes else {
+                        set_fallback_icon(&image, &fallback);
+                        return;
+                    };
+                    if let Some(pixbuf) = decode_pixbuf(&bytes, SIZE) {
+                        store_pixbuf(cache_key, SIZE, &pixbuf);
+                        image.set_from_pixbuf(Some(&pixbuf));
                     }
-                    None => set_fallback_icon(&image, &fallback),
+                    // Decode failure: leave the image empty, exactly as before.
                 },
             );
         }
         None => set_fallback_icon(image, fallback_name(pkg)),
     }
+}
+
+// Icon pixbuf cache ----------------------------------------------------------
+
+// Icon pixbuf cache: decoded icons keyed by (resolved path, requested pixel
+// size). Rows use 72 px, the detail page 128 px — keying by size keeps both
+// sharp while still sharing the disk read. Thread-local because `Pixbuf` is
+// main-thread-only (all callers run on the GTK main thread). The
+// distinct-icon count is in the low hundreds; a generous cap clears the cache
+// instead of letting it grow without bound.
+thread_local! {
+    static PIXBUF_CACHE: RefCell<HashMap<(PathBuf, i32), gtk::gdk_pixbuf::Pixbuf>> =
+        RefCell::new(HashMap::new());
+}
+
+pub(crate) fn cached_pixbuf(path: &Path, size: i32) -> Option<gtk::gdk_pixbuf::Pixbuf> {
+    PIXBUF_CACHE.with(|cache| {
+        cache
+            .borrow()
+            .get(&(path.to_path_buf(), size))
+            .cloned()
+    })
+}
+
+pub(crate) fn store_pixbuf(path: PathBuf, size: i32, pixbuf: &gtk::gdk_pixbuf::Pixbuf) {
+    PIXBUF_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if cache.len() > 2000 {
+            cache.clear();
+        }
+        cache.insert((path, size), pixbuf.clone());
+    });
+}
+
+/// Decode raw image bytes into a pixbuf scaled to `size` px. Shared by list
+/// rows and the detail page so both paths decode identically.
+#[allow(deprecated)]
+pub(crate) fn decode_pixbuf(bytes: &[u8], size: i32) -> Option<gtk::gdk_pixbuf::Pixbuf> {
+    let loader = gtk::gdk_pixbuf::PixbufLoader::new();
+    loader.set_size(size, size);
+    if loader.write(bytes).is_err() {
+        let _ = loader.close();
+        return None;
+    }
+    let pixbuf = loader.pixbuf();
+    let _ = loader.close();
+    pixbuf
 }
 
 fn fallback_name(pkg: &InstalledPackage) -> &'static str {

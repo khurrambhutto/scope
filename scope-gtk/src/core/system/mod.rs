@@ -123,6 +123,18 @@ pub async fn run_elevated(
     };
 
     let started = std::time::Instant::now();
+    // Explicit progress marker for the silent window before/around the auth
+    // dialog: the task log shows exactly what was started, with which auth,
+    // so a long `pkexec` wait reads as "waiting for authentication", not hung.
+    // Display-only — one `pkexec` invocation per apply, unchanged.
+    let auth_label = match auth {
+        AuthMethod::Pkexec => "pkexec (Polkit password prompt may appear)",
+        AuthMethod::None => "none",
+    };
+    let start_line = format!(
+        "[scope] start: {} {:?} (auth: {auth_label})",
+        display_program, args
+    );
     let output = tokio::time::timeout(timeout, cmd.output()).await;
 
     let elapsed = started.elapsed();
@@ -137,7 +149,8 @@ pub async fn run_elevated(
         Ok(Ok(out)) => {
             let stdout = String::from_utf8_lossy(&out.stdout).to_string();
             let stderr = String::from_utf8_lossy(&out.stderr).to_string();
-            let logs = format!("--- stdout ---\n{stdout}\n--- stderr ---\n{stderr}{logs_suffix}");
+            let logs =
+                format!("{start_line}\n--- stdout ---\n{stdout}\n--- stderr ---\n{stderr}{logs_suffix}");
             let success = out.status.success();
             let exit_code = out.status.code();
             let op_label = if program == "apt" {
@@ -164,13 +177,13 @@ pub async fn run_elevated(
         Ok(Err(e)) => OperationResult {
             success: false,
             message: format!("Failed to start command: {e}"),
-            logs: format!("spawn error: {e}{logs_suffix}"),
+            logs: format!("{start_line}\nspawn error: {e}{logs_suffix}"),
             exit_code: None,
         },
         Err(_) => OperationResult {
             success: false,
             message: format!("Operation timed out after {timeout:?}."),
-            logs: format!("timed out after {timeout:?}{logs_suffix}"),
+            logs: format!("{start_line}\ntimed out after {timeout:?}{logs_suffix}"),
             exit_code: None,
         },
     }

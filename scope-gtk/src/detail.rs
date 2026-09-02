@@ -285,8 +285,11 @@ pub fn build_widgets() -> DetailWidgets {
 }
 
 /// Load the detail icon from the backend-resolved path (whitelist-checked).
+/// Uses the shared pixbuf cache in `packages` so re-opening details never
+/// re-reads or re-decodes the icon from disk.
 #[allow(deprecated)]
 fn load_detail_icon(app: &Rc<App>, pkg: &crate::backend::package::InstalledPackage) {
+    const SIZE: i32 = 128;
     let path = pkg
         .icon
         .as_deref()
@@ -295,22 +298,24 @@ fn load_detail_icon(app: &Rc<App>, pkg: &crate::backend::package::InstalledPacka
 
     let Some(path) = path else { return };
     let image = app.d_icon.clone();
+    if let Some(pixbuf) = crate::packages::cached_pixbuf(&path, SIZE) {
+        image.set_from_pixbuf(Some(&pixbuf));
+        return;
+    }
+    let cache_key = path.clone();
     crate::bridge::spawn(
         async move {
-            tokio::task::spawn_blocking(move || std::fs::read(&path).ok())
+            let bytes = tokio::task::spawn_blocking(move || std::fs::read(&path).ok())
                 .await
-                .unwrap_or(None)
+                .unwrap_or(None);
+            (cache_key, bytes)
         },
-        move |bytes| {
+        move |(cache_key, bytes)| {
             if let Some(bytes) = bytes {
-                let loader = gtk::gdk_pixbuf::PixbufLoader::new();
-                loader.set_size(128, 128);
-                if loader.write(&bytes).is_ok() {
-                    if let Some(pixbuf) = loader.pixbuf() {
-                        image.set_from_pixbuf(Some(&pixbuf));
-                    }
+                if let Some(pixbuf) = crate::packages::decode_pixbuf(&bytes, SIZE) {
+                    crate::packages::store_pixbuf(cache_key, SIZE, &pixbuf);
+                    image.set_from_pixbuf(Some(&pixbuf));
                 }
-                let _ = loader.close();
             }
         },
     );

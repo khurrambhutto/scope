@@ -181,7 +181,20 @@ fn esc(s: &str) -> String {
 }
 
 /// Dialog confirmed: close, register a running task, execute in background.
+///
+/// The apply path revalidates against a fresh full scan (seconds) and then may
+/// block on the Polkit password dialog — both silent windows that previously
+/// looked hung. Cover them explicitly: the task opens with a stage message
+/// naming the revalidation step (and the possible auth prompt), the row shows
+/// a spinner, and a toast says the same up front. No extra `pkexec` calls;
+/// revalidation still happens inside `backend.apply_*` before anything runs.
 fn start_task(app: &Rc<App>, op: Operation, key: String, plan: OperationPlan) {
+    let initial_message = match plan.auth_method {
+        AuthMethod::Pkexec => {
+            "Revalidating plan… a password prompt may appear next.".to_string()
+        }
+        AuthMethod::None => "Revalidating plan…".to_string(),
+    };
     let task_id = app.with_state(|s| {
         let id = s.next_task_id;
         s.next_task_id += 1;
@@ -190,7 +203,7 @@ fn start_task(app: &Rc<App>, op: Operation, key: String, plan: OperationPlan) {
             op,
             package_name: plan.display_name.clone(),
             status: TaskStatus::Running,
-            message: "Running…".to_string(),
+            message: initial_message,
             logs: String::new(),
         });
         id
@@ -202,6 +215,12 @@ fn start_task(app: &Rc<App>, op: Operation, key: String, plan: OperationPlan) {
     };
     crate::app::set_busy(app, &key, Some(busy_label));
     crate::tasks::rebuild(app);
+    // Non-blocking heads-up for the silent rescan-to-dialog window. The task
+    // row + row spinner carry the ongoing state; this toast names the wait.
+    app.toast(match plan.auth_method {
+        AuthMethod::Pkexec => "Working… revalidating, then waiting for authentication.",
+        AuthMethod::None => "Working… revalidating plan.",
+    });
 
     let backend = app.backend.clone();
     let app2 = app.clone();

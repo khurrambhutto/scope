@@ -331,8 +331,25 @@ fn wire(
         let app2 = app.clone();
         app.search_entry.connect_search_changed(move |entry| {
             let text = entry.text().to_string();
-            app2.with_state(|s| s.query = text);
-            packages::rebuild_list(&app2);
+            // Debounce: every keystroke records the query but only the latest
+            // generation rebuilds, 150 ms after typing settles. Without this,
+            // each keystroke cleared and rebuilt the whole ListBox (rows +
+            // icon disk reads) while the user was still typing.
+            let generation = app2.with_state(|s| {
+                s.query = text;
+                s.search_generation += 1;
+                s.search_generation
+            });
+            let app3 = app2.clone();
+            gtk::glib::timeout_add_local_once(
+                std::time::Duration::from_millis(150),
+                move || {
+                    let current = app3.with_state(|s| s.search_generation);
+                    if current == generation {
+                        packages::rebuild_list(&app3);
+                    }
+                },
+            );
         });
     }
 

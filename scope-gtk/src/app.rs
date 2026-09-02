@@ -16,6 +16,9 @@ pub struct AppState {
     pub scanned_at_ms: Option<u64>,
     pub scanning: bool,
     pub query: String,
+    /// Monotonic generation bumped on every keystroke so the debounced search
+    /// timeout can skip stale rebuilds (only the latest generation rebuilds).
+    pub search_generation: u64,
     pub updates_only: bool,
     pub largest_first: bool,
     /// package key -> short busy label ("Removing…", "Updating…").
@@ -32,6 +35,7 @@ impl Default for AppState {
             scanned_at_ms: None,
             scanning: false,
             query: String::new(),
+            search_generation: 0,
             updates_only: false,
             largest_first: false,
             busy: HashMap::new(),
