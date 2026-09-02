@@ -1,0 +1,18 @@
+/* Scope GTK — small additions on top of the Adwaita theme. */
+
+.chip {
+    border-radius: 9999px;
+    padding: 2px 10px;
+    font-size: 0.85em;
+    font-weight: bold;
+}
+
+.task-row .expander {
+    margin-top: 4px;
+}
+
+.log-label {
+    font-family: monospace;
+    font-size: 0.9em;
+    margin-top: 6px;
+}

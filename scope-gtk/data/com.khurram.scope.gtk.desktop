@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Scope GTK
+GenericName=Package Manager
+Comment=See, update, and uninstall every app on your Linux system (GTK build)
+Exec=scope-gtk
+Icon=com.khurram.scope.gtk
+Terminal=false
+Categories=System;PackageManager;
+Keywords=packages;apps;uninstall;update;apt;snap;flatpak;appimage;
+StartupNotify=true
