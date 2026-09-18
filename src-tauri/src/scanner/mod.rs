@@ -112,12 +112,12 @@ struct ScanOutcome {
 /// failures are never fatal: a broken/uninstalled source simply contributes zero
 /// packages and reports `available = false`.
 pub async fn scan_all() -> (Vec<InstalledPackage>, ScanAvailability) {
-    // Discover desktop apps on a blocking thread (synchronous fs walk).
+    // Discover desktop apps on a blocking thread (synchronous fs walk). Started
+    // here, ahead of the package scans, so the walk overlaps them instead of
+    // running serially in front of them.
     let desktop = tokio::task::spawn_blocking(|| {
         DesktopIndex::from_apps(crate::desktop_entries::discover_desktop_apps())
-    })
-    .await
-    .unwrap_or_else(|_| DesktopIndex::empty());
+    });
 
     let mut join = JoinSet::new();
     for scanner in scanners() {
@@ -178,6 +178,7 @@ pub async fn scan_all() -> (Vec<InstalledPackage>, ScanAvailability) {
     // name. Icon resolution touches the filesystem (theme lookups), so the
     // whole merge pass runs on a blocking thread to keep the async runtime
     // responsive. `DesktopIndex` and `InstalledPackage` are both `Send`.
+    let desktop = desktop.await.unwrap_or_else(|_| DesktopIndex::empty());
     let (merged, availability) = tokio::task::spawn_blocking(move || {
         for pkg in merged.iter_mut() {
             enrich(pkg, &desktop);

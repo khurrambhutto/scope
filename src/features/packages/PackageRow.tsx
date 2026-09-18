@@ -1,9 +1,10 @@
+import { memo } from "react";
 import type { InstalledPackage } from "../../shared/types/package";
 import { SOURCE_LABELS } from "../../shared/types/package";
 import { formatSize } from "./format";
 import { AppIcon } from "../../shared/components/AppIcon";
 
-export function PackageRow({
+function PackageRowBase({
   pkg,
   selected,
   viewMode,
@@ -25,9 +26,7 @@ export function PackageRow({
     <div className={`pkg-row${selected ? " pkg-row--selected" : ""}`}>
       <AppIcon pkg={pkg} title={title} size="row" />
       <span className="pkg-row__main">
-        <span className="pkg-row__title">
-          {title}
-        </span>
+        <span className="pkg-row__title">{title}</span>
         <span className="pkg-row__meta-line">
           <span>{pkg.version || "—"}</span>
           <span>·</span>
@@ -73,3 +72,9 @@ export function PackageRow({
     </div>
   );
 }
+
+/**
+ * Memoized so opening a detail row, or typing in the search box, re-renders only
+ * the rows that actually changed.
+ */
+export const PackageRow = memo(PackageRowBase);

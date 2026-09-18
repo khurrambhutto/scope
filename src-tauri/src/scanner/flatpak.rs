@@ -4,7 +4,12 @@
 //! applications are reported (runtimes are intentionally excluded). Flatpaks are
 //! GUI-first; their `.desktop` ids equal the application id, which the desktop
 //! enrichment step matches exactly.
+//!
+//! User and system installs are independent, so they are listed and checked
+//! concurrently. `flatpak update --appstream` is global rather than per-scope, so
+//! it runs once per scan and overlaps the listings.
 
+use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 
@@ -31,9 +36,46 @@ impl Scanner for FlatpakScanner {
 }
 
 async fn scan() -> Result<Vec<InstalledPackage>> {
-    let user = scan_scope(InstallScope::User).await;
-    let system = scan_scope(InstallScope::System).await;
+    // AppStream metadata is shared by both scopes and may reach the network, so
+    // refresh it once while the two scope listings run.
+    let appstream = tokio::spawn(refresh_appstream());
+    let (user, system) = tokio::join!(
+        list_scope(InstallScope::User),
+        list_scope(InstallScope::System)
+    );
+    let _ = appstream.await;
 
+    let mut packages = merge_scopes(user, system)?;
+
+    // Update checks read AppStream data, so they run after the refresh.
+    let (user_updates, system_updates) = tokio::join!(
+        available_updates(InstallScope::User),
+        available_updates(InstallScope::System)
+    );
+    mark_updates(&mut packages, InstallScope::User, &user_updates);
+    mark_updates(&mut packages, InstallScope::System, &system_updates);
+
+    Ok(packages)
+}
+
+fn scope_flag(scope: InstallScope) -> &'static str {
+    match scope {
+        InstallScope::User => "--user",
+        InstallScope::System => "--system",
+    }
+}
+
+/// Refresh AppStream metadata. Best-effort: without it `remote-ls --updates`
+/// still reports whatever the already-cached metadata knows about.
+async fn refresh_appstream() {
+    let _ = capture_stdout("flatpak", &["update", "--appstream"], SCAN_TIMEOUT).await;
+}
+
+/// Combine the two scope listings, tolerating one scope failing.
+fn merge_scopes(
+    user: Result<Vec<InstalledPackage>>,
+    system: Result<Vec<InstalledPackage>>,
+) -> Result<Vec<InstalledPackage>> {
     match (user, system) {
         (Ok(mut user_packages), Ok(mut system_packages)) => {
             user_packages.append(&mut system_packages);
@@ -41,19 +83,16 @@ async fn scan() -> Result<Vec<InstalledPackage>> {
         }
         (Ok(packages), Err(_)) | (Err(_), Ok(packages)) => Ok(packages),
         (Err(user_err), Err(system_err)) => {
-            Err(user_err).context(format!("flatpak system scan also failed: {system_err}"))
+            Err(user_err.context(format!("flatpak system scan also failed: {system_err}")))
         }
     }
 }
 
-async fn scan_scope(scope: InstallScope) -> Result<Vec<InstalledPackage>> {
+async fn list_scope(scope: InstallScope) -> Result<Vec<InstalledPackage>> {
     // Tab-delimited column output (flatpak columns default to this separator
     // when redirected / non-tty).
     let columns = "application,name,version,origin,size,description";
-    let scope_arg = match scope {
-        InstallScope::User => "--user",
-        InstallScope::System => "--system",
-    };
+    let scope_arg = scope_flag(scope);
     let output = capture_stdout(
         "flatpak",
         &["list", scope_arg, "--app", &format!("--columns={columns}")],
@@ -93,30 +132,26 @@ async fn scan_scope(scope: InstallScope) -> Result<Vec<InstalledPackage>> {
         pkg.app_kind = AppKind::Gui;
         packages.push(pkg);
     }
-    // Check for updates after scanning each scope.
-    check_scope_updates(scope, &mut packages).await;
     Ok(packages)
 }
 
-/// Check for Flatpak updates for a given scope by running
-/// `flatpak remote-ls --updates` and matching against the scanned packages.
-async fn check_scope_updates(scope: InstallScope, packages: &mut Vec<InstalledPackage>) {
-    // Refresh appstream metadata first (fast when fresh).
-    let _ = capture_stdout("flatpak", &["update", "--appstream"], SCAN_TIMEOUT).await;
-
-    let scope_flag = match scope {
-        InstallScope::User => "--user",
-        InstallScope::System => "--system",
-    };
+/// Available updates for one scope, keyed by application id.
+async fn available_updates(scope: InstallScope) -> HashMap<String, Option<String>> {
+    let mut updates = HashMap::new();
     let output = match capture_stdout(
         "flatpak",
-        &["remote-ls", "--updates", scope_flag, "--columns=application,version"],
+        &[
+            "remote-ls",
+            "--updates",
+            scope_flag(scope),
+            "--columns=application,version",
+        ],
         SCAN_TIMEOUT,
     )
     .await
     {
         Ok(o) => o,
-        Err(_) => return,
+        Err(_) => return updates,
     };
 
     // Tab-delimited: application_id\tversion
@@ -125,17 +160,30 @@ async fn check_scope_updates(scope: InstallScope, packages: &mut Vec<InstalledPa
         if line.is_empty() {
             continue;
         }
-        let parts: Vec<&str> = line.split('\t').collect();
-        if parts.is_empty() {
-            continue;
-        }
-        let app_id = parts[0].to_string();
-        let new_version = parts.get(1).filter(|v| !v.is_empty()).map(|s| s.to_string());
-        if let Some(pkg) = packages.iter_mut().find(|p| p.package_id == app_id) {
+        let mut parts = line.split('\t');
+        let Some(app_id) = parts.next() else { continue };
+        let version = parts.next().filter(|v| !v.is_empty()).map(|s| s.to_string());
+        updates.insert(app_id.to_string(), version);
+    }
+    updates
+}
+
+/// Flag packages from one scope that have an available update.
+fn mark_updates(
+    packages: &mut [InstalledPackage],
+    scope: InstallScope,
+    updates: &HashMap<String, Option<String>>,
+) {
+    if updates.is_empty() {
+        return;
+    }
+    for pkg in packages
+        .iter_mut()
+        .filter(|p| p.install_scope == Some(scope))
+    {
+        if let Some(version) = updates.get(&pkg.package_id) {
             pkg.has_update = true;
-            if let Some(ver) = new_version {
-                pkg.update_version = Some(ver);
-            }
+            pkg.update_version = version.clone();
         }
     }
 }

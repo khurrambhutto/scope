@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { InstalledPackage } from "../../shared/types/package";
 import { Logo } from "../../shared/components/Logo";
 import { PackageList } from "./PackageList";
@@ -24,21 +24,37 @@ export function PackageScreen() {
   } = usePackages();
   const [selected, setSelected] = useState<InstalledPackage | null>(null);
 
-  const handleSelect = (pkg: InstalledPackage) =>
-    setSelected((prev) => (prev?.key === pkg.key ? null : pkg));
+  const handleSelect = useCallback(
+    (pkg: InstalledPackage) => setSelected((prev) => (prev?.key === pkg.key ? null : pkg)),
+    []
+  );
 
   // Keep the selected detail row in sync after a rescan.
-  const selectedRow =
-    selected && packages.find((p) => p.key === selected.key)
-      ? packages.find((p) => p.key === selected.key)!
-      : selected;
+  const selectedRow = useMemo(
+    () => (selected ? packages.find((p) => p.key === selected.key) ?? selected : null),
+    [packages, selected]
+  );
 
-  const handleUninstalled = (pkg: InstalledPackage) => {
-    if (selected?.key === pkg.key) {
-      setSelected(null);
-    }
-    refresh();
-  };
+  const handleUninstalled = useCallback(
+    (pkg: InstalledPackage) => {
+      setSelected((prev) => (prev?.key === pkg.key ? null : prev));
+      refresh();
+    },
+    [refresh]
+  );
+
+  // A source that timed out or errored should say so, instead of looking like
+  // "no packages".
+  const sourceWarnings = useMemo(() => {
+    const availability = lastScan?.availability;
+    return [
+      { label: "APT", message: availability?.apt_error },
+      { label: "Snap", message: availability?.snap_error },
+      { label: "Flatpak", message: availability?.flatpak_error },
+    ].filter((warning): warning is { label: string; message: string } =>
+      Boolean(warning.message)
+    );
+  }, [lastScan]);
 
   return (
     <section className="screen">
@@ -63,11 +79,12 @@ export function PackageScreen() {
       />
 
       {error && <div className="banner banner--error">{error}</div>}
-      {lastScan?.availability?.apt_error && !error && (
-        <div className="banner banner--warn">
-          APT: {lastScan.availability.apt_error}
-        </div>
-      )}
+      {!error &&
+        sourceWarnings.map((warning) => (
+          <div className="banner banner--warn" key={warning.label}>
+            {warning.label}: {warning.message}
+          </div>
+        ))}
 
       <div className="screen__body">
         {loading ? (

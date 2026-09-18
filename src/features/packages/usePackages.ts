@@ -1,9 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import {
-  scanPackages,
-  getCachedScan,
-  searchPackages,
-} from "../../shared/api/packages";
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { scanPackages, getCachedScan } from "../../shared/api/packages";
 import type {
   CachedScan,
   InstalledPackage,
@@ -15,156 +11,109 @@ export type SourceFilter = PackageSource | "all";
 export type KindFilter = AppKind | "all";
 export type ViewMode = "uninstall" | "updates";
 
-interface UsePackagesState {
-  loading: boolean;
-  refreshing: boolean;
-  error: string | null;
-  packages: InstalledPackage[];
-  lastScan: CachedScan | null;
-  query: string;
-  sourceFilter: SourceFilter;
-  kindFilter: KindFilter;
-  viewMode: ViewMode;
+/**
+ * Everything a package can be searched by, lowercased. Built once per scan and
+ * indexed by package key, so typing never re-allocates per package.
+ */
+function searchText(pkg: InstalledPackage): string {
+  return [
+    pkg.name,
+    pkg.display_name ?? "",
+    pkg.description ?? "",
+    pkg.package_id,
+    pkg.install_scope ?? "",
+    pkg.categories ?? "",
+    pkg.version,
+  ]
+    .join(" ")
+    .toLowerCase();
 }
 
 export function usePackages() {
-  const [state, setState] = useState<UsePackagesState>({
-    loading: true,
-    refreshing: false,
-    error: null,
-    packages: [],
-    lastScan: null,
-    query: "",
-    sourceFilter: "all",
-    kindFilter: "all",
-    viewMode: "uninstall",
-  });
+  const [scan, setScan] = useState<CachedScan | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
+  const [kindFilter, setKindFilter] = useState<KindFilter>("all");
+  const [viewMode, setViewMode] = useState<ViewMode>("uninstall");
 
-  // Filter happens client-side on the cached full scan (kept fast & offline).
-  const applyFilters = useCallback(
-    (scan: CachedScan | null, query: string, source: SourceFilter, kind: KindFilter, viewMode: ViewMode) => {
-      if (!scan) {
-        setState((s) => ({ ...s, packages: [] }));
-        return;
-      }
-      const q = query.trim().toLowerCase();
-      const filtered = scan.packages.filter((p) => {
-        if (source !== "all" && p.source !== source) return false;
-        if (kind !== "all" && p.app_kind !== kind) return false;
-        if (viewMode === "updates" && !p.has_update) return false;
-        if (q) {
-          const haystack = [
-            p.name,
-            p.display_name ?? "",
-            p.description ?? "",
-            p.package_id,
-            p.install_scope ?? "",
-            p.categories ?? "",
-            p.version,
-          ]
-            .join(" ")
-            .toLowerCase();
-          if (!haystack.includes(q)) return false;
-        }
-        return true;
-      });
-      setState((s) => ({ ...s, packages: filtered }));
-    },
-    []
-  );
+  // The search field stays in sync immediately while the filter pass is
+  // deferred, which keeps typing smooth as the list grows into the thousands.
+  const deferredQuery = useDeferredValue(query);
+
+  const searchIndex = useMemo(() => {
+    const index = new Map<string, string>();
+    for (const pkg of scan?.packages ?? []) {
+      index.set(pkg.key, searchText(pkg));
+    }
+    return index;
+  }, [scan]);
 
   const refresh = useCallback(async () => {
-    setState((s) => ({ ...s, refreshing: true, error: null }));
+    setRefreshing(true);
+    setError(null);
     try {
-      const cached = await scanPackages();
-      setState((s) => {
-        const next = { ...s, loading: false, refreshing: false, lastScan: cached };
-        return next;
-      });
-      applyFilters(cached, state.query, state.sourceFilter, state.kindFilter, state.viewMode);
+      setScan(await scanPackages());
     } catch (e) {
-      setState((s) => ({
-        ...s,
-        loading: false,
-        refreshing: false,
-        error: String(e),
-      }));
+      setError(String(e));
+    } finally {
+      setRefreshing(false);
+      setLoading(false);
     }
-  }, [applyFilters, state.query, state.sourceFilter, state.kindFilter, state.viewMode]);
+  }, []);
 
-  // Initial load: reuse a cached scan if present, else scan fresh.
+  // Paint the last scan first — the in-memory cache, or the copy the backend
+  // persisted during the previous session — then always refresh in the
+  // background so nothing on screen stays stale.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const cached = await getCachedScan();
-        if (cancelled) return;
-        if (cached) {
-          setState((s) => ({ ...s, loading: false, lastScan: cached }));
-          applyFilters(cached, "", "all", "all", "uninstall");
-        } else {
-          await refresh();
+        if (!cancelled && cached) {
+          setScan(cached);
+          setLoading(false);
         }
-      } catch (e) {
-        if (!cancelled) {
-          setState((s) => ({ ...s, loading: false, error: String(e) }));
-        }
+      } catch {
+        // No usable cache: the refresh below covers it.
       }
+      if (!cancelled) await refresh();
     })();
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [refresh]);
 
-  const setQuery = useCallback(
-    (q: string) => {
-      setState((s) => ({ ...s, query: q }));
-      applyFilters(state.lastScan, q, state.sourceFilter, state.kindFilter, state.viewMode);
-    },
-    [applyFilters, state.lastScan, state.sourceFilter, state.kindFilter, state.viewMode]
-  );
-
-  const setSourceFilter = useCallback(
-    (src: SourceFilter) => {
-      setState((s) => ({ ...s, sourceFilter: src }));
-      applyFilters(state.lastScan, state.query, src, state.kindFilter, state.viewMode);
-    },
-    [applyFilters, state.lastScan, state.query, state.kindFilter, state.viewMode]
-  );
-
-  const setKindFilter = useCallback(
-    (k: KindFilter) => {
-      setState((s) => ({ ...s, kindFilter: k }));
-      applyFilters(state.lastScan, state.query, state.sourceFilter, k, state.viewMode);
-    },
-    [applyFilters, state.lastScan, state.query, state.sourceFilter, state.viewMode]
-  );
-
-  const setViewMode = useCallback(
-    (v: ViewMode) => {
-      setState((s) => ({ ...s, viewMode: v }));
-      applyFilters(state.lastScan, state.query, state.sourceFilter, state.kindFilter, v);
-    },
-    [applyFilters, state.lastScan, state.query, state.sourceFilter, state.kindFilter]
-  );
-
-  // Also expose the server-side search for parity; not used by the default UI
-  // flow but available for future "search anywhere" affordances.
-  const serverSearch = useCallback(
-    async (q: string, src: PackageSource | undefined, kind: AppKind | undefined) => {
-      return searchPackages(q || undefined, src, kind);
-    },
-    []
-  );
+  // Derived rather than stored, so the visible list cannot drift out of sync
+  // with the scan or the active filters.
+  const packages = useMemo(() => {
+    const all = scan?.packages ?? [];
+    const needle = deferredQuery.trim().toLowerCase();
+    return all.filter((pkg) => {
+      if (sourceFilter !== "all" && pkg.source !== sourceFilter) return false;
+      if (kindFilter !== "all" && pkg.app_kind !== kindFilter) return false;
+      if (viewMode === "updates" && !pkg.has_update) return false;
+      if (needle) return (searchIndex.get(pkg.key) ?? "").includes(needle);
+      return true;
+    });
+  }, [scan, searchIndex, deferredQuery, sourceFilter, kindFilter, viewMode]);
 
   return {
-    ...state,
+    loading,
+    refreshing,
+    error,
+    packages,
+    lastScan: scan,
+    query,
+    sourceFilter,
+    kindFilter,
+    viewMode,
     refresh,
     setQuery,
     setSourceFilter,
     setKindFilter,
     setViewMode,
-    serverSearch,
   };
 }
