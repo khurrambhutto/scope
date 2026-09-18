@@ -302,8 +302,7 @@ body {
   padding: 10px 12px;
   margin: 2px 0;
   color: var(--text);
-  cursor: pointer;
-  appearance: none;
+  cursor: default;
   transition: background 0.1s;
 }
 .pkg-row:hover {
@@ -312,6 +311,32 @@ body {
 .pkg-row--selected {
   background: rgba(212, 80, 74, 0.08);
   border-color: rgba(212, 80, 74, 0.15);
+}
+.pkg-row__actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  opacity: 0;
+  transform: translateX(4px);
+  pointer-events: none;
+  transition: opacity 0.15s, transform 0.15s;
+}
+.pkg-row:hover .pkg-row__actions,
+.pkg-row:focus-within .pkg-row__actions,
+.pkg-row--selected .pkg-row__actions {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+.btn--sm {
+  padding: 6px 12px;
+  font-size: 13px;
+  border-radius: 10px;
+}
+.btn--sm.btn--icon {
+  padding: 6px;
 }
 .pkg-row__avatar {
   flex: 0 0 auto;

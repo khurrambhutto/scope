@@ -6,19 +6,23 @@ import { AppIcon } from "../../shared/components/AppIcon";
 export function PackageRow({
   pkg,
   selected,
-  onClick,
+  viewMode,
+  onInfo,
+  onUninstall,
+  onUpdate,
 }: {
   pkg: InstalledPackage;
   selected: boolean;
-  onClick: (pkg: InstalledPackage) => void;
+  viewMode: "uninstall" | "updates";
+  onInfo: (pkg: InstalledPackage) => void;
+  onUninstall: (pkg: InstalledPackage) => void;
+  onUpdate: (pkg: InstalledPackage) => void;
 }) {
   const title = pkg.display_name ?? pkg.name;
+  const showUpdate = viewMode === "updates" && pkg.has_update;
+  const showUninstall = viewMode === "uninstall";
   return (
-    <button
-      type="button"
-      className={`pkg-row${selected ? " pkg-row--selected" : ""}`}
-      onClick={() => onClick(pkg)}
-    >
+    <div className={`pkg-row${selected ? " pkg-row--selected" : ""}`}>
       <AppIcon pkg={pkg} title={title} size="row" />
       <span className="pkg-row__main">
         <span className="pkg-row__title">
@@ -32,6 +36,40 @@ export function PackageRow({
           <span>{SOURCE_LABELS[pkg.source]}</span>
         </span>
       </span>
-    </button>
+      <span className="pkg-row__actions">
+        {showUpdate && (
+          <button
+            type="button"
+            className="btn btn--primary btn--sm"
+            onClick={() => onUpdate(pkg)}
+          >
+            Update
+          </button>
+        )}
+        {showUninstall && (
+          <button
+            type="button"
+            className="btn btn--danger btn--sm"
+            onClick={() => onUninstall(pkg)}
+          >
+            Uninstall
+          </button>
+        )}
+        <button
+          type="button"
+          className="btn btn--ghost btn--icon btn--sm"
+          aria-label={`Details for ${title}`}
+          aria-expanded={selected}
+          title="Details"
+          onClick={() => onInfo(pkg)}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
+            <path d="M12 11v5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            <circle cx="12" cy="8" r="1.2" fill="currentColor" />
+          </svg>
+        </button>
+      </span>
+    </div>
   );
 }
