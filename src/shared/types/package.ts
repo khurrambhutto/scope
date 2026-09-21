@@ -42,14 +42,6 @@ export interface CachedScan {
   scanned_at_ms: number;
 }
 
-export interface ScanStatus {
-  apt_available: boolean;
-  snap_available: boolean;
-  flatpak_available: boolean;
-  appimage_available: boolean;
-  appimage_dirs: string[];
-}
-
 export const SOURCE_LABELS: Record<PackageSource, string> = {
   apt: "APT",
   snap: "Snap",

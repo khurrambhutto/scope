@@ -27,16 +27,6 @@ impl PackageSource {
         }
     }
 
-    /// Human label shown in the UI.
-    #[allow(dead_code)]
-    pub fn label(self) -> &'static str {
-        match self {
-            PackageSource::Apt => "APT",
-            PackageSource::Snap => "Snap",
-            PackageSource::Flatpak => "Flatpak",
-            PackageSource::AppImage => "AppImage",
-        }
-    }
 }
 
 /// Coarse classification used for filtering/feedback only. Best-effort.
@@ -164,14 +154,4 @@ impl InstalledPackage {
             update_version: None,
         }
     }
-}
-
-/// Status reported by `scan_status` so the UI can show per-source health.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ScanStatus {
-    pub apt_available: bool,
-    pub snap_available: bool,
-    pub flatpak_available: bool,
-    pub appimage_available: bool,
-    pub appimage_dirs: Vec<String>,
 }

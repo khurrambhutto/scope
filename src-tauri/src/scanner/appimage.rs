@@ -9,7 +9,6 @@
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
-use std::time::Duration;
 
 use anyhow::Result;
 use tokio::fs;
@@ -185,9 +184,4 @@ fn trim_appimage_suffix(filename: &str) -> &str {
     filename
         .trim_end_matches(".AppImage")
         .trim_end_matches(".appimage")
-}
-
-#[allow(dead_code)]
-fn _unused() {
-    let _ = Duration::from_secs(1);
 }

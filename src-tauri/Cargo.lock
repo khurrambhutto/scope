@@ -2767,7 +2767,6 @@ name = "scope"
 version = "0.1.6"
 dependencies = [
  "anyhow",
- "glob",
  "regex",
  "serde",
  "serde_json",

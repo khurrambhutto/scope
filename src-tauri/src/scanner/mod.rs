@@ -10,7 +10,6 @@ pub mod flatpak;
 pub mod snap;
 
 use std::future::Future;
-use std::path::PathBuf;
 
 use anyhow::Result;
 
@@ -259,9 +258,4 @@ pub struct ScanAvailability {
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub flatpak_error: Option<String>,
     pub appimage_dirs: Vec<String>,
-}
-
-#[allow(dead_code)]
-pub fn home_dir() -> Option<PathBuf> {
-    std::env::var_os("HOME").map(PathBuf::from)
 }

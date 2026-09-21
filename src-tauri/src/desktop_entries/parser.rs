@@ -10,12 +10,10 @@ use std::path::Path;
 pub struct DesktopApp {
     pub id: String,
     pub name: String,
-    pub generic_name: Option<String>,
     pub comment: Option<String>,
     pub exec: String,
     pub icon: Option<String>,
     pub categories: Vec<String>,
-    pub keywords: Vec<String>,
     pub terminal: bool,
     /// `NoDisplay=true` entries are skipped by the discoverer but kept here for
     /// internal lookups (we filter them out before sorting).
@@ -80,17 +78,10 @@ pub fn parse(id: &str, path: &Path) -> Option<DesktopApp> {
     Some(DesktopApp {
         id: id.to_string(),
         name: field(entry, "Name").unwrap_or(id).to_string(),
-        generic_name: field(entry, "GenericName").map(str::to_string),
         comment: field(entry, "Comment").map(str::to_string),
         exec: exec_raw,
         icon: field(entry, "Icon").map(str::to_string),
         categories: field(entry, "Categories")
-            .unwrap_or("")
-            .split(';')
-            .filter(|c| !c.is_empty())
-            .map(str::to_string)
-            .collect(),
-        keywords: field(entry, "Keywords")
             .unwrap_or("")
             .split(';')
             .filter(|c| !c.is_empty())

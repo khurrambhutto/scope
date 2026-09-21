@@ -14,7 +14,7 @@ mod scanner;
 mod system;
 
 use commands::operations::{apply_uninstall, preview_uninstall, apply_update, preview_update};
-use commands::packages::{get_cached_scan, scan_packages, scan_status, search_packages, ScanCache};
+use commands::packages::{get_cached_scan, scan_packages, ScanCache};
 use operations::PlanStore;
 use tauri::http::{header, Response, StatusCode};
 
@@ -48,8 +48,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             scan_packages,
             get_cached_scan,
-            scan_status,
-            search_packages,
             preview_uninstall,
             apply_uninstall,
             preview_update,

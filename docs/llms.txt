@@ -1,31 +1,34 @@
-# Scope — Unified Linux Package & App Manager TUI
+# Scope — Unified Linux Package & App Manager
 
-Scope is a terminal user interfalsce (TUI) app manager for Linux that unifies multiple package managers (APT, Snap, Flatpak, AppImage).
+Scope is a desktop app for Linux that unifies APT, Snap, Flatpak, and AppImage into one place to see, update, and uninstall every app, regardless of how it was installed. It is built with Tauri v2 (Rust backend) and React.
 
 ## Pages
 
 - [Homepage](https://khurrambhutto.github.io/scope/) — Overview, features, download links, and FAQ for the Linux app manager.
 - [GitHub Repository](https://github.com/khurrambhutto/scope) — Source code, issues, and releases.
-- [Releases](https://github.com/khurrambhutto/scope/releases) — Pre-built binaries for download.
+- [Releases](https://github.com/khurrambhutto/scope/releases) — Pre-built `.deb`, `.rpm`, and `.AppImage` bundles.
 
 ## Key Information
 
 - **License**: MIT
-- **Language**: Rust
-- **Platform**: Linux
+- **Platform**: Linux (Ubuntu / Debian first)
+- **Stack**: Tauri v2, Rust, React 19, TypeScript
 - **Author**: Khurram Bhutto (https://khurrambhutto.tech/)
-- **Features**: Multi-source package management, real-time fuzzy search, zero runtime dependencies
+- **Features**: Unified package list across APT, Snap, Flatpak, and AppImage; desktop-entry and icon enrichment; preview-first uninstall and update with Polkit privilege escalation
 
 ## Installation
 
+Download the `.deb`, `.rpm`, or `.AppImage` from [Releases](https://github.com/khurrambhutto/scope/releases). The app self-updates.
+
 ```bash
-cargo install --git https://github.com/khurrambhutto/scope
+curl -LO https://github.com/khurrambhutto/scope/releases/latest/download/scope_0.1.6_amd64.deb
+sudo dpkg -i scope_0.1.6_amd64.deb
 ```
 
 ## FAQ
 
 **What is Scope?**
-A TUI app manager that unifies APT, Snap, Flatpak, and AppImage into a single searchable view.
+A desktop app that unifies APT, Snap, Flatpak, and AppImage into a single list for seeing, updating, and uninstalling installed software.
 
 **Which package managers are supported?**
 APT (Debian/Ubuntu), Snap, Flatpak, and AppImage.

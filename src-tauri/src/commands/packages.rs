@@ -6,7 +6,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
-use crate::package::{InstalledPackage, ScanStatus};
+use crate::package::InstalledPackage;
 use crate::scanner::{scan_all, ScanAvailability};
 
 /// Cache of the latest full scan, shared across commands.
@@ -104,82 +104,6 @@ fn write_disk_cache(app: &AppHandle, json: Vec<u8>) {
         }
     }
     let _ = std::fs::write(path, json);
-}
-
-/// Per-source availability summary (cheap probes; no real scans).
-#[tauri::command]
-pub async fn scan_status() -> Result<ScanStatus, String> {
-    use crate::system::which;
-    let appimage_dirs = crate::scanner::appimage::search_directories();
-    Ok(ScanStatus {
-        apt_available: which("dpkg-query") && which("apt-mark"),
-        snap_available: which("snap"),
-        flatpak_available: which("flatpak"),
-        appimage_available: true,
-        appimage_dirs,
-    })
-}
-
-/// Server-side search filter applied to the cached scan. Filters by source, app
-/// kind, and a case-insensitive query matched against name + display name +
-/// description + package id + categories.
-#[tauri::command]
-pub async fn search_packages(
-    state: State<'_, ScanCache>,
-    query: Option<String>,
-    source: Option<String>,
-    app_kind: Option<String>,
-) -> Result<Vec<InstalledPackage>, String> {
-    let guard = state.inner.lock().await;
-    let Some(cached) = guard.as_ref() else {
-        return Ok(Vec::new());
-    };
-
-    let q = query.map(|s| s.trim().to_lowercase());
-    let source_filter = source.and_then(|s| match s.to_lowercase().as_str() {
-        "apt" => Some(crate::package::PackageSource::Apt),
-        "snap" => Some(crate::package::PackageSource::Snap),
-        "flatpak" => Some(crate::package::PackageSource::Flatpak),
-        "appimage" => Some(crate::package::PackageSource::AppImage),
-        _ => None,
-    });
-    let kind_filter = app_kind.and_then(|s| match s.to_lowercase().as_str() {
-        "gui" => Some(crate::package::AppKind::Gui),
-        "cli" => Some(crate::package::AppKind::Cli),
-        "unknown" => Some(crate::package::AppKind::Unknown),
-        _ => None,
-    });
-
-    let needle = |p: &InstalledPackage| -> String {
-        format!(
-            "{} {} {} {} {} {} {}",
-            p.name,
-            p.display_name.as_deref().unwrap_or(""),
-            p.description.as_deref().unwrap_or(""),
-            p.package_id,
-            p.install_scope.map(|s| s.id()).unwrap_or(""),
-            p.categories.as_deref().unwrap_or(""),
-            p.version
-        )
-        .to_lowercase()
-    };
-
-    let results = cached
-        .packages
-        .iter()
-        .filter(|p| match (source_filter, kind_filter) {
-            (Some(s), Some(k)) => p.source == s && p.app_kind == k,
-            (Some(s), None) => p.source == s,
-            (None, Some(k)) => p.app_kind == k,
-            (None, None) => true,
-        })
-        .filter(|p| match &q {
-            Some(needle_q) if !needle_q.is_empty() => needle(p).contains(needle_q),
-            _ => true,
-        })
-        .cloned()
-        .collect();
-    Ok(results)
 }
 
 fn now_ms() -> u64 {
