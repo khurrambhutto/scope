@@ -62,12 +62,19 @@ async fn scan() -> Result<Vec<InstalledPackage>> {
         .context("query dpkg metadata for manual packages")?;
 
     let mut packages = Vec::new();
+    // dpkg-query emits one row per architecture for multiarch packages (e.g.
+    // libc6:amd64 and libc6:i386). Keep the first row per package name so
+    // every package key stays unique.
+    let mut seen: HashSet<String> = HashSet::new();
     for line in output.lines() {
         let parts: Vec<&str> = line.split(SEP).collect();
         if parts.len() < 3 {
             continue;
         }
         let name = parts[0].to_string();
+        if !seen.insert(name.clone()) {
+            continue;
+        }
         let version = parts[1].to_string();
         let kib: u64 = parts[2].parse().unwrap_or(0);
         let summary = parts.get(3).copied().unwrap_or("").to_string();
