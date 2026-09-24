@@ -95,30 +95,37 @@ fn build_steps(pkg: &InstalledPackage, protected: bool) -> (AuthMethod, Vec<Plan
     }
 }
 
-/// Re-validate that a package still exists and still has an update available.
-pub async fn revalidate(plan: &OperationPlan, scan: &[InstalledPackage]) -> Result<()> {
-    let still_present = scan.iter().any(|p| {
-        p.source == plan.source
-            && p.package_id == plan.package_id
-            && p.install_scope == plan.install_scope
-    });
-    if !still_present {
+/// Re-validate that the package still exists, still passes the safety check,
+/// and still matches the state the plan was built from. `probed` comes from
+/// [`super::probe::probe_package`] — one cheap query instead of a full rescan.
+pub fn revalidate(plan: &OperationPlan, probed: &super::probe::ProbedPackage) -> Result<()> {
+    if !probed.present {
         anyhow::bail!(
             "This update plan is stale: '{}' is no longer installed.",
             plan.display_name
         );
     }
-    // Check the package still has an update available.
-    let pkg = scan.iter().find(|p| {
-        p.source == plan.source
-            && p.package_id == plan.package_id
-            && p.install_scope == plan.install_scope
-    });
-    if let Some(pkg) = pkg {
-        if !pkg.has_update {
+    // Safety re-check (mirrors uninstall) in case deny-list state changed.
+    let protection = safety::check_package(plan.source, &plan.package_id);
+    if protection.protected {
+        anyhow::bail!(
+            "Refusing to update protected package: {}",
+            protection.reason.unwrap_or_else(|| "protected".into())
+        );
+    }
+    if probed.has_update == Some(false) {
+        anyhow::bail!(
+            "'{}' no longer has updates available. Rescan and try again.",
+            plan.display_name
+        );
+    }
+    if let Some(version) = &probed.version {
+        if !plan.current_version.is_empty() && *version != plan.current_version {
             anyhow::bail!(
-                "'{}' no longer has updates available. Rescan and try again.",
-                plan.display_name
+                "This update plan is stale: '{}' changed since the preview (expected version {}, found {}). Rescan and try again.",
+                plan.display_name,
+                plan.current_version,
+                version
             );
         }
     }
@@ -173,5 +180,97 @@ async fn appimage_update(path: &str) -> OperationResult {
         message: "AppImage auto-update is not yet implemented. Download the latest version from the project website.".into(),
         logs: String::new(),
         exit_code: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::operations::probe::ProbedPackage;
+
+    fn plan(package_id: &str) -> OperationPlan {
+        OperationPlan {
+            plan_id: "plan-test-2".into(),
+            operation: Operation::Update,
+            source: PackageSource::Apt,
+            package_id: package_id.into(),
+            install_scope: None,
+            display_name: "Test".into(),
+            current_version: "1.0".into(),
+            target_version: "2.0".into(),
+            requires_auth: true,
+            auth_method: AuthMethod::Pkexec,
+            protected: false,
+            protection_reason: None,
+            steps: vec![],
+            created_at_ms: 0,
+        }
+    }
+
+    fn present(version: &str, has_update: Option<bool>) -> ProbedPackage {
+        ProbedPackage {
+            present: true,
+            version: Some(version.into()),
+            has_update,
+        }
+    }
+
+    #[test]
+    fn rejects_missing_package() {
+        let p = plan("gimp");
+        let probed = ProbedPackage {
+            present: false,
+            version: None,
+            has_update: None,
+        };
+        assert!(revalidate(&p, &probed).is_err());
+    }
+
+    #[test]
+    fn rejects_protected_package() {
+        let p = plan("libc6");
+        assert!(revalidate(&p, &present("1.0", None)).is_err());
+    }
+
+    #[test]
+    fn rejects_when_update_disappeared() {
+        let p = plan("gimp");
+        assert!(revalidate(&p, &present("1.0", Some(false))).is_err());
+    }
+
+    #[test]
+    fn rejects_when_version_changed_since_preview() {
+        let p = plan("gimp");
+        assert!(revalidate(&p, &present("2.0", None)).is_err());
+    }
+
+    #[test]
+    fn accepts_unchanged_package_with_update_still_pending() {
+        let p = plan("gimp");
+        assert!(revalidate(&p, &present("1.0", Some(true))).is_ok());
+    }
+
+    #[test]
+    fn accepts_when_update_state_unknown_but_version_unchanged() {
+        let p = plan("gimp");
+        assert!(revalidate(&p, &present("1.0", None)).is_ok());
+    }
+
+    #[test]
+    fn accepts_when_version_unknown_but_present() {
+        let p = plan("gimp");
+        let probed = ProbedPackage {
+            present: true,
+            version: None,
+            has_update: None,
+        };
+        assert!(revalidate(&p, &probed).is_ok());
+    }
+
+    #[test]
+    fn accepts_when_preview_version_was_unknown() {
+        let mut p = plan("gimp");
+        p.current_version = String::new();
+        assert!(revalidate(&p, &present("9.9", None)).is_ok());
     }
 }

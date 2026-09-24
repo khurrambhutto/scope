@@ -1,8 +1,16 @@
 import { useEffect, useState } from "react";
 import type { InstalledPackage } from "../../shared/types/package";
-import type { OperationPlan, OperationResult } from "../../shared/types/operations";
+import type {
+  OperationPlan,
+  OperationResult,
+  OperationStage,
+} from "../../shared/types/operations";
 import { SOURCE_LABELS } from "../../shared/types/package";
-import { previewUninstall, applyUninstall } from "../../shared/api/operations";
+import {
+  previewUninstall,
+  applyUninstall,
+  onOperationStatus,
+} from "../../shared/api/operations";
 
 type Phase = "loading" | "confirm" | "running" | "done" | "error";
 
@@ -18,6 +26,7 @@ export function UninstallDialog({ pkg, onClose, onUninstalled }: Props) {
   const [result, setResult] = useState<OperationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showLogs, setShowLogs] = useState(false);
+  const [stage, setStage] = useState<OperationStage>("verifying");
 
   // Build the preview plan when the dialog opens.
   useEffect(() => {
@@ -43,8 +52,19 @@ export function UninstallDialog({ pkg, onClose, onUninstalled }: Props) {
   async function confirm() {
     if (!plan) return;
     setPhase("running");
+    setStage("verifying");
     setError(null);
+    let unlisten: (() => void) | undefined;
     try {
+      try {
+        unlisten = await onOperationStatus((status) => {
+          if (status.plan_id === plan.plan_id) {
+            setStage(status.stage);
+          }
+        });
+      } catch {
+        // Progress events are best-effort; fall back to the default copy.
+      }
       const res = await applyUninstall(plan.plan_id);
       setResult(res);
       setPhase("done");
@@ -54,6 +74,8 @@ export function UninstallDialog({ pkg, onClose, onUninstalled }: Props) {
     } catch (e) {
       setError(String(e));
       setPhase("error");
+    } finally {
+      unlisten?.();
     }
   }
 
@@ -159,10 +181,19 @@ export function UninstallDialog({ pkg, onClose, onUninstalled }: Props) {
 
         {phase === "running" && (
           <div className="modal__body">
-            <p className="modal__muted">
-              Removing {title}…{" "}
-              {plan?.requires_auth && "If a password dialog appears, enter your administrator password."}
-            </p>
+            {stage === "verifying" ? (
+              <p className="modal__muted">
+                Checking that {title} can be removed…{" "}
+                {plan?.requires_auth &&
+                  "A system password prompt will appear next."}
+              </p>
+            ) : (
+              <p className="modal__muted">
+                Removing {title}…{" "}
+                {plan?.requires_auth &&
+                  "If a password dialog appears, enter your administrator password."}
+              </p>
+            )}
             <div className="spinner" aria-hidden />
           </div>
         )}

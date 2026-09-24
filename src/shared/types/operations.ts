@@ -34,3 +34,10 @@ export interface OperationResult {
   logs: string;
   exit_code: number | null;
 }
+
+export type OperationStage = "verifying" | "executing";
+
+export interface OperationStatus {
+  plan_id: string;
+  stage: OperationStage;
+}

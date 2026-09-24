@@ -6,6 +6,7 @@
 //! itself issued (stored in [`PlanStore`]) and revalidates the system state
 //! before executing — so a stale or tampered plan is rejected.
 
+pub mod probe;
 pub mod uninstall;
 pub mod update;
 
@@ -75,6 +76,28 @@ pub struct OperationResult {
     pub logs: String,
     pub exit_code: Option<i32>,
 }
+
+/// Progress stage of a running apply flow, streamed to the UI so the wait
+/// before the Polkit password dialog is never a silent gap.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum OperationStage {
+    /// Checking that the package still matches the plan and is safe to act on.
+    Verifying,
+    /// The package-manager command is running (possibly awaiting a Polkit
+    /// password dialog).
+    Executing,
+}
+
+/// Payload of [`OPERATION_STATUS_EVENT`], emitted while an apply command runs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OperationStatus {
+    pub plan_id: String,
+    pub stage: OperationStage,
+}
+
+/// Event name used to stream [`OperationStatus`] to the frontend.
+pub const OPERATION_STATUS_EVENT: &str = "operation-status";
 
 /// In-memory store of issued plans, keyed by id. Plans expire after
 /// [`PLAN_TTL`] so a user who walks away cannot later apply a stale plan that

@@ -12,24 +12,58 @@ use tokio::process::Command;
 use crate::operations::AuthMethod;
 use crate::operations::OperationResult;
 
+/// Captured result of a finished command, including non-zero exits.
+///
+/// Probe callers need to see *how* a command failed (e.g. "package not
+/// installed" vs "package manager broken"), so unlike [`capture_stdout`] this
+/// returns the output instead of turning it into an error.
+pub struct ProcessOutput {
+    pub success: bool,
+    pub exit_code: Option<i32>,
+    pub stdout: String,
+    pub stderr: String,
+}
+
+/// Run a command and capture its full output with a timeout.
+///
+/// `Err` is reserved for spawn failures and timeouts; a non-zero exit is
+/// reported in the returned [`ProcessOutput`] for the caller to interpret.
+pub async fn capture_output(
+    program: &str,
+    args: &[&str],
+    timeout: Duration,
+) -> anyhow::Result<ProcessOutput> {
+    let output = tokio::time::timeout(timeout, Command::new(program).args(args).output()).await;
+    match output {
+        Ok(Ok(out)) => Ok(ProcessOutput {
+            success: out.status.success(),
+            exit_code: out.status.code(),
+            stdout: String::from_utf8_lossy(&out.stdout).to_string(),
+            stderr: String::from_utf8_lossy(&out.stderr).to_string(),
+        }),
+        Ok(Err(e)) => anyhow::bail!("failed to spawn {program}: {e}"),
+        Err(_) => anyhow::bail!("{program} timed out after {timeout:?}"),
+    }
+}
+
 /// Capture stdout of a command as a UTF-8 string, with a timeout.
 ///
-/// Returns the trimmed stdout on success. If the command is missing, exits
+/// Returns the stdout on success. If the command is missing, exits
 /// non-zero, or exceeds the timeout, this returns `Err` with a readable cause.
 pub async fn capture_stdout(
     program: &str,
     args: &[&str],
     timeout: Duration,
 ) -> anyhow::Result<String> {
-    let output = tokio::time::timeout(timeout, Command::new(program).args(args).output()).await;
-    match output {
-        Ok(Ok(out)) if out.status.success() => Ok(String::from_utf8_lossy(&out.stdout).to_string()),
-        Ok(Ok(out)) => {
-            let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
-            anyhow::bail!("{program} failed (exit {:?}): {stderr}", out.status.code())
-        }
-        Ok(Err(e)) => anyhow::bail!("failed to spawn {program}: {e}"),
-        Err(_) => anyhow::bail!("{program} timed out after {timeout:?}"),
+    let out = capture_output(program, args, timeout).await?;
+    if out.success {
+        Ok(out.stdout)
+    } else {
+        anyhow::bail!(
+            "{program} failed (exit {:?}): {}",
+            out.exit_code,
+            out.stderr.trim()
+        )
     }
 }
 

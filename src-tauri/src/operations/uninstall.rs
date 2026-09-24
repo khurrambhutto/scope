@@ -109,15 +109,12 @@ fn build_steps(pkg: &InstalledPackage, protected: bool) -> (AuthMethod, Vec<Plan
     }
 }
 
-/// Re-validate that a package still exists on the system before applying.
-/// Returns an error message string when the plan is stale.
-pub async fn revalidate(plan: &OperationPlan, scan: &[InstalledPackage]) -> Result<()> {
-    let still_present = scan.iter().any(|p| {
-        p.source == plan.source
-            && p.package_id == plan.package_id
-            && p.install_scope == plan.install_scope
-    });
-    if !still_present {
+/// Re-validate that the package still exists and still passes the safety check
+/// before applying. `probed` comes from [`super::probe::probe_package`], which
+/// queries only this package instead of re-scanning the whole system — so the
+/// confirmation-to-password-prompt gap stays near-instant.
+pub fn revalidate(plan: &OperationPlan, probed: &super::probe::ProbedPackage) -> Result<()> {
+    if !probed.present {
         anyhow::bail!(
             "This uninstall plan is stale: '{}' is no longer installed. Rescan and try again.",
             plan.display_name
@@ -239,4 +236,66 @@ fn now_ms_debris() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::operations::probe::ProbedPackage;
+
+    fn plan(source: PackageSource, package_id: &str) -> OperationPlan {
+        OperationPlan {
+            plan_id: "plan-test-1".into(),
+            operation: Operation::Uninstall,
+            source,
+            package_id: package_id.into(),
+            install_scope: None,
+            display_name: "Test".into(),
+            current_version: "1.0".into(),
+            target_version: String::new(),
+            requires_auth: true,
+            auth_method: AuthMethod::Pkexec,
+            protected: false,
+            protection_reason: None,
+            steps: vec![],
+            created_at_ms: 0,
+        }
+    }
+
+    fn present() -> ProbedPackage {
+        ProbedPackage {
+            present: true,
+            version: Some("1.0".into()),
+            has_update: None,
+        }
+    }
+
+    #[test]
+    fn rejects_missing_package() {
+        let p = plan(PackageSource::Apt, "gimp");
+        let probed = ProbedPackage {
+            present: false,
+            version: None,
+            has_update: None,
+        };
+        assert!(revalidate(&p, &probed).is_err());
+    }
+
+    #[test]
+    fn rejects_protected_package_even_if_plan_says_otherwise() {
+        let p = plan(PackageSource::Apt, "systemd");
+        assert!(revalidate(&p, &present()).is_err());
+    }
+
+    #[test]
+    fn rejects_protected_snap_runtime() {
+        let p = plan(PackageSource::Snap, "core22");
+        assert!(revalidate(&p, &present()).is_err());
+    }
+
+    #[test]
+    fn accepts_present_allowed_package() {
+        let p = plan(PackageSource::Apt, "gimp");
+        assert!(revalidate(&p, &present()).is_ok());
+    }
 }
