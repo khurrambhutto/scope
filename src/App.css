@@ -11,6 +11,10 @@
   --danger: #c9443e;
   --warn: #d9a441;
   --radius: 12px;
+  --scroll-thumb: rgba(239, 230, 228, 0.16);
+  --scroll-thumb-hover: rgba(239, 230, 228, 0.3);
+  --scroll-thumb-active: rgba(212, 80, 74, 0.55);
+  --scroll-track: transparent;
   font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
 }
 
@@ -794,4 +798,46 @@ body {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+/* ---------- Scrollbars ----------
+   Slim floating-pill scrollbars. The track stays transparent so no bright
+   channel cuts through the dark gradient; a faint warm pill appears at rest,
+   brightens on hover, and tints accent-red while dragging.
+
+   The `::-webkit-scrollbar` family styles the WebKitGTK webview natively.
+   The standard `scrollbar-width`/`scrollbar-color` pair is applied only to
+   engines without those pseudo-elements — setting both at once would make
+   modern engines ignore the richer pseudo-element styling (MDN). */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+  background: var(--scroll-track);
+}
+*::-webkit-scrollbar-track {
+  background: var(--scroll-track);
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scroll-thumb-hover);
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:active {
+  background: var(--scroll-thumb-active);
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-corner {
+  background: var(--scroll-track);
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scroll-thumb) var(--scroll-track);
+  }
 }
