@@ -18,11 +18,11 @@ Scope is a desktop app for Linux that unifies APT, Snap, Flatpak, and AppImage i
 
 ## Installation
 
-Download the `.deb`, `.rpm`, or `.AppImage` from [Releases](https://github.com/khurrambhutto/scope/releases). The app self-updates.
+Download the `.deb`, `.rpm`, or `.AppImage` from [Releases](https://github.com/khurrambhutto/scope/releases). The AppImage self-updates; `.deb`/`.rpm` installs update by downloading the new package.
 
 ```bash
-curl -LO https://github.com/khurrambhutto/scope/releases/latest/download/scope_0.1.9_amd64.deb
-sudo dpkg -i scope_0.1.9_amd64.deb
+curl -LO https://github.com/khurrambhutto/scope/releases/latest/download/scope_0.1.91_amd64.deb
+sudo dpkg -i scope_0.1.91_amd64.deb
 ```
 
 ## FAQ

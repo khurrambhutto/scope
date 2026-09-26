@@ -1,7 +1,7 @@
-import { useAppUpdater } from "./useAppUpdater";
+import { useAppUpdater, RELEASES_URL } from "./useAppUpdater";
 
 export function AppUpdateNotification() {
-  const { status, update, error, downloaded, total, download, restart, dismiss } =
+  const { status, update, installKind, error, downloaded, total, download, restart, dismiss } =
     useAppUpdater();
 
   if (status === "idle" || status === "checking" || status === "no-update") {
@@ -35,18 +35,28 @@ export function AppUpdateNotification() {
                 {update.body && (
                   <p className="updater__notes">{update.body}</p>
                 )}
+                {installKind !== "appimage" && (
+                  <p className="updater__muted">
+                    You installed Scope from a system package, which can't
+                    update itself. Download the new version here:
+                    <br />
+                    {RELEASES_URL}
+                  </p>
+                )}
               </div>
               <div className="updater__actions">
                 <button type="button" className="btn" onClick={dismiss}>
                   Later
                 </button>
-                <button
-                  type="button"
-                  className="btn btn--primary"
-                  onClick={download}
-                >
-                  Update
-                </button>
+                {installKind === "appimage" && (
+                  <button
+                    type="button"
+                    className="btn btn--primary"
+                    onClick={download}
+                  >
+                    Update
+                  </button>
+                )}
               </div>
             </>
           )}

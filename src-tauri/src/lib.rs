@@ -13,6 +13,7 @@ mod safety;
 mod scanner;
 mod system;
 
+use commands::install::install_kind;
 use commands::operations::{apply_uninstall, preview_uninstall, apply_update, preview_update};
 use commands::packages::{get_cached_scan, scan_packages, ScanCache};
 use operations::PlanStore;
@@ -46,6 +47,7 @@ pub fn run() {
                 .expect("scope-icon response is always constructable")
         })
         .invoke_handler(tauri::generate_handler![
+            install_kind,
             scan_packages,
             get_cached_scan,
             preview_uninstall,
