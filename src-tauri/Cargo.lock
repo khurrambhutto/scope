@@ -2764,7 +2764,7 @@ dependencies = [
 
 [[package]]
 name = "scope"
-version = "0.1.6"
+version = "0.1.9"
 dependencies = [
  "anyhow",
  "regex",
