@@ -4,6 +4,7 @@ import { Logo } from "../../shared/components/Logo";
 import { PackageList } from "./PackageList";
 import { PackageFilters } from "./PackageFilters";
 import { usePackages } from "./usePackages";
+import { formatAppCount } from "./format";
 
 export function PackageScreen() {
   const {
@@ -11,6 +12,7 @@ export function PackageScreen() {
     refreshing,
     error,
     packages,
+    totalCount,
     lastScan,
     query,
     sourceFilter,
@@ -103,7 +105,13 @@ export function PackageScreen() {
         )}
       </div>
 
-      <footer className="footer" />
+      <footer className="footer">
+        {!loading && (
+          <span className="footer__count">
+            {formatAppCount(packages.length, totalCount)}
+          </span>
+        )}
+      </footer>
     </section>
   );
 }

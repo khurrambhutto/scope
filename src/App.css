@@ -550,6 +550,9 @@ body {
   font-size: 12px;
   color: var(--text-faint);
 }
+.footer__count {
+  font-variant-numeric: tabular-nums;
+}
 
 /* ---------- Detail actions ---------- */
 .detail__actions {

@@ -86,6 +86,9 @@ export function usePackages() {
     };
   }, [refresh]);
 
+  // Total before any filter or search, used for the "x of y" status line.
+  const totalCount = scan?.packages.length ?? 0;
+
   // Derived rather than stored, so the visible list cannot drift out of sync
   // with the scan or the active filters.
   const packages = useMemo(() => {
@@ -105,6 +108,7 @@ export function usePackages() {
     refreshing,
     error,
     packages,
+    totalCount,
     lastScan: scan,
     query,
     sourceFilter,
