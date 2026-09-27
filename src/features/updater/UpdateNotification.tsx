@@ -1,8 +1,18 @@
 import { useAppUpdater, RELEASES_URL } from "./useAppUpdater";
 
 export function AppUpdateNotification() {
-  const { status, update, installKind, error, downloaded, total, download, restart, dismiss } =
-    useAppUpdater();
+  const {
+    status,
+    update,
+    installKind,
+    canSelfUpdate,
+    error,
+    downloaded,
+    total,
+    download,
+    restart,
+    dismiss,
+  } = useAppUpdater();
 
   if (status === "idle" || status === "checking" || status === "no-update") {
     return null;
@@ -35,20 +45,27 @@ export function AppUpdateNotification() {
                 {update.body && (
                   <p className="updater__notes">{update.body}</p>
                 )}
-                {installKind !== "appimage" && (
+                {installKind === "deb" || installKind === "rpm" ? (
                   <p className="updater__muted">
-                    You installed Scope from a system package, which can't
-                    update itself. Download the new version here:
-                    <br />
-                    {RELEASES_URL}
+                    Your Linux desktop will ask for your administrator
+                    password to install the update.
                   </p>
+                ) : (
+                  !canSelfUpdate && (
+                    <p className="updater__muted">
+                      This install can't update itself automatically. Download
+                      the new version here:
+                      <br />
+                      {RELEASES_URL}
+                    </p>
+                  )
                 )}
               </div>
               <div className="updater__actions">
                 <button type="button" className="btn" onClick={dismiss}>
                   Later
                 </button>
-                {installKind === "appimage" && (
+                {canSelfUpdate && (
                   <button
                     type="button"
                     className="btn btn--primary"
@@ -75,6 +92,12 @@ export function AppUpdateNotification() {
               <p className="updater__muted">
                 {progressPct !== null ? `${progressPct}%` : "Preparing…"}
               </p>
+              {(installKind === "deb" || installKind === "rpm") && (
+                <p className="updater__muted">
+                  If a password dialog appears, enter your administrator
+                  password.
+                </p>
+              )}
             </div>
           )}
 
