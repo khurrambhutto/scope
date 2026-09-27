@@ -6,11 +6,13 @@ import type { InstallKind } from "../../shared/types/install";
 
 export const RELEASES_URL = "https://github.com/khurrambhutto/scope/releases";
 
-// The updater serves an AppImage, which cannot install over a system-package
-// (.deb) install — that path always fails with "invalid updater binary
-// format". System installs get directions instead of a doomed Update button.
+// The updater installs the artifact matching this copy's bundle type
+// (.deb → dpkg, .rpm → rpm, AppImage → in-place rewrite). Anything else
+// (source build, AUR, Flatpak) gets directions instead of a doomed button.
 export const MANUAL_UPDATE_MESSAGE =
-  "This install can't update itself. Download the new package from the Releases page and install it yourself.";
+  "This install can't update itself automatically. Download the new package from the Releases page and install it yourself.";
+
+const SELF_UPDATABLE: readonly InstallKind[] = ["appimage", "deb", "rpm"];
 
 type Status =
   | "idle"
@@ -51,9 +53,9 @@ export function useAppUpdater() {
       try {
         const [update, installKind] = await Promise.all([
           check(),
-          // Fail closed: if detection breaks, assume a system install so we
+          // Fail closed: if detection breaks, assume an unknown install so we
           // never offer a one-click update that is guaranteed to fail.
-          getInstallKind().catch<InstallKind>(() => "system"),
+          getInstallKind().catch<InstallKind>(() => "unknown"),
         ]);
         if (cancelled) return;
         if (update) {
@@ -122,5 +124,8 @@ export function useAppUpdater() {
     setState((s) => ({ ...s, status: "no-update" }));
   }, []);
 
-  return { ...state, download, restart, dismiss };
+  const canSelfUpdate =
+    state.installKind !== null && SELF_UPDATABLE.includes(state.installKind);
+
+  return { ...state, canSelfUpdate, download, restart, dismiss };
 }

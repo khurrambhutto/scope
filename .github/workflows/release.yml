@@ -50,37 +50,61 @@ jobs:
           TAG="${{ github.ref_name }}"
           VERSION="${TAG#v}"
           APPIMAGE=$(ls "$RELEASE_DIR"/appimage/*.AppImage 2>/dev/null | head -1)
-          APPIMAGE_SIG=$(ls "$RELEASE_DIR"/appimage/*.AppImage.sig 2>/dev/null | head -1)
           DEB=$(ls "$RELEASE_DIR"/deb/*.deb 2>/dev/null | head -1)
-          DEB_SIG=$(ls "$RELEASE_DIR"/deb/*.deb.sig 2>/dev/null | head -1)
+          RPM=$(ls "$RELEASE_DIR"/rpm/*.rpm 2>/dev/null | head -1)
+
+          # Every self-update target must exist and be signed, otherwise
+          # installs of that format would silently fall back or fail.
+          for f in "$APPIMAGE" "$DEB" "$RPM"; do
+            if [ -z "$f" ] || [ ! -f "$f" ]; then
+              echo "Missing bundle artifact (found appimage='$APPIMAGE' deb='$DEB' rpm='$RPM')"
+              exit 1
+            fi
+            if [ ! -f "$f.sig" ]; then
+              echo "Missing updater signature for $f"
+              exit 1
+            fi
+          done
 
           APPIMAGE_NAME=$(basename "$APPIMAGE")
           DEB_NAME=$(basename "$DEB")
+          RPM_NAME=$(basename "$RPM")
+          RELEASE_BASE="https://github.com/khurrambhutto/scope/releases/download/${TAG}"
 
-          APPIMAGE_SIGNATURE=""
-          if [ -f "$APPIMAGE_SIG" ]; then
-            APPIMAGE_SIGNATURE=$(cat "$APPIMAGE_SIG")
-          fi
+          APPIMAGE_SIGNATURE=$(cat "$APPIMAGE.sig")
+          DEB_SIGNATURE=$(cat "$DEB.sig")
+          RPM_SIGNATURE=$(cat "$RPM.sig")
 
-          DEB_SIGNATURE=""
-          if [ -f "$DEB_SIG" ]; then
-            DEB_SIGNATURE=$(cat "$DEB_SIG")
-          fi
-
+          # Platform keys: the updater looks up "{os}-{arch}-{bundle_type}"
+          # first (linux-x86_64-deb / -rpm / -appimage) and falls back to
+          # "linux-x86_64", which is kept on the AppImage for older installs.
           cat > latest.json << EOF
           {
             "version": "${VERSION}",
             "notes": "See full release notes: https://github.com/khurrambhutto/scope/releases/tag/${TAG}",
             "pub_date": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
             "platforms": {
+              "linux-x86_64-deb": {
+                "signature": "${DEB_SIGNATURE}",
+                "url": "${RELEASE_BASE}/${DEB_NAME}"
+              },
+              "linux-x86_64-rpm": {
+                "signature": "${RPM_SIGNATURE}",
+                "url": "${RELEASE_BASE}/${RPM_NAME}"
+              },
+              "linux-x86_64-appimage": {
+                "signature": "${APPIMAGE_SIGNATURE}",
+                "url": "${RELEASE_BASE}/${APPIMAGE_NAME}"
+              },
               "linux-x86_64": {
                 "signature": "${APPIMAGE_SIGNATURE}",
-                "url": "https://github.com/khurrambhutto/scope/releases/download/${TAG}/${APPIMAGE_NAME}"
+                "url": "${RELEASE_BASE}/${APPIMAGE_NAME}"
               }
             }
           }
           EOF
 
+          jq . latest.json > /dev/null
           echo "Generated latest.json:"
           cat latest.json
 
@@ -96,6 +120,7 @@ jobs:
             src-tauri/target/release/bundle/deb/*.deb
             src-tauri/target/release/bundle/deb/*.deb.sig
             src-tauri/target/release/bundle/rpm/*.rpm
+            src-tauri/target/release/bundle/rpm/*.rpm.sig
             src-tauri/target/release/bundle/appimage/*.AppImage
             src-tauri/target/release/bundle/appimage/*.AppImage.sig
             latest.json
