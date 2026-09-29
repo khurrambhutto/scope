@@ -196,10 +196,43 @@ impl DesktopIndex {
                     .get(&lc)
                     .or_else(|| self.by_exec.get(&lc))
                     .or_else(|| self.by_name_lower.get(&name.to_lowercase()))
+                    .or_else(|| self.lookup_stripped(package_id))
             }
         }
     }
+
+    /// Last-resort APT/AppImage lookup that strips a known packaging suffix and
+    /// retries (e.g. `helium-bin` → `helium`, `google-chrome-stable` →
+    /// `google-chrome`). Only consulted after every exact key has failed, so
+    /// packages that already match by id, `Exec=`, or `Name=` are unaffected.
+    fn lookup_stripped(&self, package_id: &str) -> Option<&DesktopApp> {
+        let lc = package_id.to_lowercase();
+        for suffix in STRIPPABLE_SUFFIXES {
+            let Some(base) = lc.strip_suffix(suffix) else {
+                continue;
+            };
+            let Some(base) = base.strip_suffix('-') else {
+                continue;
+            };
+            if base.is_empty() {
+                continue;
+            }
+            if let Some(app) = self
+                .by_id
+                .get(base)
+                .or_else(|| self.by_exec.get(base))
+                .or_else(|| self.by_name_lower.get(base))
+            {
+                return Some(app);
+            }
+        }
+        None
+    }
 }
+
+/// Packaging suffixes that commonly separate an APT package name from the app
+/// it ships. Stripped only as a fallback during [`DesktopIndex::lookup`].
+const STRIPPABLE_SUFFIXES: &[&str] = &["bin", "desktop", "stable", "browser"];
 
 /// Extract the executable basename from a `.desktop` `Exec=` value.
 fn exec_binary(exec: &str) -> Option<String> {
@@ -219,4 +252,64 @@ fn exec_binary(exec: &str) -> Option<String> {
     let first = rest.split_whitespace().next()?;
     let path = Path::new(first);
     Some(path.file_name()?.to_string_lossy().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::package::PackageSource;
+
+    fn app(id: &str, name: &str, exec: &str) -> DesktopApp {
+        DesktopApp {
+            id: id.to_string(),
+            name: name.to_string(),
+            comment: None,
+            exec: exec.to_string(),
+            icon: Some(id.to_string()),
+            categories: Vec::new(),
+            terminal: false,
+            no_display: false,
+        }
+    }
+
+    #[test]
+    fn apt_exact_matches_are_unchanged() {
+        let index = DesktopIndex::from_apps(vec![app("firefox", "Firefox", "firefox %u")]);
+        let found = index.lookup(PackageSource::Apt, "firefox", "firefox");
+        assert_eq!(found.map(|a| a.id.as_str()), Some("firefox"));
+    }
+
+    #[test]
+    fn apt_strips_bin_suffix_to_find_app() {
+        // `helium-bin` ships `/usr/share/applications/helium.desktop`.
+        let index = DesktopIndex::from_apps(vec![app("helium", "Helium", "helium %U")]);
+        let found = index.lookup(PackageSource::Apt, "helium-bin", "helium-bin");
+        assert_eq!(found.map(|a| a.id.as_str()), Some("helium"));
+    }
+
+    #[test]
+    fn apt_strips_stable_suffix_to_find_app() {
+        let index =
+            DesktopIndex::from_apps(vec![app("google-chrome", "Google Chrome", "google-chrome-stable %U")]);
+        let found = index.lookup(PackageSource::Apt, "google-chrome-stable", "google-chrome-stable");
+        assert_eq!(found.map(|a| a.id.as_str()), Some("google-chrome"));
+    }
+
+    #[test]
+    fn apt_exact_id_wins_over_stripped_candidate() {
+        let index = DesktopIndex::from_apps(vec![
+            app("foo", "Foo", "foo"),
+            app("foo-bin", "Foo Bin", "foo-bin"),
+        ]);
+        let found = index.lookup(PackageSource::Apt, "foo-bin", "foo-bin");
+        assert_eq!(found.map(|a| a.id.as_str()), Some("foo-bin"));
+    }
+
+    #[test]
+    fn apt_unrelated_package_stays_unmatched() {
+        let index = DesktopIndex::from_apps(vec![app("helium", "Helium", "helium %U")]);
+        assert!(index
+            .lookup(PackageSource::Apt, "ncurses-bin", "ncurses-bin")
+            .is_none());
+    }
 }
