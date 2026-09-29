@@ -118,7 +118,18 @@ export function UninstallDialog({ pkg, onClose, onUninstalled }: Props) {
 
         {phase === "confirm" && plan && (
           <div className="modal__body">
-            {plan.protected ? (
+            {pkg.source === "appimage" ? (
+              <div className="modal__notice">
+                <div className="banner banner--warn banner--fit">
+                  Sorry, AppImage uninstall is not supported yet.
+                </div>
+                <div className="modal__actions modal__actions--center">
+                  <button type="button" className="btn" onClick={onClose}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : plan.protected ? (
               <div className="banner banner--warn">
                 {plan.protection_reason ?? "This package is protected and cannot be removed."}
               </div>
@@ -159,23 +170,25 @@ export function UninstallDialog({ pkg, onClose, onUninstalled }: Props) {
                   ))}
                 </ul>
                 <p className="modal__warn">
-                  ⚠ This removes the package from your system. AppImages go to Trash; everything else is removed by its package manager.
+                  ⚠ This removes the package from your system. Everything is removed by its package manager.
                 </p>
               </>
             )}
-            <div className="modal__actions">
-              <button type="button" className="btn" onClick={onClose}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn--danger"
-                onClick={confirm}
-                disabled={plan.protected}
-              >
-                {plan.protected ? "Protected" : "Confirm uninstall"}
-              </button>
-            </div>
+            {pkg.source !== "appimage" && (
+              <div className="modal__actions">
+                <button type="button" className="btn" onClick={onClose}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--danger"
+                  onClick={confirm}
+                  disabled={plan.protected}
+                >
+                  {plan.protected ? "Protected" : "Confirm uninstall"}
+                </button>
+              </div>
+            )}
           </div>
         )}
 

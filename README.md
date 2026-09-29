@@ -37,7 +37,7 @@ Update and uninstall follow the same flow. Scope builds a plan showing exactly w
 
 Works today:
 
-- Unified package list across APT (manual installs), Snap (runtimes hidden), Flatpak (user and system scoped), and AppImage
+- Unified package list across APT (manual installs), Snap (runtimes hidden), Flatpak (user and system scoped), and AppImage (listed only)
 - Desktop-entry enrichment and freedesktop icon theme resolution
 - Uninstall with preview, Polkit auth, and a protected-package deny-list
 - Update with preview for APT, Snap, and Flatpak
@@ -46,7 +46,7 @@ Works today:
 
 Not yet:
 
-- AppImage auto-update and update detection
+- AppImage uninstall and update (AppImages are listed only)
 - Snap target version in the update preview
 - Whole-system cleanup and disk usage views
 - Fedora and Arch package-manager support

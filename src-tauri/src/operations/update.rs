@@ -88,8 +88,8 @@ fn build_steps(pkg: &InstalledPackage, protected: bool) -> (AuthMethod, Vec<Plan
         PackageSource::AppImage => (
             AuthMethod::None,
             vec![PlanStep {
-                description: format!("Replace AppImage '{}' with latest version.", pkg.name),
-                command_summary: format!("Download and replace {}", pkg.package_id),
+                description: "Blocked: AppImage updates are not supported yet.".into(),
+                command_summary: "(no command — not supported yet)".into(),
             }],
         ),
     }
@@ -138,7 +138,12 @@ pub async fn apply(plan: &OperationPlan) -> OperationResult {
         PackageSource::Apt => apt_update(&plan.package_id).await,
         PackageSource::Snap => snap_refresh(&plan.package_id).await,
         PackageSource::Flatpak => flatpak_update(&plan.package_id, plan.install_scope).await,
-        PackageSource::AppImage => appimage_update(&plan.package_id).await,
+        PackageSource::AppImage => OperationResult {
+            success: false,
+            message: "AppImage auto-update is not yet implemented. Download the latest version from the project website.".into(),
+            logs: String::new(),
+            exit_code: None,
+        },
     }
 }
 
@@ -168,19 +173,6 @@ async fn flatpak_update(app_id: &str, scope: Option<InstallScope>) -> OperationR
         Some(InstallScope::System) | None => (AuthMethod::Pkexec, vec!["update", "-y", "--system", app_id]),
     };
     run_elevated("flatpak", &args, auth, UPDATE_TIMEOUT).await
-}
-
-async fn appimage_update(path: &str) -> OperationResult {
-    // AppImage auto-update is complex: requires AppImageUpdate tool or manual
-    // download-and-replace. For v1 we report the capability as not-yet-implemented
-    // so users know it is expected in a future release.
-    let _ = path;
-    OperationResult {
-        success: false,
-        message: "AppImage auto-update is not yet implemented. Download the latest version from the project website.".into(),
-        logs: String::new(),
-        exit_code: None,
-    }
 }
 
 #[cfg(test)]
@@ -272,5 +264,14 @@ mod tests {
         let mut p = plan("gimp");
         p.current_version = String::new();
         assert!(revalidate(&p, &present("9.9", None)).is_ok());
+    }
+
+    /// AppImage update plans can never execute: preview marks them protected
+    /// and revalidation refuses them.
+    #[test]
+    fn appimage_revalidate_refuses() {
+        let mut p = plan("/opt/Foo-1.0.AppImage");
+        p.source = PackageSource::AppImage;
+        assert!(revalidate(&p, &present("1.0", Some(true))).is_err());
     }
 }

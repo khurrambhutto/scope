@@ -59,7 +59,7 @@ Scanner filters are deliberate product choices:
 - APT lists manual installs only (`apt-mark showmanual`). Auto-installed dependencies stay hidden.
 - Snap hides runtimes and bases (`core*`, `snapd`, `bare`, `gtk-*`, `gnome-*`, `*-gtk3`). Snap entries never default to GUI; a matching non-terminal `.desktop` entry promotes them.
 - Flatpak scans user and system as separate installs. Keys are `flatpak:user:<id>` and `flatpak:system:<id>`, and the DTO's `install_scope` is the single source of truth for which scope every later command uses. Never re-guess scope at preview or apply time.
-- AppImage walks `/opt`, `/usr/local/bin`, `~/Applications`, `~/apps`, `~/AppImages`, `~/Downloads`, `~/.local/bin` for ELF+`AI` magic files. `safety::check_path` must allow exactly the same directories.
+- AppImage walks `/opt`, `/usr/local/bin`, `~/Applications`, `~/apps`, `~/AppImages`, `~/Downloads`, `~/.local/bin` for ELF+`AI` magic files so they appear in the unified list. AppImage uninstall and update are deliberately not supported yet: `safety::check_appimage` denies every AppImage path, so preview yields a protected plan and apply-time revalidation fails closed.
 
 Enrichment is a layer on top of package data, not a replacement: `.desktop` entries supply display names, categories, and icons for GUI apps. Non-GUI packages show a source-colored initials icon and keep full source metadata.
 
@@ -71,7 +71,7 @@ Commands that previews display and apply runs:
 | Snap | `pkexec snap remove <pkg>` | `pkexec snap refresh <pkg>` |
 | Flatpak user | `flatpak uninstall -y --user <id>` | `flatpak update -y --user <id>` |
 | Flatpak system | `pkexec flatpak uninstall -y --system <id>` | `pkexec flatpak update -y --system <id>` |
-| AppImage | `gio trash <path>` with manual trash fallback | stub in `operations/update.rs` |
+| AppImage | not supported yet — protected plan, no command runs | not supported yet — protected plan, no command runs |
 
 Icon contract: the webview renders icons only from `scope-icon://localhost/<path>` URLs produced by `icons::icon_url`. The frontend never touches the filesystem and holds no `fs`/`shell` Tauri permissions.
 

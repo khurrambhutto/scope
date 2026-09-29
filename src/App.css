@@ -8,6 +8,13 @@
   --text-faint: #786c68;
   --accent: #d4504a;
   --accent-glow: rgba(212, 80, 74, 0.15);
+  --accent-ring: rgba(212, 80, 74, 0.35);
+  /* Single soft focus ring: a translucent band plus a blurred halo. Mirrors
+   * the element's border-radius (box-shadow, not outline) so it stays smooth
+   * in WebKitGTK, and avoids stacking a second red on top of the border. */
+  --focus-ring: 0 0 0 3px var(--accent-ring), 0 0 12px 2px var(--accent-glow);
+  --accent-soft: rgba(212, 80, 74, 0.08);
+  --on-accent: #ffffff;
   --danger: #c9443e;
   --warn: #d9a441;
   --radius: 12px;
@@ -79,8 +86,17 @@ body {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 
+/* ---------- Buttons ----------
+ * One base owns layout, radius, typography and every interaction state;
+ * variants below only change colour. Add a variant instead of restyling a
+ * button inline, so hover / focus / active / disabled never drift.
+ */
 .btn {
   appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   border: 1px solid var(--border);
   background: var(--bg-elev-2);
   color: var(--text);
@@ -88,15 +104,26 @@ body {
   border-radius: var(--radius);
   cursor: pointer;
   font-size: 14px;
-  transition: border-color 0.15s, background 0.15s;
+  line-height: 1.2;
+  transition: border-color 0.15s ease, background 0.15s ease, filter 0.15s ease,
+    box-shadow 0.15s ease;
 }
 .btn:hover {
   border-color: var(--accent);
-  background: rgba(212, 80, 74, 0.08);
+  background: var(--accent-soft);
+}
+.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.btn:active {
+  transform: translateY(1px);
 }
 .btn:disabled {
   opacity: 0.5;
   cursor: default;
+  transform: none;
+  filter: none;
 }
 .btn--ghost {
   background: transparent;
@@ -105,9 +132,6 @@ body {
   background: var(--bg-elev-2);
 }
 .btn--icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
   padding: 8px;
   line-height: 0;
 }
@@ -140,7 +164,7 @@ body {
 }
 .filters__search:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  box-shadow: var(--focus-ring);
 }
 /* ---------- View Mode Toggle ---------- */
 .view-toggle {
@@ -216,11 +240,11 @@ body {
 }
 .select__trigger:focus-visible {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  box-shadow: var(--focus-ring);
 }
 .select--open .select__trigger {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  box-shadow: var(--focus-ring);
 }
 .select__value {
   flex: 1;
@@ -500,35 +524,39 @@ body {
   color: #ecd9a8;
   margin-top: 10px;
 }
+/* Centered, text-width notice used by the AppImage "not supported" dialog. */
+.modal__notice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.banner--fit {
+  display: inline-block;
+  margin: 10px 0 0;
+  text-align: center;
+}
 
-/* ---------- Primary / Danger / OK ---------- */
-.btn--primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
+/* ---------- Solid variants (primary / danger) ---------- */
+.btn--primary,
+.btn--danger {
+  color: var(--on-accent);
   font-weight: 600;
+  background: var(--btn-solid);
+  border-color: var(--btn-solid);
 }
-.btn--primary:hover {
-  filter: brightness(1.12);
-  border-color: var(--accent);
-  background: var(--accent);
-}
-.btn--primary:disabled {
-  background: var(--bg-elev-2);
-  color: var(--text-faint);
-  border-color: var(--border);
+.btn--primary {
+  --btn-solid: var(--accent);
 }
 .btn--danger {
-  background: var(--danger);
-  border-color: var(--danger);
-  color: #fff;
-  font-weight: 600;
+  --btn-solid: var(--danger);
 }
+.btn--primary:hover,
 .btn--danger:hover {
+  background: var(--btn-solid);
+  border-color: var(--btn-solid);
   filter: brightness(1.12);
-  border-color: var(--danger);
-  background: var(--danger);
 }
+.btn--primary:disabled,
 .btn--danger:disabled {
   background: var(--bg-elev-2);
   color: var(--text-faint);
@@ -637,6 +665,9 @@ body {
   justify-content: flex-end;
   gap: 10px;
   margin-top: 18px;
+}
+.modal__actions--center {
+  justify-content: center;
 }
 .modal__logtoggle {
   appearance: none;

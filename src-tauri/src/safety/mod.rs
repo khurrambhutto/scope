@@ -153,42 +153,14 @@ fn check_flatpak(_app_id: &str) -> Protection {
     Protection::allowed()
 }
 
+/// AppImages are listed for discovery, but uninstall/update support is a
+/// documented stub (see `operations/update.rs` and AGENTS.md). Blocking here
+/// means preview returns a protected plan, the confirm button renders
+/// disabled, and apply-time revalidation fails closed — all from one place.
 fn check_appimage(path: &str) -> Protection {
-    check_path(path)
-}
-
-/// Guard arbitrary filesystem paths used by AppImage removal.
-pub fn check_path(path: &str) -> Protection {
-    let cleaned = std::path::Path::new(path);
-    let Ok(abs) = cleaned.canonicalize() else {
-        return Protection::denied("Path does not resolve to a real file.");
-    };
-    let s = abs.to_string_lossy();
-
-    // Never allow operations outside expected AppImage locations or on system dirs.
-    let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
-    let mut allowed_roots: Vec<std::path::PathBuf> = vec![std::path::PathBuf::from("/opt")];
-    if let Some(h) = &home {
-        allowed_roots.push(h.join("Applications"));
-        allowed_roots.push(h.join("apps"));
-        allowed_roots.push(h.join("AppImages"));
-        allowed_roots.push(h.join("Downloads"));
-        allowed_roots.push(h.join(".local/bin"));
-    }
-    let inside_allowed = allowed_roots.iter().any(|root| {
-        s.starts_with(&format!("{}/", root.display())) || s == root.display().to_string()
-    });
-    if !inside_allowed {
-        return Protection::denied("File is outside the allowed AppImage directories.");
-    }
-    // Must be an AppImage.
-    if !s.to_lowercase().ends_with(".appimage") {
-        return Protection::denied("Only .AppImage files can be removed this way.");
-    }
-    if !abs.is_file() {
-        return Protection::denied("Path is not a regular file.");
-    }
-    Protection::allowed()
+    Protection::denied(format!(
+        "Scope lists AppImages ({path}) but can't remove or update them yet."
+    ))
 }
 
 #[cfg(test)]
@@ -226,10 +198,18 @@ mod tests {
         assert!(check_package(PackageSource::Snap, "snapd").protected);
     }
 
+    /// AppImages are listed but uninstall/update is deliberately not supported
+    /// yet: preview must yield a protected plan for every AppImage path.
     #[test]
-    fn blocks_appimage_outside_allowed_dirs() {
-        assert!(check_path("/etc/passwd").protected);
-        assert!(check_path("/usr/bin/bash").protected);
-        assert!(check_path("/nonexistent.AppImage").protected);
+    fn blocks_all_appimage_operations() {
+        for path in [
+            "/opt/Firefox-130.0.AppImage",
+            "/usr/local/bin/Firefox-130.0.AppImage",
+            "/home/user/AppImages/app-1.2.AppImage",
+        ] {
+            let protection = check_package(PackageSource::AppImage, path);
+            assert!(protection.protected, "expected '{path}' to be protected");
+            assert!(protection.reason.unwrap().contains("yet"));
+        }
     }
 }

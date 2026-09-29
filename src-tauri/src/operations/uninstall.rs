@@ -11,7 +11,7 @@ use anyhow::Result;
 
 use crate::package::{InstallScope, InstalledPackage, PackageSource};
 use crate::safety;
-use crate::system::{run_elevated, which};
+use crate::system::run_elevated;
 
 use super::{new_plan_id, now_ms, AuthMethod, Operation, OperationPlan, OperationResult, PlanStep};
 
@@ -102,8 +102,8 @@ fn build_steps(pkg: &InstalledPackage, protected: bool) -> (AuthMethod, Vec<Plan
         PackageSource::AppImage => (
             AuthMethod::None,
             vec![PlanStep {
-                description: format!("Move the AppImage '{}' to Trash.", pkg.package_id),
-                command_summary: format!("gio trash {}", pkg.package_id),
+                description: "Blocked: AppImage uninstall is not supported yet.".into(),
+                command_summary: "(no command — not supported yet)".into(),
             }],
         ),
     }
@@ -132,12 +132,23 @@ pub fn revalidate(plan: &OperationPlan, probed: &super::probe::ProbedPackage) ->
 }
 
 /// Execute the plan's uninstall command for the given source, capturing logs.
+///
+/// AppImages never reach here: preview marks them protected and apply-time
+/// revalidation refuses them, so only package-manager sources execute.
 pub async fn apply(plan: &OperationPlan) -> OperationResult {
     match plan.source {
         PackageSource::Apt => apt_remove(&plan.package_id).await,
         PackageSource::Snap => snap_remove(&plan.package_id).await,
         PackageSource::Flatpak => flatpak_uninstall(&plan.package_id, plan.install_scope).await,
-        PackageSource::AppImage => appimage_trash(&plan.package_id).await,
+        PackageSource::AppImage => {
+            let _ = &plan.package_id;
+            OperationResult {
+                success: false,
+                message: "AppImage uninstall is not supported yet.".into(),
+                logs: String::new(),
+                exit_code: None,
+            }
+        }
     }
 }
 
@@ -170,72 +181,6 @@ async fn flatpak_uninstall(app_id: &str, scope: Option<InstallScope>) -> Operati
         ),
     };
     run_elevated("flatpak", &args, auth, UNINSTALL_TIMEOUT).await
-}
-
-async fn appimage_trash(path: &str) -> OperationResult {
-    // Prefer the FreeDesktop trash via `gio trash` (restorable). Fallback to
-    // moving into ~/.local/share/Trash/files when gio is unavailable.
-    if which("gio") {
-        let res = run_elevated(
-            "gio",
-            &["trash", "-f", path],
-            AuthMethod::None,
-            Duration::from_secs(20),
-        )
-        .await;
-        if res.success {
-            return res;
-        }
-        // Fall through to manual move if gio failed.
-    }
-    manual_trash(path).await
-}
-
-async fn manual_trash(path: &str) -> OperationResult {
-    let Some(home) = std::env::var_os("HOME") else {
-        return OperationResult {
-            success: false,
-            message: "No HOME directory; cannot trash AppImage.".into(),
-            logs: String::new(),
-            exit_code: None,
-        };
-    };
-    let trash_files = std::path::Path::new(&home).join(".local/share/Trash/files");
-    if let Err(e) = tokio::fs::create_dir_all(&trash_files).await {
-        return OperationResult {
-            success: false,
-            message: format!("Could not create trash dir: {e}"),
-            logs: format!("mkdir failed: {e}"),
-            exit_code: None,
-        };
-    }
-    let src = std::path::Path::new(path);
-    let filename = src
-        .file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_else(|| "appimage".into());
-    let dest = trash_files.join(format!("{}.{}", filename, now_ms_debris()));
-    match tokio::fs::rename(src, &dest).await {
-        Ok(_) => OperationResult {
-            success: true,
-            message: "AppImage moved to Trash.".into(),
-            logs: format!("moved {path} -> {}", dest.display()),
-            exit_code: Some(0),
-        },
-        Err(e) => OperationResult {
-            success: false,
-            message: format!("Could not move AppImage to Trash: {e}"),
-            logs: format!("rename failed: {e}"),
-            exit_code: None,
-        },
-    }
-}
-
-fn now_ms_debris() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
 }
 
 #[cfg(test)]
@@ -297,5 +242,18 @@ mod tests {
     fn accepts_present_allowed_package() {
         let p = plan(PackageSource::Apt, "gimp");
         assert!(revalidate(&p, &present()).is_ok());
+    }
+
+    /// AppImages are listed but not removable: preview must mark them
+    /// protected and revalidation must refuse them even if a stale plan
+    /// somehow reaches apply.
+    #[test]
+    fn appimage_preview_is_protected_and_revalidate_refuses() {
+        let mut pkg = InstalledPackage::new(PackageSource::AppImage, "/opt/Foo-1.0.AppImage");
+        pkg.name = "Foo".into();
+        let p = preview(&pkg);
+        assert!(p.protected);
+        assert!(p.protection_reason.as_deref().unwrap().contains("yet"));
+        assert!(revalidate(&p, &present()).is_err());
     }
 }
