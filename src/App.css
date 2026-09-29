@@ -87,9 +87,12 @@ body {
 }
 
 /* ---------- Buttons ----------
+ * Hallmark · component: button · states: default · hover · focus · active · disabled
  * One base owns layout, radius, typography and every interaction state;
  * variants below only change colour. Add a variant instead of restyling a
  * button inline, so hover / focus / active / disabled never drift.
+ * The accent outline is a hover affordance only; at rest every button keeps
+ * the neutral border.
  */
 .btn {
   appearance: none;
@@ -178,7 +181,7 @@ body {
   transition: border-color 0.15s, background 0.15s;
 }
 .view-toggle:hover {
-  border-color: var(--text-faint);
+  border-color: var(--accent);
   background: rgba(255, 255, 255, 0.02);
 }
 .view-toggle__btn {
@@ -236,7 +239,7 @@ body {
 }
 .select__trigger:hover {
   background: rgba(255, 255, 255, 0.03);
-  border-color: var(--text-faint);
+  border-color: var(--accent);
 }
 .select__trigger:focus-visible {
   border-color: var(--accent);
