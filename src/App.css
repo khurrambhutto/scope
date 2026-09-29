@@ -521,6 +521,11 @@ body {
   border: 1px solid rgba(212, 80, 74, 0.25);
   color: #f0c4be;
 }
+.banner--muted {
+  background: rgba(239, 230, 228, 0.04);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
 .banner--warn {
   background: rgba(217, 164, 65, 0.1);
   border: 1px solid rgba(217, 164, 65, 0.25);
@@ -653,16 +658,6 @@ body {
   margin: 0 0 14px;
   font-size: 14px;
 }
-.modal__lead {
-  margin: 0 0 14px;
-  font-size: 14px;
-  line-height: 1.5;
-}
-.modal__warn {
-  margin: 14px 0 0;
-  font-size: 13px;
-  color: var(--warn);
-}
 .modal__actions {
   display: flex;
   justify-content: flex-end;
@@ -717,32 +712,6 @@ body {
   font-size: 13px;
   text-align: right;
   word-break: break-word;
-}
-.plan__steps {
-  list-style: none;
-  margin: 0 0 10px;
-  padding: 0;
-}
-.plan__steps li {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 10px 12px;
-  background: var(--bg-elev-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  margin-bottom: 8px;
-}
-.plan__step-desc {
-  font-size: 14px;
-}
-.plan__step-cmd {
-  font-size: 12px;
-  color: var(--text-dim);
-  background: var(--bg);
-  padding: 4px 8px;
-  border-radius: 6px;
-  word-break: break-all;
 }
 
 /* ---------- Spinner ---------- */

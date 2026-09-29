@@ -5,12 +5,13 @@ import type {
   OperationResult,
   OperationStage,
 } from "../../shared/types/operations";
-import { SOURCE_LABELS } from "../../shared/types/package";
 import {
   previewUninstall,
   applyUninstall,
   onOperationStatus,
+  isCancelledResult,
 } from "../../shared/api/operations";
+import { formatSize } from "../packages/format";
 
 type Phase = "loading" | "confirm" | "running" | "done" | "error";
 
@@ -135,12 +136,6 @@ export function UninstallDialog({ pkg, onClose, onUninstalled }: Props) {
               </div>
             ) : (
               <>
-                <p className="modal__lead">
-                  You are about to remove <strong>{title}</strong> ({SOURCE_LABELS[plan.source]}).
-                  {plan.requires_auth && (
-                    <> Linux will ask for your password to confirm.</>
-                  )}
-                </p>
                 <dl className="plan">
                   <div className="plan__row">
                     <dt>Package</dt>
@@ -157,21 +152,10 @@ export function UninstallDialog({ pkg, onClose, onUninstalled }: Props) {
                     <dd>{plan.current_version || "—"}</dd>
                   </div>
                   <div className="plan__row">
-                    <dt>Privilege</dt>
-                    <dd>{plan.requires_auth ? "Administrator password (Polkit)" : "No password needed"}</dd>
+                    <dt>Size</dt>
+                    <dd>{formatSize(pkg.size_bytes)}</dd>
                   </div>
                 </dl>
-                <ul className="plan__steps">
-                  {plan.steps.map((s, i) => (
-                    <li key={i}>
-                      <span className="plan__step-desc">{s.description}</span>
-                      <code className="plan__step-cmd">{s.command_summary}</code>
-                    </li>
-                  ))}
-                </ul>
-                <p className="modal__warn">
-                  ⚠ This removes the package from your system. Everything is removed by its package manager.
-                </p>
               </>
             )}
             {pkg.source !== "appimage" && (
@@ -185,7 +169,7 @@ export function UninstallDialog({ pkg, onClose, onUninstalled }: Props) {
                   onClick={confirm}
                   disabled={plan.protected}
                 >
-                  {plan.protected ? "Protected" : "Confirm uninstall"}
+                  {plan.protected ? "Protected" : "Confirm"}
                 </button>
               </div>
             )}
@@ -213,17 +197,25 @@ export function UninstallDialog({ pkg, onClose, onUninstalled }: Props) {
 
         {phase === "done" && result && (
           <div className="modal__body">
-            <div className={`banner ${result.success ? "banner--ok" : "banner--error"}`}>
-              {result.message}
-            </div>
-            <button
-              type="button"
-              className="modal__logtoggle"
-              onClick={() => setShowLogs((v) => !v)}
-            >
-              {showLogs ? "Hide" : "Show"} command output
-            </button>
-            {showLogs && <pre className="modal__logs">{result.logs}</pre>}
+            {isCancelledResult(result) ? (
+              <div className="banner banner--muted">
+                Authentication was cancelled. Nothing was changed.
+              </div>
+            ) : (
+              <>
+                <div className={`banner ${result.success ? "banner--ok" : "banner--error"}`}>
+                  {result.message}
+                </div>
+                <button
+                  type="button"
+                  className="modal__logtoggle"
+                  onClick={() => setShowLogs((v) => !v)}
+                >
+                  {showLogs ? "Hide" : "Show"} command output
+                </button>
+                {showLogs && <pre className="modal__logs">{result.logs}</pre>}
+              </>
+            )}
             <div className="modal__actions">
               <button type="button" className="btn" onClick={onClose}>
                 {result.success ? "Done" : "Close"}

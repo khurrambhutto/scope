@@ -37,3 +37,12 @@ export function onOperationStatus(
     handler(event.payload);
   });
 }
+
+/// A dismissed Polkit password dialog comes back as a non-zero pkexec result
+/// (exit 126, "Request dismissed") rather than a thrown error. Treat that as
+/// the user declining the action so the UI can show a calm cancelled state
+/// instead of an error.
+export function isCancelledResult(result: OperationResult): boolean {
+  if (result.success || result.exit_code !== 126) return false;
+  return /dismiss|cancel/i.test(`${result.message}\n${result.logs}`);
+}
