@@ -68,7 +68,7 @@ export function AppUpdateNotification() {
                 {canSelfUpdate && (
                   <button
                     type="button"
-                    className="btn btn--primary"
+                    className="btn btn--update"
                     onClick={download}
                   >
                     Update
@@ -112,7 +112,7 @@ export function AppUpdateNotification() {
               <div className="updater__actions">
                 <button
                   type="button"
-                  className="btn btn--primary"
+                  className="btn btn--update"
                   onClick={restart}
                 >
                   Restart Now

@@ -55,7 +55,7 @@ function PackageRowBase({
         {showUpdate && (
           <button
             type="button"
-            className="btn btn--primary btn--sm"
+            className="btn btn--update btn--sm"
             onClick={(event) => {
               event.stopPropagation();
               onUpdate(pkg);

@@ -39,7 +39,7 @@ export function PackageList({
             onUpdate={setUpdateTarget}
           />
           {p.key === selectedKey && selectedPkg && (
-            <PackageDetail pkg={selectedPkg} viewMode={viewMode} onUninstalled={onUninstalled} />
+            <PackageDetail pkg={selectedPkg} />
           )}
         </Fragment>
       ))}

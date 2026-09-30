@@ -157,7 +157,7 @@ export function UpdateDialog({ pkg, onClose, onUpdated }: Props) {
               </button>
               <button
                 type="button"
-                className="btn btn--primary"
+                className="btn btn--update"
                 onClick={confirm}
                 disabled={plan.protected}
               >

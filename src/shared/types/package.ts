@@ -55,3 +55,15 @@ export const SOURCE_COLORS: Record<PackageSource, string> = {
   flatpak: "#4a154b",
   appimage: "#0b8a4f",
 };
+
+export const KIND_LABELS: Record<AppKind, string> = {
+  gui: "GUI",
+  cli: "CLI",
+  unknown: "Unknown",
+};
+
+export const KIND_COLORS: Record<AppKind, string> = {
+  gui: "#2f8fa3",
+  cli: "#a97b2e",
+  unknown: "#6b625e",
+};

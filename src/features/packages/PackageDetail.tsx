@@ -1,37 +1,24 @@
-import { useState } from "react";
 import type { InstalledPackage } from "../../shared/types/package";
-import { SOURCE_COLORS, SOURCE_LABELS } from "../../shared/types/package";
-import { formatSize, kindIcon } from "./format";
+import {
+  KIND_COLORS,
+  KIND_LABELS,
+  SOURCE_COLORS,
+  SOURCE_LABELS,
+} from "../../shared/types/package";
+import { formatSize } from "./format";
 import { AppIcon } from "../../shared/components/AppIcon";
-import { UninstallDialog } from "../uninstall/UninstallDialog";
-import { UpdateDialog } from "../update/UpdateDialog";
-import type { ViewMode } from "./usePackages";
 
-export function PackageDetail({
-  pkg,
-  viewMode,
-  onUninstalled,
-}: {
-  pkg: InstalledPackage | null;
-  viewMode: ViewMode;
-  onUninstalled?: (pkg: InstalledPackage) => void;
-}) {
-  const [uninstallTarget, setUninstallTarget] = useState<InstalledPackage | null>(null);
-  const [updateTarget, setUpdateTarget] = useState<InstalledPackage | null>(null);
+export function PackageDetail({ pkg }: { pkg: InstalledPackage | null }) {
   if (!pkg) return null;
 
   const title = pkg.display_name ?? pkg.name;
   const rows: { label: string; value: string }[] = [
-    { label: "Source", value: SOURCE_LABELS[pkg.source] },
-    { label: "Install scope", value: pkg.install_scope ?? "—" },
     { label: "Package id", value: pkg.package_id },
     { label: "Version", value: pkg.version || "—" },
     { label: "Installed size", value: formatSize(pkg.size_bytes) },
-    { label: "Kind", value: `${kindIcon(pkg.app_kind)} ${pkg.app_kind}` },
     { label: "Categories", value: pkg.categories ?? "—" },
-    { label: "Runs in terminal", value: pkg.terminal ? "Yes" : "No" },
     { label: "Update available", value: pkg.has_update ? "Yes" : "—" },
-  ];
+  ].filter((row) => row.value && row.value !== "—");
 
   return (
     <div className="pkg-detail">
@@ -39,12 +26,23 @@ export function PackageDetail({
         <AppIcon pkg={pkg} title={title} size="detail" />
         <div className="detail__title">
           <h2>{title}</h2>
-          <span
-            className="detail__source"
-            style={{ color: SOURCE_COLORS[pkg.source], borderColor: SOURCE_COLORS[pkg.source] }}
-          >
-            {SOURCE_LABELS[pkg.source]}
-          </span>
+          <div className="detail__tags">
+            <span
+              className="detail__tag"
+              style={{ color: SOURCE_COLORS[pkg.source], borderColor: SOURCE_COLORS[pkg.source] }}
+            >
+              {SOURCE_LABELS[pkg.source]}
+            </span>
+            <span
+              className="detail__tag"
+              style={{
+                color: KIND_COLORS[pkg.app_kind],
+                borderColor: KIND_COLORS[pkg.app_kind],
+              }}
+            >
+              {KIND_LABELS[pkg.app_kind]}
+            </span>
+          </div>
         </div>
       </div>
       {pkg.description && <p className="detail__desc">{pkg.description}</p>}
@@ -56,47 +54,6 @@ export function PackageDetail({
           </div>
         ))}
       </dl>
-      <div className="detail__actions">
-        {viewMode === "updates" && pkg.has_update && (
-          <button
-            type="button"
-            className="btn btn--primary detail__update"
-            onClick={() => setUpdateTarget(pkg)}
-          >
-            Update{pkg.update_version ? ` to ${pkg.update_version}` : ""}
-          </button>
-        )}
-        {viewMode === "uninstall" && (
-          <button
-            type="button"
-            className="btn btn--danger detail__uninstall"
-            onClick={() => setUninstallTarget(pkg)}
-          >
-            Uninstall
-          </button>
-        )}
-        <span className="detail__actions-hint">Preview-first · protected packages are blocked</span>
-      </div>
-      {updateTarget && (
-        <UpdateDialog
-          pkg={updateTarget}
-          onClose={() => setUpdateTarget(null)}
-          onUpdated={(p) => {
-            setUpdateTarget(null);
-            onUninstalled?.(p);
-          }}
-        />
-      )}
-      {uninstallTarget && (
-        <UninstallDialog
-          pkg={uninstallTarget}
-          onClose={() => setUninstallTarget(null)}
-          onUninstalled={(p) => {
-            setUninstallTarget(null);
-            onUninstalled?.(p);
-          }}
-        />
-      )}
     </div>
   );
 }
