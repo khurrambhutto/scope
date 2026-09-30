@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, type KeyboardEvent } from "react";
 import type { InstalledPackage } from "../../shared/types/package";
 import { SOURCE_LABELS } from "../../shared/types/package";
 import { formatSize } from "./format";
@@ -22,8 +22,24 @@ function PackageRowBase({
   const title = pkg.display_name ?? pkg.name;
   const showUpdate = viewMode === "updates" && pkg.has_update;
   const showUninstall = viewMode === "uninstall";
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      onInfo(pkg);
+    }
+  };
+
   return (
-    <div className={`pkg-row${selected ? " pkg-row--selected" : ""}`}>
+    <div
+      className={`pkg-row${selected ? " pkg-row--selected" : ""}`}
+      role="button"
+      tabIndex={0}
+      aria-expanded={selected}
+      aria-label={`Details for ${title}`}
+      onClick={() => onInfo(pkg)}
+      onKeyDown={handleKeyDown}
+    >
       <AppIcon pkg={pkg} title={title} size="row" />
       <span className="pkg-row__main">
         <span className="pkg-row__title">{title}</span>
@@ -40,7 +56,10 @@ function PackageRowBase({
           <button
             type="button"
             className="btn btn--primary btn--sm"
-            onClick={() => onUpdate(pkg)}
+            onClick={(event) => {
+              event.stopPropagation();
+              onUpdate(pkg);
+            }}
           >
             Update
           </button>
@@ -49,25 +68,14 @@ function PackageRowBase({
           <button
             type="button"
             className="btn btn--danger btn--sm"
-            onClick={() => onUninstall(pkg)}
+            onClick={(event) => {
+              event.stopPropagation();
+              onUninstall(pkg);
+            }}
           >
             Uninstall
           </button>
         )}
-        <button
-          type="button"
-          className="btn btn--ghost btn--icon btn--sm"
-          aria-label={`Details for ${title}`}
-          aria-expanded={selected}
-          title="Details"
-          onClick={() => onInfo(pkg)}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
-            <path d="M12 11v5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            <circle cx="12" cy="8" r="1.2" fill="currentColor" />
-          </svg>
-        </button>
       </span>
     </div>
   );

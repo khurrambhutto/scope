@@ -333,15 +333,26 @@ body {
   padding: 10px 12px;
   margin: 2px 0;
   color: var(--text);
-  cursor: default;
-  transition: background 0.1s;
+  cursor: pointer;
+  transition: background 0.1s, box-shadow 0.1s, border-color 0.1s;
 }
 .pkg-row:hover {
   background: rgba(255, 255, 255, 0.04);
 }
+.pkg-row:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+.pkg-row:active {
+  background: rgba(255, 255, 255, 0.06);
+}
 .pkg-row--selected {
   background: rgba(212, 80, 74, 0.08);
   border-color: rgba(212, 80, 74, 0.15);
+}
+.pkg-row--selected:hover {
+  background: rgba(212, 80, 74, 0.12);
 }
 .pkg-row__actions {
   flex: 0 0 auto;

@@ -3,6 +3,9 @@
 /dist
 /node_modules
 
+# Showreel
+/showreel/
+
 # IDE
 .idea/
 .vscode/
