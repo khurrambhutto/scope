@@ -2,11 +2,15 @@
   <img src="public/scope-logo.svg" alt="Scope" width="96" />
 </p>
 
-# Scope
+<h1 align="center">Scope</h1>
 
-**See, update, and uninstall every app on your Linux system in one place.**
+<p align="center"><strong>See, update, and uninstall every app on your Linux system in one place.</strong></p>
 
 Linux spreads software across APT, Snap, Flatpak, and AppImage. Scope scans all four into a single list, adds desktop names and icons where a GUI app exists, and lets you update or uninstall without typing a package-manager command. Every destructive action shows a preview first. Privileged actions go through Polkit, so Scope never handles your password.
+
+<p align="center">
+  <img src="docs/image.png" alt="Scope showing installed apps from APT, Snap, Flatpak, and AppImage in one list, with an inline detail panel and hover actions" width="720" />
+</p>
 
 Built with Tauri v2, a Rust backend and a React 19 frontend. Architecture and module rules live in [AGENTS.md](AGENTS.md).
 
