@@ -236,3 +236,41 @@ fn hex(byte: u8) -> Option<u8> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::package::PackageSource;
+
+    #[test]
+    fn percent_decode_expands_valid_sequences() {
+        assert_eq!(percent_decode("a%20b"), "a b");
+        assert_eq!(percent_decode("%E2%9C%93"), "✓");
+        assert_eq!(percent_decode("plain"), "plain");
+    }
+
+    #[test]
+    fn percent_decode_keeps_invalid_sequences_verbatim() {
+        assert_eq!(percent_decode("%zz"), "%zz");
+        assert_eq!(percent_decode("trailing%4"), "trailing%4");
+        assert_eq!(percent_decode("%"), "%");
+        assert_eq!(percent_decode(""), "");
+    }
+
+    #[test]
+    fn icon_path_accepts_only_scope_urls() {
+        let mut pkg = InstalledPackage::new(PackageSource::Apt, "x");
+
+        pkg.icon = Some("scope-icon://localhost/opt/my%20app.png".to_string());
+        assert_eq!(icon_path(&pkg), Some(PathBuf::from("/opt/my app.png")));
+
+        pkg.icon = Some("scope-icon://themes/hicolor/icon.svg".to_string());
+        assert_eq!(icon_path(&pkg), Some(PathBuf::from("themes/hicolor/icon.svg")));
+
+        pkg.icon = Some("https://example.com/icon.png".to_string());
+        assert_eq!(icon_path(&pkg), None);
+
+        pkg.icon = None;
+        assert_eq!(icon_path(&pkg), None);
+    }
+}

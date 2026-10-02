@@ -236,3 +236,34 @@ impl ScopeApp {
             .child(rescan)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn source_filter_matches_only_the_selected_source() {
+        assert!(SourceFilter::All.matches(PackageSource::Apt));
+        assert!(SourceFilter::All.matches(PackageSource::AppImage));
+        assert!(SourceFilter::Apt.matches(PackageSource::Apt));
+        assert!(!SourceFilter::Apt.matches(PackageSource::Snap));
+        assert!(SourceFilter::Snap.matches(PackageSource::Snap));
+        assert!(!SourceFilter::Snap.matches(PackageSource::Flatpak));
+        assert!(SourceFilter::Flatpak.matches(PackageSource::Flatpak));
+        assert!(!SourceFilter::Flatpak.matches(PackageSource::Apt));
+        assert!(SourceFilter::AppImage.matches(PackageSource::AppImage));
+        assert!(!SourceFilter::AppImage.matches(PackageSource::Snap));
+    }
+
+    #[test]
+    fn kind_filter_matches_only_the_selected_kind() {
+        assert!(KindFilter::All.matches(AppKind::Gui));
+        assert!(KindFilter::All.matches(AppKind::Unknown));
+        assert!(KindFilter::Gui.matches(AppKind::Gui));
+        assert!(!KindFilter::Gui.matches(AppKind::Cli));
+        assert!(KindFilter::Cli.matches(AppKind::Cli));
+        assert!(!KindFilter::Cli.matches(AppKind::Gui));
+        assert!(KindFilter::Unknown.matches(AppKind::Unknown));
+        assert!(!KindFilter::Unknown.matches(AppKind::Cli));
+    }
+}

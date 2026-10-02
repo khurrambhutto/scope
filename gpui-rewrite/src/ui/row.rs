@@ -1,7 +1,7 @@
 //! One row in the package list: icon, title/meta line, hover action button.
 
 use gpui::prelude::*;
-use gpui::{div, img, px, rgba, rgb, AnyElement, FontWeight, Hsla, SharedString, WeakEntity};
+use gpui::{div, img, px, rgba, rgb, AnyElement, FontWeight, Hsla, WeakEntity};
 
 use crate::backend::{self, OpKind};
 use crate::package::InstalledPackage;
@@ -15,6 +15,7 @@ pub(super) fn row_element(
     pkg: &InstalledPackage,
     selected: bool,
     view_mode: ViewMode,
+    index: usize,
 ) -> AnyElement {
     let title = display_title(pkg);
     let key = pkg.key.clone();
@@ -33,7 +34,7 @@ pub(super) fn row_element(
     };
 
     let row = div()
-        .id(SharedString::from(format!("row-{key}")))
+        .id(("row", index))
         .group("row")
         .relative()
         .flex()
@@ -118,11 +119,11 @@ fn action_button(
     let entity = entity.clone();
     let pkg = pkg.clone();
     let action_id = match kind {
-        OpKind::Uninstall => format!("action-uninstall-{}", pkg.key),
-        OpKind::Update => format!("action-update-{}", pkg.key),
+        OpKind::Uninstall => "action-uninstall",
+        OpKind::Update => "action-update",
     };
     div()
-        .id(SharedString::from(action_id))
+        .id(action_id)
         .h_full()
         .px(px(18.))
         .flex()
@@ -147,7 +148,7 @@ fn action_button(
 pub(super) fn package_icon(pkg: &InstalledPackage, size: f32) -> AnyElement {
     if let Some(path) = backend::icon_path(pkg) {
         return img(path)
-            .id(SharedString::from(format!("icon-{}", pkg.key)))
+            .id("icon")
             .size(px(size))
             .rounded(px(10.))
             .into_any_element();

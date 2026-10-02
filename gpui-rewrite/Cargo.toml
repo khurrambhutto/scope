@@ -24,6 +24,16 @@ regex = "1"
 futures = "0.3"
 unicode-segmentation = "1"
 
+[lints.rust]
+# The shell is safe, idiomatic Rust; shared backend modules included.
+unsafe_code = "forbid"
+
+[lints.clippy]
+# No half-finished states may ship in either shell.
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"
+
 [profile.release]
 opt-level = 3
 lto = "thin"

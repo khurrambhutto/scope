@@ -58,6 +58,10 @@ pub(super) fn act(
 
 // ---- App state -------------------------------------------------------------
 
+/// Query + filters + scan identity: everything [`ScopeApp::sync_entries`]
+/// needs to know the visible set is already up to date.
+type FilterInputs = (String, SourceFilter, KindFilter, ViewMode, u64);
+
 pub struct ScopeApp {
     pub(super) search_input: Entity<TextInput>,
     pub(super) scan: Option<backend::Scan>,
@@ -77,6 +81,12 @@ pub struct ScopeApp {
     /// them without cloning the whole filtered set every frame.
     pub(super) entries: Vec<InstalledPackage>,
     pub(super) entry_keys: Vec<String>,
+    /// Last inputs [`ScopeApp::sync_entries`] rebuilt from; unchanged inputs
+    /// skip the rebuild (and its package clones) entirely.
+    filter_inputs: Option<FilterInputs>,
+    /// Bumped whenever a fresh scan replaces `scan`, so a rescan that arrives
+    /// with identical filters still triggers a rebuild.
+    scan_gen: u64,
 }
 
 impl ScopeApp {
@@ -107,6 +117,8 @@ impl ScopeApp {
             list_state: ListState::new(0, ListAlignment::Top, px(1000.)),
             entries: Vec::new(),
             entry_keys: Vec::new(),
+            filter_inputs: None,
+            scan_gen: 0,
         };
         app.start_scan(cx);
         app
@@ -133,6 +145,7 @@ impl ScopeApp {
             this.update(cx, |this, cx| {
                 if let Ok(scan) = scan {
                     this.scan = Some(scan);
+                    this.scan_gen += 1;
                 }
                 this.loading = false;
                 this.refreshing = false;
@@ -164,10 +177,31 @@ impl ScopeApp {
     }
 
     /// Keep [`Self::entries`] and the list's item count in sync with the active
-    /// filters. Resets the virtual list only when the visible set actually
-    /// changed, so a plain rescan keeps the user's scroll position.
+    /// filters. Rebuilds only when the query, filters, or scan actually changed,
+    /// so a plain re-render never re-clones the package list. Resets the virtual
+    /// list only when the visible set actually changed, so a plain rescan keeps
+    /// the user's scroll position.
     fn sync_entries(&mut self, cx: &App) {
-        let filtered = self.filtered(cx);
+        let query = self.search_input.read(cx).text().trim().to_lowercase();
+        let unchanged = self.filter_inputs.as_ref().is_some_and(|(q, s, k, v, g)| {
+            *q == query
+                && *s == self.source_filter
+                && *k == self.kind_filter
+                && *v == self.view_mode
+                && *g == self.scan_gen
+        });
+        if unchanged {
+            return;
+        }
+        self.filter_inputs = Some((
+            query.clone(),
+            self.source_filter,
+            self.kind_filter,
+            self.view_mode,
+            self.scan_gen,
+        ));
+
+        let filtered = self.filtered(&query);
         let keys: Vec<String> = filtered.iter().map(|pkg| pkg.key.clone()).collect();
         if keys != self.entry_keys {
             self.entry_keys = keys;
@@ -293,8 +327,7 @@ impl ScopeApp {
         cx.notify();
     }
 
-    fn filtered(&self, cx: &App) -> Vec<InstalledPackage> {
-        let query = self.search_input.read(cx).text().trim().to_lowercase();
+    fn filtered(&self, query: &str) -> Vec<InstalledPackage> {
         let mut out = Vec::new();
         let Some(scan) = &self.scan else {
             return out;
@@ -309,7 +342,7 @@ impl ScopeApp {
             if self.view_mode == ViewMode::Updates && !pkg.has_update {
                 continue;
             }
-            if !query.is_empty() && !theme::search_text(pkg).contains(&query) {
+            if !query.is_empty() && !theme::search_text(pkg).contains(query) {
                 continue;
             }
             out.push(pkg.clone());
@@ -360,6 +393,7 @@ impl Render for ScopeApp {
                             pkg,
                             selected,
                             this.view_mode,
+                            index,
                         ));
                         if selected {
                             column = column.child(detail_element(pkg));

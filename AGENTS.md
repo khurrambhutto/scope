@@ -58,10 +58,10 @@ gpui-rewrite/             second shell: same product on GPUI (see below)
 
 - The backend domain modules are reused verbatim: `gpui-rewrite/src/main.rs` pulls in `src-tauri/src/{package,scanner,desktop_entries,icons,safety,system,operations}` with `#[path]`. Those files stay the single source of truth for both shells — change a scanner, DTO, or safety rule once and both pick it up.
 - `src-tauri/src/commands/*` and `lib.rs` are Tauri-only and are not reused. `gpui-rewrite/src/backend.rs` is the thin, GPUI-side equivalent: scan + persistent cache, plan preview/apply with streamed logs, and `scope-icon://` URL decoding.
-- UI lives in `gpui-rewrite/src/ui/`: `app_view.rs` is the screen (header, filters, list, inline detail, uninstall/update dialogs), `text_input.rs` is the search field, `theme.rs` holds the palette and formatting helpers.
+- UI lives in `gpui-rewrite/src/ui/`: `app_view.rs` holds screen state and composition (header, filters, virtualized list, inline detail, uninstall/update dialogs), split into `filters.rs`, `row.rs`, `detail.rs`, `dialog.rs`, `title_bar.rs`, and `widgets.rs`; `text_input.rs` is the search field. `gpui-rewrite/src/theme.rs` holds the palette and formatting helpers.
 - Run `cd gpui-rewrite && cargo run`. Linux needs GPUI's system deps; notably `libxkbcommon-x11-dev`, because GPUI links `-lxkbcommon-x11` on Linux even in Wayland-only builds.
-- Check/test with `cargo check --manifest-path gpui-rewrite/Cargo.toml` and `cargo test --manifest-path gpui-rewrite/Cargo.toml`.
-- Not yet ported: the self-updater banner and list virtualization (the list renders all filtered rows).
+- Check/test/clippy with `cargo check --manifest-path gpui-rewrite/Cargo.toml`, `cargo test --manifest-path gpui-rewrite/Cargo.toml`, and `cargo clippy --manifest-path gpui-rewrite/Cargo.toml`. The crate pins `[lints]` in its `Cargo.toml` (`unsafe_code = "forbid"`, deny `dbg_macro`/`todo`/`unimplemented`).
+- Not yet ported: the self-updater banner.
 
 ## Product rules
 
@@ -121,9 +121,9 @@ cargo check --manifest-path src-tauri/Cargo.toml
 cargo test  --manifest-path src-tauri/Cargo.toml
 ```
 
-For the GPUI shell, also: `cargo check --manifest-path gpui-rewrite/Cargo.toml`.
+For the GPUI shell, also run the check, test, and clippy commands listed under **GPUI rewrite**.
 
-- All three pass and the diff contains only the requested change.
+- All of the above pass and the diff contains only the requested change.
 - Safety-sensitive backend changes (probe, revalidate, deny-list, PlanStore) ship with targeted Rust tests in the same change.
 - A changed command or DTO is reflected in `src/shared/types/`.
 - `package.json`, `package-lock.json`, and `src-tauri/Cargo.lock` stay committed.
