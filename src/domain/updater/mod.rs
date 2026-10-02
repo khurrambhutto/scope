@@ -359,7 +359,7 @@ mod tests {
     }
 
     #[test]
-    fn bundle_marker_wins() {
+    fn classify_prefers_the_bundle_marker() {
         assert_eq!(
             classify(Some("deb".into()), None, false, false),
             InstallKind::Deb
@@ -375,7 +375,7 @@ mod tests {
     }
 
     #[test]
-    fn appimage_env_fallback() {
+    fn classify_uses_appimage_env_when_no_bundle() {
         assert_eq!(
             classify(None, Some(OsString::from("/tmp/x.AppImage")), false, false),
             InstallKind::AppImage
@@ -383,7 +383,7 @@ mod tests {
     }
 
     #[test]
-    fn unknown_when_nothing_matches() {
+    fn classify_returns_unknown_when_no_signal_matches() {
         assert_eq!(classify(None, None, false, false), InstallKind::Unknown);
         assert_eq!(
             classify(Some("msi".into()), None, false, false),
@@ -392,12 +392,12 @@ mod tests {
     }
 
     #[test]
-    fn deb_marker_fallback() {
+    fn classify_uses_the_deb_marker() {
         assert_eq!(classify(None, None, true, false), InstallKind::Deb);
     }
 
     #[test]
-    fn version_compare() {
+    fn is_newer_compares_numeric_cores_and_prereleases() {
         assert!(is_newer("0.2.0", "0.3.0"));
         assert!(is_newer("0.2.0", "v0.3.0"));
         assert!(!is_newer("0.3.0", "0.3.0"));
@@ -408,7 +408,7 @@ mod tests {
     }
 
     #[test]
-    fn strip_v_prefix() {
+    fn strip_v_removes_a_leading_v() {
         assert_eq!(strip_v("v0.3.0"), "0.3.0");
         assert_eq!(strip_v("0.3.0"), "0.3.0");
     }
@@ -421,7 +421,7 @@ mod tests {
     }
 
     #[test]
-    fn asset_pick_per_kind() {
+    fn select_asset_picks_by_extension() {
         let r = release_with(&[
             ("scope_0.3.0_amd64.deb", "https://x/d.deb"),
             ("scope-0.3.0.x86_64.rpm", "https://x/d.rpm"),
@@ -437,14 +437,14 @@ mod tests {
     }
 
     #[test]
-    fn no_update_when_current() {
+    fn check_update_returns_none_when_current_is_newest() {
         let r = release_with(&[]);
         assert!(check_update("0.3.0", &r, InstallKind::Deb).is_none());
         assert!(check_update("0.4.0", &r, InstallKind::Deb).is_none());
     }
 
     #[test]
-    fn update_check_reports_manual_when_no_asset() {
+    fn check_update_falls_back_to_the_releases_url_without_an_asset() {
         let r = release_with(&[]);
         let check = check_update("0.2.0", &r, InstallKind::Deb).unwrap();
         assert_eq!(check.latest, "0.3.0");
@@ -453,7 +453,7 @@ mod tests {
     }
 
     #[test]
-    fn self_update_flags() {
+    fn can_self_update_is_true_for_known_install_kinds() {
         assert!(InstallKind::Deb.can_self_update());
         assert!(InstallKind::Rpm.can_self_update());
         assert!(InstallKind::AppImage.can_self_update());

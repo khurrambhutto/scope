@@ -14,12 +14,15 @@ pub struct Protection {
 }
 
 impl Protection {
+    /// The package/path is safe to act on.
     pub fn allowed() -> Self {
         Self {
             protected: false,
             reason: None,
         }
     }
+
+    /// The package/path must not be acted on. `reason` is shown to the user.
     pub fn denied(reason: impl Into<String>) -> Self {
         Self {
             protected: true,
@@ -168,23 +171,37 @@ mod tests {
     use super::*;
 
     #[test]
-    fn blocks_critical_apt() {
-        assert!(check_package(PackageSource::Apt, "ubuntu-desktop").protected);
-        assert!(check_package(PackageSource::Apt, "systemd").protected);
-        assert!(check_package(PackageSource::Apt, "linux-image-6.8.0-45-generic").protected);
-        assert!(check_package(PackageSource::Apt, "apt").protected);
-        assert!(check_package(PackageSource::Apt, "pkexec").protected);
+    fn check_package_blocks_critical_apt_packages() {
+        for name in ["ubuntu-desktop", "systemd", "apt", "pkexec"] {
+            assert!(
+                check_package(PackageSource::Apt, name).protected,
+                "expected '{name}' to be protected"
+            );
+        }
     }
 
     #[test]
-    fn blocks_libraries_but_allows_libreoffice() {
-        assert!(check_package(PackageSource::Apt, "libssl3").protected);
-        assert!(check_package(PackageSource::Apt, "libgtk-3-0").protected);
+    fn check_package_blocks_kernel_images() {
+        assert!(check_package(PackageSource::Apt, "linux-image-6.8.0-45-generic").protected);
+    }
+
+    #[test]
+    fn check_package_blocks_shared_libraries() {
+        for name in ["libssl3", "libgtk-3-0"] {
+            assert!(
+                check_package(PackageSource::Apt, name).protected,
+                "expected '{name}' to be protected"
+            );
+        }
+    }
+
+    #[test]
+    fn check_package_allows_libreoffice_despite_the_lib_heuristic() {
         assert!(!check_package(PackageSource::Apt, "libreoffice-writer").protected);
     }
 
     #[test]
-    fn allows_regular_apps() {
+    fn check_package_allows_regular_apps_across_sources() {
         assert!(!check_package(PackageSource::Apt, "firefox").protected);
         assert!(!check_package(PackageSource::Apt, "vlc").protected);
         assert!(!check_package(PackageSource::Snap, "firefox").protected);
@@ -192,24 +209,34 @@ mod tests {
     }
 
     #[test]
-    fn blocks_snap_runtimes() {
-        assert!(check_package(PackageSource::Snap, "core20").protected);
-        assert!(check_package(PackageSource::Snap, "gtk-common-themes").protected);
-        assert!(check_package(PackageSource::Snap, "snapd").protected);
+    fn check_package_blocks_snap_runtimes() {
+        for name in ["core20", "gtk-common-themes", "snapd"] {
+            assert!(
+                check_package(PackageSource::Snap, name).protected,
+                "expected '{name}' to be protected"
+            );
+        }
     }
 
     /// AppImages are listed but uninstall/update is deliberately not supported
     /// yet: preview must yield a protected plan for every AppImage path.
     #[test]
-    fn blocks_all_appimage_operations() {
+    fn check_package_blocks_every_appimage_path() {
         for path in [
             "/opt/Firefox-130.0.AppImage",
             "/usr/local/bin/Firefox-130.0.AppImage",
             "/home/user/AppImages/app-1.2.AppImage",
         ] {
-            let protection = check_package(PackageSource::AppImage, path);
-            assert!(protection.protected, "expected '{path}' to be protected");
-            assert!(protection.reason.unwrap().contains("yet"));
+            assert!(
+                check_package(PackageSource::AppImage, path).protected,
+                "expected '{path}' to be protected"
+            );
         }
+    }
+
+    #[test]
+    fn check_package_explains_appimage_protection() {
+        let protection = check_package(PackageSource::AppImage, "/opt/Firefox-130.0.AppImage");
+        assert!(protection.reason.unwrap().contains("yet"));
     }
 }

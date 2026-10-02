@@ -63,6 +63,8 @@ pub(super) fn act(
 /// needs to know the visible set is already up to date.
 type FilterInputs = (String, SourceFilter, ViewMode, u64);
 
+/// The Scope window: header, filters, a virtualized package list with inline
+/// detail, and the uninstall/update dialog flow.
 pub struct ScopeApp {
     pub(super) search_input: Entity<TextInput>,
     pub(super) scan: Option<backend::Scan>,
@@ -98,6 +100,7 @@ pub struct ScopeApp {
 }
 
 impl ScopeApp {
+    /// Create the app state and kick off the first scan and updater check.
     pub fn new(cx: &mut Context<Self>) -> Self {
         let search_input = cx.new(TextInput::new);
         cx.observe(&search_input, |_this, _input, cx| cx.notify())
@@ -444,6 +447,31 @@ impl ScopeApp {
         out
     }
 
+    /// Updater banner (if any) plus either the scan error or the per-source
+    /// warnings, in the order they should stack.
+    fn banner_stack(&self, entity: &WeakEntity<ScopeApp>) -> Vec<AnyElement> {
+        let mut banners: Vec<AnyElement> = Vec::new();
+        if self.updater.show_banner() {
+            let busy = self.updater_busy;
+            banners.push(updater_banner(
+                &self.updater,
+                !busy,
+                act(entity, |this, cx| this.start_update(cx)),
+                act(entity, |this, cx| this.dismiss_updater(cx)),
+            ));
+        }
+        if let Some(error) = &self.error {
+            banners.push(banner(error, BannerKind::Error).into_any_element());
+        } else {
+            for (label, message) in self.source_warnings() {
+                banners.push(
+                    banner(&format!("{label}: {message}"), BannerKind::Warn).into_any_element(),
+                );
+            }
+        }
+        banners
+    }
+
     fn source_warnings(&self) -> Vec<(String, String)> {
         let Some(scan) = &self.scan else {
             return Vec::new();
@@ -501,26 +529,7 @@ impl Render for ScopeApp {
             .into_any_element()
         };
 
-        let warnings = self.source_warnings();
-        let mut banner_children: Vec<AnyElement> = Vec::new();
-        if self.updater.show_banner() {
-            let busy = self.updater_busy;
-            banner_children.push(updater_banner(
-                &self.updater,
-                !busy,
-                act(&entity, |this, cx| this.start_update(cx)),
-                act(&entity, |this, cx| this.dismiss_updater(cx)),
-            ));
-        }
-        if let Some(error) = &self.error {
-            banner_children.push(banner(error, BannerKind::Error).into_any_element());
-        } else {
-            for (label, message) in warnings {
-                banner_children.push(
-                    banner(&format!("{label}: {message}"), BannerKind::Warn).into_any_element(),
-                );
-            }
-        }
+        let banner_children = self.banner_stack(&entity);
 
         let footer = if self.loading {
             String::new()

@@ -20,6 +20,8 @@ pub struct DesktopApp {
     pub no_display: bool,
 }
 
+/// Parse one `.desktop` file into a [`DesktopApp`], or `None` when it cannot be
+/// read or carries no usable `Name`.
 pub fn parse(id: &str, path: &Path) -> Option<DesktopApp> {
     let content = fs::read_to_string(path).ok()?;
     let mut sections: HashMap<String, Vec<(String, String)>> = HashMap::new();

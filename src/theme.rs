@@ -222,10 +222,17 @@ mod tests {
     }
 
     #[test]
-    fn labels_are_stable_copy() {
+    fn source_label_covers_every_source() {
         assert_eq!(source_label(PackageSource::Apt), "APT");
+        assert_eq!(source_label(PackageSource::Snap), "Snap");
+        assert_eq!(source_label(PackageSource::Flatpak), "Flatpak");
         assert_eq!(source_label(PackageSource::AppImage), "AppImage");
+    }
+
+    #[test]
+    fn kind_label_covers_every_kind() {
         assert_eq!(kind_label(AppKind::Gui), "GUI");
+        assert_eq!(kind_label(AppKind::Cli), "CLI");
         assert_eq!(kind_label(AppKind::Unknown), "Unknown");
     }
 }
