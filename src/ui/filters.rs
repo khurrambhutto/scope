@@ -1,10 +1,10 @@
 //! Filter enums and the header filter bar: search, view toggle, selects, rescan.
 
 use gpui::prelude::*;
-use gpui::{div, img, px, AnyElement, Context, ImageSource, Resource};
+use gpui::{div, img, px, rgba, AnyElement, Context, ImageSource, Resource};
 
 use crate::domain::package::PackageSource;
-use crate::theme::{border, elev2};
+use crate::theme::{accent, border};
 
 use super::app_view::{act, ScopeApp};
 use super::widgets::{menu_item, select_widget, view_toggle_button};
@@ -69,6 +69,7 @@ impl ScopeApp {
             .rounded_full()
             .border_1()
             .border_color(border())
+            .hover(|this| this.border_color(accent()))
             .child(
                 view_toggle_button(
                     "view-uninstall",
@@ -140,13 +141,13 @@ impl ScopeApp {
             .flex()
             .items_center()
             .justify_center()
-            .p(px(8.))
-            .rounded(px(12.))
+            .size(px(34.))
+            .rounded_full()
             .border_1()
             .border_color(border())
             .cursor_pointer()
             .opacity(if self.refreshing { 0.5 } else { 1.0 })
-            .hover(|this| this.bg(elev2()))
+            .hover(|this| this.bg(rgba(0xffffff08)).border_color(accent()))
             .on_click(act(&entity, |this, cx| {
                 if !this.refreshing {
                     this.start_scan(cx);
@@ -156,7 +157,7 @@ impl ScopeApp {
                 img(ImageSource::Resource(Resource::Embedded(
                     ICON_REFRESH.into(),
                 )))
-                .size(px(16.))
+                .size(px(14.))
                 .flex_none(),
             );
 

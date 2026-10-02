@@ -9,11 +9,13 @@ use std::ops::Range;
 use gpui::{
     actions, div, fill, point, prelude::*, px, relative, rgb, rgba, size, App, Bounds, Context,
     CursorStyle, ElementId, ElementInputHandler, Entity, EntityInputHandler, FocusHandle, Focusable,
-    GlobalElementId, KeyBinding, LayoutId, MouseButton, MouseDownEvent, MouseMoveEvent,
+    FontWeight, GlobalElementId, KeyBinding, LayoutId, MouseButton, MouseDownEvent, MouseMoveEvent,
     MouseUpEvent, PaintQuad, Pixels, Point, ShapedLine, SharedString, Style, TextRun,
     UTF16Selection, UnderlineStyle, Window,
 };
 use unicode_segmentation::UnicodeSegmentation;
+
+use crate::theme::{accent, border};
 
 actions!(
     search_input,
@@ -586,14 +588,15 @@ impl Render for TextInput {
             .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
             .on_mouse_move(cx.listener(Self::on_mouse_move))
             .w(px(240.))
-            .h(px(34.))
-            .px(px(14.))
+            .px(px(16.))
+            .py(px(7.))
             .rounded_full()
             .border_1()
-            .border_color(rgb(0x2d2325))
-            .text_size(px(14.))
+            .border_color(border())
+            .text_size(px(13.))
+            .font_weight(FontWeight::MEDIUM)
             .text_color(rgb(0xefe6e4))
-            .hover(|this| this.bg(rgba(0xffffff08)))
+            .hover(|this| this.bg(rgba(0xffffff08)).border_color(accent()))
             .child(
                 div()
                     .w_full()

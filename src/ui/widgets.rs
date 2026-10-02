@@ -33,7 +33,9 @@ pub(super) fn view_toggle_button(
             .text_color(rgb(0xffffff))
         })
         .when(!active, |this| {
-            this.text_color(text_dim()).hover(|this| this.text_color(text()))
+            this.text_color(text_dim()).hover(|this| {
+                this.text_color(text()).bg(rgba(0xffffff08))
+            })
         })
         .on_click(on_click)
         .child(label)
@@ -61,7 +63,12 @@ pub(super) fn select_widget(
         .hover(|this| this.bg(rgba(0xffffff08)).border_color(accent()))
         .on_click(on_trigger)
         .when_some(value_label, |this, label| {
-            this.px(px(14.)).py(px(9.)).text_size(px(14.)).child(label)
+            this.px(px(18.))
+                .py(px(7.))
+                .text_size(px(13.))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(text_dim())
+                .child(label)
         })
         .when_some(icon, |this, icon| {
             this.px(px(12.)).py(px(8.)).child(
