@@ -1,7 +1,14 @@
 //! Filter enums and the header filter bar: search, view toggle, selects, rescan.
 
 use gpui_kit::prelude::*;
-use gpui_kit::{div, img, px, rgba, AnyElement, Context, ImageSource, Resource};
+use gpui_kit::{div, img, px, rems, rgba, AnyElement, Context, ImageSource, Resource};
+use gpui_kit::assets::IconName;
+use gpui_kit::component::{
+    Icon,
+    input::{
+        InputGroup, InputGroupAddon, InputGroupAddonAlignment, InputGroupInput, InputGroupText,
+    },
+};
 
 use crate::domain::package::PackageSource;
 use crate::theme::{accent, border};
@@ -56,6 +63,30 @@ pub(super) enum OpenSelect {
 }
 
 impl ScopeApp {
+    /// Kit search field: magnifier prefix, cleanable input, live result
+    /// count suffix. The query state lives in [`ScopeApp::search_input`];
+    /// typing emits `InputEvent::Change`, which re-renders the list.
+    fn search_box(&self, _cx: &mut Context<Self>) -> impl IntoElement {
+        let shown = self.entries.len();
+        let count = format!("{shown} result{}", if shown == 1 { "" } else { "s" });
+        InputGroup::new("scope-search")
+            .max_w(rems(24.))
+            .input(
+                InputGroupInput::new(&self.search_input)
+                    .aria_label("Search apps")
+                    .cleanable(true),
+            )
+            .addon(
+                InputGroupAddon::new("scope-search-icon")
+                    .child(Icon::new(IconName::Search).size_4()),
+            )
+            .addon(
+                InputGroupAddon::new("scope-search-count")
+                    .align(InputGroupAddonAlignment::InlineEnd)
+                    .child(InputGroupText::new().child(count)),
+            )
+    }
+
     pub(super) fn filters(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let entity = cx.entity().downgrade();
         let open = self.open_select;
@@ -169,7 +200,7 @@ impl ScopeApp {
             .pl(px(32.))
             .pr(px(16.))
             .py(px(12.))
-            .child(self.search_input.clone())
+            .child(self.search_box(cx))
             .child(view_toggle)
             .child(div().flex_1())
             .child(source_select)

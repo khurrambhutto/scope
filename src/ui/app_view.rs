@@ -13,15 +13,15 @@ use futures::StreamExt;
 use gpui_kit::prelude::*;
 use gpui_kit::{
     actions, div, linear_color_stop, linear_gradient, list, px, rgb, AnyElement, App, ClickEvent,
-    Context, Entity, IntoElement, KeyBinding, ListAlignment, ListState, Render, Window,
-    WeakEntity,
+    Context, Entity, IntoElement, KeyBinding, ListAlignment, ListState, Render, Subscription,
+    Window, WeakEntity,
 };
+use gpui_kit::component::input::{InputEvent, InputState};
 
 use crate::backend::{self, OpKind, OpMsg};
 use crate::domain::operations::{OperationPlan, OperationStage, PlanStore};
 use crate::domain::package::InstalledPackage;
 use crate::theme::{self, text, text_faint};
-use crate::ui::text_input::TextInput;
 
 use super::detail::detail_element;
 use super::dialog::Dialog;
@@ -66,7 +66,10 @@ type FilterInputs = (String, SourceFilter, ViewMode, u64);
 /// The Scope window: header, filters, a virtualized package list with inline
 /// detail, and the uninstall/update dialog flow.
 pub struct ScopeApp {
-    pub(super) search_input: Entity<TextInput>,
+    pub(super) search_input: Entity<InputState>,
+    /// Keeps the query-change subscription alive; dropping it would stop
+    /// list refreshes on typing.
+    _search_change: Subscription,
     pub(super) scan: Option<backend::Scan>,
     pub(super) loading: bool,
     pub(super) refreshing: bool,
@@ -101,16 +104,24 @@ pub struct ScopeApp {
 
 impl ScopeApp {
     /// Create the app state and kick off the first scan and updater check.
-    pub fn new(cx: &mut Context<Self>) -> Self {
-        let search_input = cx.new(TextInput::new);
-        cx.observe(&search_input, |_this, _input, cx| cx.notify())
-            .detach();
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let search_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Search apps"));
+        let search_change = cx.subscribe(
+            &search_input,
+            |_this, _input, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    cx.notify();
+                }
+            },
+        );
 
         // Paint the previous session's list immediately, then always rescan.
         let scan = backend::read_cache();
 
         let mut app = Self {
             search_input,
+            _search_change: search_change,
             scan,
             loading: true,
             refreshing: false,
@@ -141,8 +152,8 @@ impl ScopeApp {
 
     /// Focus the search box once the window exists.
     pub fn focus_search(&mut self, window: &mut Window, cx: &mut App) {
-        let handle = self.search_input.read(cx).focus_handle();
-        window.focus(&handle, cx);
+        self.search_input
+            .update(cx, |input, cx| input.focus(window, cx));
     }
 
     pub(super) fn start_scan(&mut self, cx: &mut Context<Self>) {
@@ -197,7 +208,7 @@ impl ScopeApp {
     /// list only when the visible set actually changed, so a plain rescan keeps
     /// the user's scroll position.
     fn sync_entries(&mut self, cx: &App) {
-        let query = self.search_input.read(cx).text().trim().to_lowercase();
+        let query = self.search_input.read(cx).value().trim().to_lowercase();
         let unchanged = self.filter_inputs.as_ref().is_some_and(|(q, s, v, g)| {
             *q == query
                 && *s == self.source_filter
@@ -564,15 +575,18 @@ impl Render for ScopeApp {
             // root: Escape closes the operation dialog, Ctrl/Cmd+R rescans.
             // Standard search behavior: Escape closes the dialog first,
             // otherwise clears the query if one is present.
-            .on_action(cx.listener(|this, _: &CloseDialog, _window, cx| {
+            .on_action(cx.listener(|this, _: &CloseDialog, window, cx| {
                 if this.dialog.is_some() {
                     this.close_dialog(cx);
                 } else {
+                    // Escape clears the query; programmatic set_value emits
+                    // no Change event, so notify the view explicitly.
                     this.search_input.update(cx, |input, cx| {
-                        if !input.is_empty() {
-                            input.clear(cx);
+                        if !input.value().is_empty() {
+                            input.set_value("", window, cx);
                         }
                     });
+                    cx.notify();
                 }
             }))
             .on_action(cx.listener(|this, _: &Rescan, _window, cx| {

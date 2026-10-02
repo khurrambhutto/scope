@@ -56,6 +56,11 @@ impl AssetSource for Assets {
         if let Some(bytes) = embedded_asset(path) {
             return Ok(Some(Cow::Borrowed(bytes)));
         }
+        // Kit component icons (e.g. the search magnifier) resolve through
+        // the kit asset bundle, which embeds its SVGs in the binary.
+        if let Some(bytes) = gpui_kit::assets::Assets.load(path)? {
+            return Ok(Some(bytes));
+        }
         std::fs::read(path)
             .map(Into::into)
             .map(Some)
@@ -80,7 +85,7 @@ fn main() {
             // Kit layers (theme, dialogs, notifications). Required once,
             // before opening windows or using any gpui-kit component.
             gpui_kit::init(cx);
-            cx.bind_keys(ui::text_input::key_bindings());
+            // Kit input handles its own keymap via init above.
             cx.bind_keys(ui::app_view::key_bindings());
 
             // Single-window app: closing the window quits.
@@ -112,7 +117,7 @@ fn main() {
                         focus: true,
                         ..Default::default()
                     },
-                    |_window, cx| cx.new(ScopeApp::new),
+                    |window, cx| cx.new(|cx| ScopeApp::new(window, cx)),
                 )
                 .expect("failed to open the Scope window");
 
