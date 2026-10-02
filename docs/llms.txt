@@ -1,28 +1,28 @@
-# Scope — Unified Linux Package & App Manager
+# Scope: Unified Linux Package & App Manager
 
-Scope is a desktop app for Linux that unifies APT, Snap, Flatpak, and AppImage into one place to see, update, and uninstall every app, regardless of how it was installed. It is built with Tauri v2 (Rust backend) and React.
+Scope is a desktop app for Linux that unifies APT, Snap, Flatpak, and AppImage into one list to see, update, and uninstall every app, regardless of how it was installed. It is built with Rust and Zed's GPUI, no webview.
 
 ## Pages
 
-- [Homepage](https://khurrambhutto.github.io/scope/) — Overview, features, download links, and FAQ for the Linux app manager.
-- [GitHub Repository](https://github.com/khurrambhutto/scope) — Source code, issues, and releases.
-- [Releases](https://github.com/khurrambhutto/scope/releases) — Pre-built `.deb`, `.rpm`, and `.AppImage` bundles.
+- [Homepage](https://khurrambhutto.github.io/scope/): Overview, features, download links, and FAQ for the Linux app manager.
+- [GitHub Repository](https://github.com/khurrambhutto/scope): Source code, issues, and releases.
+- [Releases](https://github.com/khurrambhutto/scope/releases): Pre-built `.deb` bundles.
 
 ## Key Information
 
 - **License**: MIT
 - **Platform**: Linux (Ubuntu / Debian first)
-- **Stack**: Tauri v2, Rust, React 19, TypeScript
+- **Stack**: Rust, Zed's GPUI
 - **Author**: Khurram Bhutto (https://khurrambhutto.tech/)
 - **Features**: Unified package list across APT, Snap, Flatpak, and AppImage; desktop-entry and icon enrichment; preview-first uninstall and update with Polkit privilege escalation
 
 ## Installation
 
-Download the `.deb`, `.rpm`, or `.AppImage` from [Releases](https://github.com/khurrambhutto/scope/releases). All three self-update in place: `.deb` and `.rpm` installs escalate with Polkit (`pkexec dpkg -i` / `rpm -U`), and the AppImage is rewritten. Source builds, AUR, and Flatpak installs can't self-update and must download the new version from Releases.
+Download the `.deb` from [Releases](https://github.com/khurrambhutto/scope/releases). The app checks the Releases API on startup and self-updates (`.deb` via `pkexec dpkg -i`); installs it can't self-update fall back to the Releases page. To build from source, install `libxkbcommon-x11-dev` and run `cargo run`.
 
 ```bash
-curl -LO https://github.com/khurrambhutto/scope/releases/latest/download/scope_0.2.0_amd64.deb
-sudo dpkg -i scope_0.2.0_amd64.deb
+curl -LO https://github.com/khurrambhutto/scope/releases/latest/download/scope_0.3.1_amd64.deb
+sudo apt install ./scope_0.3.1_amd64.deb
 ```
 
 ## FAQ

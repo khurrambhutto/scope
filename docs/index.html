@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Scope — Unified Linux Package Manager</title>
+  <title>Scope: Unified Linux Package Manager</title>
   <meta name="google-site-verification" content="msIjf5-oHmJg_58yKXFLPUWxh03z06n0ON6FUat3KZ4" />
   <meta name="description" content="Scope is a Linux desktop app for package visibility, cleanup planning, and safe maintenance workflows across APT, Snap, Flatpak, and AppImage.">
   <meta name="robots" content="index, follow, max-snippet:150, max-image-preview:large">
@@ -11,7 +11,7 @@
 
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://khurrambhutto.github.io/scope/">
-  <meta property="og:title" content="Scope — Unified Linux Package Manager">
+  <meta property="og:title" content="Scope: Unified Linux Package Manager">
   <meta property="og:description" content="A Linux desktop app for package visibility, cleanup planning, and safe maintenance workflows.">
   <meta property="og:image" content="https://khurrambhutto.github.io/scope/image.png">
   <meta property="og:image:width" content="1200">
@@ -19,7 +19,7 @@
   <meta property="og:site_name" content="Scope">
 
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Scope — Unified Linux Package Manager">
+  <meta name="twitter:title" content="Scope: Unified Linux Package Manager">
   <meta name="twitter:description" content="A Linux desktop app for package visibility, cleanup planning, and safe maintenance workflows.">
   <meta name="twitter:image" content="https://khurrambhutto.github.io/scope/image.png">
 
@@ -37,7 +37,7 @@
     "image": "https://khurrambhutto.github.io/scope/image.png",
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "Linux",
-    "softwareVersion": "0.2.0",
+    "softwareVersion": "0.3.1",
     "license": "https://opensource.org/licenses/MIT",
     "author": {
       "@type": "Person",
@@ -58,7 +58,7 @@
     "featureList": [
       "Multi-package manager support (APT, Snap, Flatpak, AppImage)",
       "Searchable package table",
-      "Built with Rust, Tauri, and React"
+      "Built with Rust and Zed's GPUI"
     ]
   }
   </script>
@@ -73,7 +73,7 @@
         "name": "What is Scope?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Scope is a Linux desktop app that scans multiple package managers — APT, Snap, Flatpak, and AppImage — into a single searchable view."
+          "text": "Scope is a Linux desktop app that scans APT, Snap, Flatpak, and AppImage into one searchable list."
         }
       },
       {
@@ -97,7 +97,7 @@
         "name": "How do I install Scope?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Run the Tauri app from source with npm install and npm run tauri dev. Release packaging will follow the GUI migration."
+          "text": "Install the .deb from GitHub Releases. To build from source, install libxkbcommon-x11-dev and run cargo run."
         }
       },
       {
@@ -105,7 +105,7 @@
         "name": "What are the system requirements for Scope?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Scope runs on Linux and uses the Tauri desktop stack with Rust backend commands."
+          "text": "Scope runs on Linux. It is a native Rust app built with Zed's GPUI, no webview."
         }
       }
     ]
@@ -411,7 +411,7 @@
   <main>
     <section class="hero">
       <h1>One interface for<br>all your packages.</h1>
-      <p>A Linux desktop app for package visibility, cleanup planning, and safe maintenance workflows across APT, Snap, Flatpak, and AppImage.</p>
+      <p>Scope scans APT, Snap, Flatpak, and AppImage into one list. Update or uninstall anything, with a preview before every change.</p>
       <div class="hero-buttons">
         <a href="https://github.com/khurrambhutto/scope/releases" target="_blank" rel="noopener noreferrer" class="btn btn-primary">Download</a>
         <a href="https://github.com/khurrambhutto/scope" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">View source</a>
@@ -421,15 +421,15 @@
     <section class="features" id="features">
       <div class="feature">
         <h3>Multi-source</h3>
-        <p>APT, Snap, Flatpak, and AppImage — all in one place. Filter by source from a desktop package table.</p>
+        <p>APT, Snap, Flatpak, and AppImage, all in one place. Filter by source.</p>
       </div>
       <div class="feature">
         <h3>Real-time search</h3>
         <p>Search across installed packages, descriptions, versions, paths, and common aliases.</p>
       </div>
       <div class="feature">
-        <h3>Built with Tauri</h3>
-        <p>Rust backend commands, a React interface, and explicit Tauri capabilities.</p>
+        <h3>Built with GPUI</h3>
+        <p>A native Rust app with Zed's GPUI shell. No webview, no Electron.</p>
       </div>
     </section>
 
@@ -451,7 +451,7 @@
           <span class="faq-icon">+</span>
         </div>
         <div class="faq-answer">
-          <p>Scope is a Linux desktop app that scans multiple package managers — APT, Snap, Flatpak, and AppImage — into a single searchable view.</p>
+          <p>Scope is a Linux desktop app that scans APT, Snap, Flatpak, and AppImage into one searchable list.</p>
         </div>
       </div>
       <div class="faq-item">
@@ -478,7 +478,7 @@
           <span class="faq-icon">+</span>
         </div>
         <div class="faq-answer">
-          <p>Run the Tauri app from source with <code>npm install</code> and <code>npm run tauri dev</code>. Release packaging will follow the GUI migration.</p>
+          <p>Install the <code>.deb</code> from GitHub Releases. To build from source, install <code>libxkbcommon-x11-dev</code> and run <code>cargo run</code>.</p>
         </div>
       </div>
       <div class="faq-item">
@@ -487,7 +487,7 @@
           <span class="faq-icon">+</span>
         </div>
         <div class="faq-answer">
-          <p>Scope runs on Linux and uses the Tauri desktop stack with Rust backend commands.</p>
+          <p>Scope runs on Linux. It is a native Rust app built with Zed's GPUI, no webview.</p>
         </div>
       </div>
     </section>
