@@ -14,9 +14,10 @@ mod ui;
 
 use std::borrow::Cow;
 
-use gpui::{
-    px, size, App, AppContext, Application, AssetSource, Bounds, SharedString, TitlebarOptions,
-    WindowBounds, WindowDecorations, WindowOptions,
+use gpui_kit::prelude::*;
+use gpui_kit::{
+    px, size, App, AssetSource, Bounds, SharedString, TitlebarOptions, WindowBounds,
+    WindowDecorations, WindowOptions,
 };
 
 use ui::app_view::ScopeApp;
@@ -44,6 +45,8 @@ fn embedded_asset(path: &str) -> Option<&'static [u8]> {
         "win-max.svg" => Some(include_bytes!("../assets/win-max.svg")),
         "win-close.svg" => Some(include_bytes!("../assets/win-close.svg")),
         "refresh.svg" => Some(include_bytes!("../assets/refresh.svg")),
+        "search.svg" => Some(include_bytes!("../assets/search.svg")),
+        "clear.svg" => Some(include_bytes!("../assets/clear.svg")),
         _ => None,
     }
 }
@@ -71,14 +74,17 @@ impl AssetSource for Assets {
 }
 
 fn main() {
-    Application::new()
+    gpui_kit::application()
         .with_assets(Assets)
         .run(|cx: &mut App| {
+            // Kit layers (theme, dialogs, notifications). Required once,
+            // before opening windows or using any gpui-kit component.
+            gpui_kit::init(cx);
             cx.bind_keys(ui::text_input::key_bindings());
             cx.bind_keys(ui::app_view::key_bindings());
 
             // Single-window app: closing the window quits.
-            cx.on_window_closed(|cx| {
+            cx.on_window_closed(|cx, _| {
                 if cx.windows().is_empty() {
                     cx.quit();
                 }
@@ -86,6 +92,11 @@ fn main() {
             .detach();
 
             let bounds = Bounds::centered(None, size(px(1120.), px(740.)), cx);
+            // Opened directly (not via gpui_kit::open_window) so no Base
+            // Root wraps the view: kit's Root draws a 1px WindowBorder frame
+            // on Linux that we don't want. Plain kit components only need
+            // the init above (theme is global); overlay components
+            // (dropdowns, popovers, toasts) need Root and stay out for now.
             let window = cx
                 .open_window(
                     WindowOptions {
@@ -127,6 +138,8 @@ mod tests {
             "win-max.svg",
             "win-close.svg",
             "refresh.svg",
+            "search.svg",
+            "clear.svg",
         ] {
             let ci_path = format!("/home/runner/work/scope/scope/assets/{name}");
             let bytes = embedded_asset(&ci_path);

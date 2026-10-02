@@ -6,16 +6,19 @@
 
 use std::ops::Range;
 
-use gpui::{
-    actions, div, fill, point, prelude::*, px, relative, rgb, rgba, size, App, Bounds, Context,
+use gpui_kit::{
+    actions, div, fill, img, point, prelude::*, px, relative, rgb, rgba, size, App, Bounds, Context,
     CursorStyle, ElementId, ElementInputHandler, Entity, EntityInputHandler, FocusHandle, Focusable,
-    FontWeight, GlobalElementId, KeyBinding, LayoutId, MouseButton, MouseDownEvent, MouseMoveEvent,
-    MouseUpEvent, PaintQuad, Pixels, Point, ShapedLine, SharedString, Style, TextRun,
-    UTF16Selection, UnderlineStyle, Window,
+    GlobalElementId, ImageSource, KeyBinding, LayoutId, MouseButton, MouseDownEvent, MouseMoveEvent,
+    MouseUpEvent, PaintQuad, Pixels, Point, Resource, ShapedLine, SharedString, Style, TextAlign,
+    TextRun, UTF16Selection, UnderlineStyle, Window,
 };
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::theme::{accent, border};
+use crate::theme::{accent, border, elev};
+
+const ICON_SEARCH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/search.svg");
+const ICON_CLEAR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/clear.svg");
 
 actions!(
     search_input,
@@ -67,12 +70,12 @@ pub struct TextInput {
 }
 
 impl TextInput {
-    /// Create an empty input with a "Search" placeholder.
+    /// Create an empty input with a "Search apps" placeholder.
     pub fn new(cx: &mut Context<Self>) -> Self {
         Self {
             focus_handle: cx.focus_handle(),
             content: "".into(),
-            placeholder: "Search".into(),
+            placeholder: "Search apps".into(),
             selected_range: 0..0,
             selection_reversed: false,
             marked_range: None,
@@ -85,6 +88,21 @@ impl TextInput {
     /// The current content as a shared string (cheap to clone).
     pub fn text(&self) -> SharedString {
         self.content.clone()
+    }
+
+    /// True when there is no query text (hides the trailing clear button).
+    pub fn is_empty(&self) -> bool {
+        self.content.is_empty()
+    }
+
+    /// Standard search-field clear: empty the query and reset the caret.
+    /// Keeps focus so typing can resume immediately.
+    pub fn clear(&mut self, cx: &mut Context<Self>) {
+        self.content = "".into();
+        self.selected_range = 0..0;
+        self.selection_reversed = false;
+        self.marked_range = None;
+        cx.notify();
     }
 
     /// Handle used to focus the input.
@@ -149,7 +167,8 @@ impl TextInput {
         }
     }
 
-    fn on_mouse_down(&mut self, event: &MouseDownEvent, _: &mut Window, cx: &mut Context<Self>) {
+    fn on_mouse_down(&mut self, event: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        window.focus(&self.focus_handle, cx);
         self.is_selecting = true;
         if event.modifiers.shift {
             self.select_to(self.index_for_mouse_position(event.position), cx);
@@ -353,13 +372,13 @@ impl EntityInputHandler for TextInput {
     fn bounds_for_range(
         &mut self,
         range_utf16: Range<usize>,
-        bounds: gpui::Bounds<Pixels>,
+        bounds: gpui_kit::Bounds<Pixels>,
         _window: &mut Window,
         _cx: &mut Context<Self>,
-    ) -> Option<gpui::Bounds<Pixels>> {
+    ) -> Option<gpui_kit::Bounds<Pixels>> {
         let last_layout = self.last_layout.as_ref()?;
         let range = self.range_from_utf16(&range_utf16);
-        Some(gpui::Bounds::from_corners(
+        Some(gpui_kit::Bounds::from_corners(
             point(
                 bounds.left() + last_layout.x_for_index(range.start),
                 bounds.top(),
@@ -373,7 +392,7 @@ impl EntityInputHandler for TextInput {
 
     fn character_index_for_point(
         &mut self,
-        point: gpui::Point<Pixels>,
+        point: gpui_kit::Point<Pixels>,
         _window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<usize> {
@@ -402,7 +421,7 @@ impl IntoElement for TextElement {
     }
 }
 
-impl gpui::Element for TextElement {
+impl gpui_kit::Element for TextElement {
     type RequestLayoutState = ();
     type PrepaintState = PrepaintState;
 
@@ -417,7 +436,7 @@ impl gpui::Element for TextElement {
     fn request_layout(
         &mut self,
         _id: Option<&GlobalElementId>,
-        _inspector_id: Option<&gpui::InspectorElementId>,
+        _inspector_id: Option<&gpui_kit::InspectorElementId>,
         window: &mut Window,
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
@@ -430,8 +449,8 @@ impl gpui::Element for TextElement {
     fn prepaint(
         &mut self,
         _id: Option<&GlobalElementId>,
-        _inspector_id: Option<&gpui::InspectorElementId>,
-        bounds: gpui::Bounds<Pixels>,
+        _inspector_id: Option<&gpui_kit::InspectorElementId>,
+        bounds: gpui_kit::Bounds<Pixels>,
         _request_layout: &mut Self::RequestLayoutState,
         window: &mut Window,
         cx: &mut App,
@@ -493,7 +512,7 @@ impl gpui::Element for TextElement {
             (
                 None,
                 Some(fill(
-                    gpui::Bounds::new(
+                    gpui_kit::Bounds::new(
                         point(bounds.left() + cursor_pos, bounds.top()),
                         size(px(2.), bounds.bottom() - bounds.top()),
                     ),
@@ -503,7 +522,7 @@ impl gpui::Element for TextElement {
         } else {
             (
                 Some(fill(
-                    gpui::Bounds::from_corners(
+                    gpui_kit::Bounds::from_corners(
                         point(
                             bounds.left() + line.x_for_index(selected_range.start),
                             bounds.top(),
@@ -513,7 +532,7 @@ impl gpui::Element for TextElement {
                             bounds.bottom(),
                         ),
                     ),
-                    gpui::rgba(0xd4504a30),
+                    gpui_kit::rgba(0xd4504a30),
                 )),
                 None,
             )
@@ -528,8 +547,8 @@ impl gpui::Element for TextElement {
     fn paint(
         &mut self,
         _id: Option<&GlobalElementId>,
-        _inspector_id: Option<&gpui::InspectorElementId>,
-        bounds: gpui::Bounds<Pixels>,
+        _inspector_id: Option<&gpui_kit::InspectorElementId>,
+        bounds: gpui_kit::Bounds<Pixels>,
         _request_layout: &mut Self::RequestLayoutState,
         prepaint: &mut Self::PrepaintState,
         window: &mut Window,
@@ -548,8 +567,15 @@ impl gpui::Element for TextElement {
             .line
             .take()
             .expect("line is shaped during prepaint");
-        line.paint(bounds.origin, window.line_height(), window, cx)
-            .expect("painting the shaped line succeeds");
+        line.paint(
+            bounds.origin,
+            window.line_height(),
+            TextAlign::Left,
+            None,
+            window,
+            cx,
+        )
+        .expect("painting the shaped line succeeds");
 
         if focus_handle.is_focused(window) {
             if let Some(cursor) = prepaint.cursor.take() {
@@ -565,11 +591,48 @@ impl gpui::Element for TextElement {
 }
 
 impl Render for TextInput {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Apple HIG / Material M3 search-field pattern: leading magnifier,
+        // descriptive placeholder, trailing clear button, focus ring only on
+        // focus (hover stays subtle so an empty field never glows orange).
+        let focused = self.focus_handle.is_focused(window);
+        let has_text = !self.content.is_empty();
+        let entity = cx.entity();
+
+        let clear_button = has_text.then(|| {
+            let entity = entity.clone();
+            div()
+                .id("search-clear")
+                .flex_none()
+                .flex()
+                .items_center()
+                .justify_center()
+                .size(px(18.))
+                .rounded_full()
+                .cursor_pointer()
+                .hover(|this| this.bg(rgba(0xffffff14)))
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .on_click(move |_, window, cx| {
+                    cx.stop_propagation();
+                    entity.update(cx, |this, cx| this.clear(cx));
+                    let handle = entity.read(cx).focus_handle();
+                    window.focus(&handle, cx);
+                })
+                .child(
+                    img(ImageSource::Resource(Resource::Embedded(
+                        ICON_CLEAR.into(),
+                    )))
+                    .size(px(10.))
+                    .flex_none(),
+                )
+        });
+
         div()
+            .id("search-field")
             .flex()
             .flex_row()
             .items_center()
+            .gap(px(8.))
             .key_context("TextInput")
             .track_focus(&self.focus_handle())
             .cursor(CursorStyle::IBeam)
@@ -587,21 +650,31 @@ impl Render for TextInput {
             .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
             .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
             .on_mouse_move(cx.listener(Self::on_mouse_move))
-            .w(px(240.))
-            .px(px(16.))
+            .w(px(260.))
+            .pl(px(12.))
+            .pr(if has_text { px(6.) } else { px(14.) })
             .py(px(7.))
             .rounded_full()
             .border_1()
-            .border_color(border())
-            .text_size(px(13.))
-            .font_weight(FontWeight::MEDIUM)
+            .border_color(if focused { accent() } else { border() })
+            .bg(elev())
+            .text_size(px(14.))
             .text_color(rgb(0xefe6e4))
-            .hover(|this| this.bg(rgba(0xffffff08)).border_color(accent()))
+            .hover(|this| this.bg(rgba(0xffffff08)))
+            .child(
+                img(ImageSource::Resource(Resource::Embedded(
+                    ICON_SEARCH.into(),
+                )))
+                .size(px(14.))
+                .flex_none(),
+            )
             .child(
                 div()
-                    .w_full()
-                    .child(TextElement { input: cx.entity() }),
+                    .flex_1()
+                    .min_w(px(0.))
+                    .child(TextElement { input: entity }),
             )
+            .children(clear_button)
     }
 }
 

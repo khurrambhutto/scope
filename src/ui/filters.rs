@@ -1,7 +1,7 @@
 //! Filter enums and the header filter bar: search, view toggle, selects, rescan.
 
-use gpui::prelude::*;
-use gpui::{div, img, px, rgba, AnyElement, Context, ImageSource, Resource};
+use gpui_kit::prelude::*;
+use gpui_kit::{div, img, px, rgba, AnyElement, Context, ImageSource, Resource};
 
 use crate::domain::package::PackageSource;
 use crate::theme::{accent, border};

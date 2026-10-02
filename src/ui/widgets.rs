@@ -1,7 +1,7 @@
 //! Small reusable building blocks shared by the list, filters, and dialog.
 
-use gpui::prelude::*;
-use gpui::{
+use gpui_kit::prelude::*;
+use gpui_kit::{
     deferred, div, img, linear_color_stop, linear_gradient, px, rgb, rgba, AnyElement, App,
     ClickEvent, FontWeight, Hsla, ImageSource, IntoElement, Resource, SharedString, Window,
 };
@@ -105,7 +105,7 @@ pub(super) fn menu_popup(items: Vec<AnyElement>) -> AnyElement {
 }
 
 pub(super) fn menu_item(
-    id: gpui::ElementId,
+    id: gpui_kit::ElementId,
     label: &'static str,
     selected: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,

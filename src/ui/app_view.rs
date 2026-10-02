@@ -10,8 +10,8 @@ use std::time::Duration;
 
 use futures::channel::{mpsc, oneshot};
 use futures::StreamExt;
-use gpui::prelude::*;
-use gpui::{
+use gpui_kit::prelude::*;
+use gpui_kit::{
     actions, div, linear_color_stop, linear_gradient, list, px, rgb, AnyElement, App, ClickEvent,
     Context, Entity, IntoElement, KeyBinding, ListAlignment, ListState, Render, Window,
     WeakEntity,
@@ -142,7 +142,7 @@ impl ScopeApp {
     /// Focus the search box once the window exists.
     pub fn focus_search(&mut self, window: &mut Window, cx: &mut App) {
         let handle = self.search_input.read(cx).focus_handle();
-        window.focus(&handle);
+        window.focus(&handle, cx);
     }
 
     pub(super) fn start_scan(&mut self, cx: &mut Context<Self>) {
@@ -562,8 +562,18 @@ impl Render for ScopeApp {
             .text_color(text())
             // Keyboard shortcuts bubble up from the focused search box to the
             // root: Escape closes the operation dialog, Ctrl/Cmd+R rescans.
+            // Standard search behavior: Escape closes the dialog first,
+            // otherwise clears the query if one is present.
             .on_action(cx.listener(|this, _: &CloseDialog, _window, cx| {
-                this.close_dialog(cx)
+                if this.dialog.is_some() {
+                    this.close_dialog(cx);
+                } else {
+                    this.search_input.update(cx, |input, cx| {
+                        if !input.is_empty() {
+                            input.clear(cx);
+                        }
+                    });
+                }
             }))
             .on_action(cx.listener(|this, _: &Rescan, _window, cx| {
                 if !this.refreshing {
