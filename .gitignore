@@ -1,3 +1,9 @@
+# Agent tooling (local-only)
+.agents/
+.commandcode/
+.pi/
+skills-lock.json
+
 # Build artifacts
 /target/
 /dist/

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/scope-logo.svg" alt="Scope" width="96" />
+  <img src="assets/scope-logo.svg" alt="Scope" width="96" />
 </p>
 
 <h1 align="center">Scope</h1>
@@ -12,23 +12,22 @@ Linux spreads software across APT, Snap, Flatpak, and AppImage. Scope scans all 
   <img src="docs/image.png" alt="Scope showing installed apps from APT, Snap, Flatpak, and AppImage in one list, with an inline detail panel and hover actions" width="720" />
 </p>
 
-Built with Tauri v2, a Rust backend and a React 19 frontend. Architecture and module rules live in [AGENTS.md](AGENTS.md).
+Built with Zed's GPUI (Rust binary in `src/`, no webview). Architecture and module rules live in [AGENTS.md](AGENTS.md).
 
 ## Install
 
-Download `.deb`, `.rpm`, or `.AppImage` from [GitHub Releases](https://github.com/khurrambhutto/scope/releases). The app self-updates after install.
+Download the `.deb` from [GitHub Releases](https://github.com/khurrambhutto/scope/releases). The app checks the Releases API on startup and self-updates (`.deb` via `pkexec dpkg -i`; `.rpm`/AppImage installs and unknown installs fall back to the Releases page).
 
 ```bash
 # Ubuntu / Debian
 sudo apt install ./scope_<version>_amd64.deb
 ```
 
-Build from source (Rust stable, Node 20+, WebKitGTK dev headers):
+Build from source (Rust stable; Linux needs GPUI system deps, notably `libxkbcommon-x11-dev`):
 
 ```bash
-sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-npm install
-npm run tauri dev
+sudo apt install libxkbcommon-x11-dev
+cargo run
 ```
 
 ## How it works
@@ -45,11 +44,12 @@ Works today:
 - Desktop-entry enrichment and freedesktop icon theme resolution
 - Uninstall with preview, Polkit auth, and a protected-package deny-list
 - Update with preview for APT, Snap, and Flatpak
-- Self-updater with download progress
-- Release pipeline producing `.deb`, `.rpm`, and `.AppImage`
+- Self-updater banner (checks GitHub Releases, one-click install for self-updatable installs)
+- Release pipeline producing `.deb` (Ubuntu first)
 
 Not yet:
 
+- `.rpm` and `.AppImage` release artifacts (installs of those kinds fall back to manual download)
 - AppImage uninstall and update (AppImages are listed only)
 - Snap target version in the update preview
 - Whole-system cleanup and disk usage views
@@ -58,17 +58,17 @@ Not yet:
 ## Development
 
 ```bash
-npm run build                                  # type-check and build frontend
-cargo check --manifest-path src-tauri/Cargo.toml
-cargo test  --manifest-path src-tauri/Cargo.toml
-npm run tauri dev                              # run the app
+cargo run
+cargo check
+cargo test
+cargo clippy
 ```
 
-Run the build and cargo checks before submitting. Safety-sensitive backend changes need targeted Rust tests first.
+Run all three checks before submitting. Safety-sensitive backend changes need targeted Rust tests first.
 
-Good first contributions are AppImage auto-update (`src-tauri/src/operations/update.rs`), Snap target versions (`src-tauri/src/scanner/snap.rs`), frontend tests (none exist yet), and new scanners through the `Scanner` trait (`src-tauri/src/scanner/`).
+Good first contributions are AppImage auto-update (`src/domain/operations/update.rs`), Snap target versions (`src/domain/scanner/snap.rs`), `.rpm`/AppImage release artifacts (`.github/workflows/release.yml`), and new scanners through the `Scanner` trait (`src/domain/scanner/`).
 
-Keep business logic in the domain modules and keep Tauri command handlers thin. PRs welcome.
+Keep feature logic in domain modules; `main.rs` and `app_view.rs` only compose and wire, `backend.rs` stays a thin orchestration layer. PRs welcome.
 
 ## License
 
