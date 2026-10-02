@@ -25,7 +25,7 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 
 use crate::domain::package::{AppKind, InstalledPackage, PackageSource};
-use crate::domain::scanner::Scanner;
+use crate::domain::scanner::{ScanReport, Scanner};
 use crate::domain::system::{capture_stdout, which};
 
 pub struct SnapScanner;
@@ -49,8 +49,8 @@ impl Scanner for SnapScanner {
         Box::pin(async { which("snap") && Path::new("/var/lib/snapd").exists() })
     }
 
-    fn scan(&self) -> Pin<Box<dyn Future<Output = Result<Vec<InstalledPackage>>> + Send + '_>> {
-        Box::pin(scan())
+    fn scan(&self) -> Pin<Box<dyn Future<Output = Result<ScanReport>> + Send + '_>> {
+        Box::pin(async { scan().await.map(ScanReport::ok) })
     }
 }
 

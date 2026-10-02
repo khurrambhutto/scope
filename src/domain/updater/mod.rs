@@ -107,7 +107,7 @@ fn parse_parts(version: &str) -> (Vec<u64>, Option<String>) {
     let (core, suffix) = version.split_at(core_end);
     let numbers = core
         .split('.')
-        .map(|p| p.trim().parse::<u64>().unwrap_or(0))
+        .filter_map(|p| p.trim().parse::<u64>().ok())
         .collect();
     let suffix = if suffix.is_empty() {
         None
@@ -411,6 +411,13 @@ mod tests {
     fn strip_v_prefix() {
         assert_eq!(strip_v("v0.3.0"), "0.3.0");
         assert_eq!(strip_v("0.3.0"), "0.3.0");
+    }
+
+    #[test]
+    fn is_newer_ignores_unparsable_version_segments() {
+        // A garbage segment must be dropped, not silently compared as `0`.
+        assert!(is_newer("1.2", "1.2.5"));
+        assert!(!is_newer("1.2.5", "1.2.x"));
     }
 
     #[test]

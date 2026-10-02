@@ -84,10 +84,30 @@ pub trait Scanner: Send + Sync {
     fn is_available(&self) -> Pin<Box<dyn Future<Output = bool> + Send + '_>>;
 
     /// List installed packages for this source.
-    fn scan(&self) -> Pin<Box<dyn Future<Output = Result<Vec<InstalledPackage>>> + Send + '_>>;
+    fn scan(&self) -> Pin<Box<dyn Future<Output = Result<ScanReport>> + Send + '_>>;
 }
 
 use std::pin::Pin;
+
+/// Result of one source's scan: the packages plus an optional non-fatal warning.
+///
+/// A warning records a partial failure (for example, one Flatpak scope failed
+/// while the other succeeded). It is surfaced to the UI as a source warning
+/// without discarding the packages that were found.
+#[derive(Debug, Default)]
+pub struct ScanReport {
+    pub packages: Vec<InstalledPackage>,
+    pub warning: Option<String>,
+}
+
+impl ScanReport {
+    pub fn ok(packages: Vec<InstalledPackage>) -> Self {
+        Self {
+            packages,
+            warning: None,
+        }
+    }
+}
 
 /// Build the full set of scanners (in a stable order for predictable results).
 fn scanners() -> Vec<Box<dyn Scanner>> {
@@ -126,11 +146,11 @@ pub async fn scan_all() -> (Vec<InstalledPackage>, ScanAvailability) {
         join.spawn(async move {
             if scanner.is_available().await {
                 match scanner.scan().await {
-                    Ok(packages) => ScanOutcome {
+                    Ok(report) => ScanOutcome {
                         source,
                         available: true,
-                        packages,
-                        error: None,
+                        packages: report.packages,
+                        error: report.warning,
                     },
                     Err(e) => ScanOutcome {
                         source,

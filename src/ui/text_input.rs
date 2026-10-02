@@ -536,9 +536,12 @@ impl gpui::Element for TextElement {
         if let Some(selection) = prepaint.selection.take() {
             window.paint_quad(selection)
         }
-        let line = prepaint.line.take().unwrap();
+        let line = prepaint
+            .line
+            .take()
+            .expect("line is shaped during prepaint");
         line.paint(bounds.origin, window.line_height(), window, cx)
-            .unwrap();
+            .expect("painting the shaped line succeeds");
 
         if focus_handle.is_focused(window) {
             if let Some(cursor) = prepaint.cursor.take() {

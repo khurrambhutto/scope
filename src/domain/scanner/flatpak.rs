@@ -16,7 +16,7 @@ use std::pin::Pin;
 use anyhow::{Context, Result};
 
 use crate::domain::package::{AppKind, InstallScope, InstalledPackage, PackageSource};
-use crate::domain::scanner::Scanner;
+use crate::domain::scanner::{ScanReport, Scanner};
 use crate::domain::system::{capture_stdout, which, SCAN_TIMEOUT};
 
 pub struct FlatpakScanner;
@@ -30,12 +30,12 @@ impl Scanner for FlatpakScanner {
         Box::pin(async { which("flatpak") })
     }
 
-    fn scan(&self) -> Pin<Box<dyn Future<Output = Result<Vec<InstalledPackage>>> + Send + '_>> {
+    fn scan(&self) -> Pin<Box<dyn Future<Output = Result<ScanReport>> + Send + '_>> {
         Box::pin(scan())
     }
 }
 
-async fn scan() -> Result<Vec<InstalledPackage>> {
+async fn scan() -> Result<ScanReport> {
     // AppStream metadata is shared by both scopes and may reach the network, so
     // refresh it once while the two scope listings run.
     let appstream = tokio::spawn(refresh_appstream());
@@ -45,7 +45,7 @@ async fn scan() -> Result<Vec<InstalledPackage>> {
     );
     let _ = appstream.await;
 
-    let mut packages = merge_scopes(user, system)?;
+    let (mut packages, warning) = merge_scopes(user, system)?;
 
     // Update checks read AppStream data, so they run after the refresh.
     let (user_updates, system_updates) = tokio::join!(
@@ -55,7 +55,7 @@ async fn scan() -> Result<Vec<InstalledPackage>> {
     mark_updates(&mut packages, InstallScope::User, &user_updates);
     mark_updates(&mut packages, InstallScope::System, &system_updates);
 
-    Ok(packages)
+    Ok(ScanReport { packages, warning })
 }
 
 fn scope_flag(scope: InstallScope) -> &'static str {
@@ -72,16 +72,27 @@ async fn refresh_appstream() {
 }
 
 /// Combine the two scope listings, tolerating one scope failing.
+///
+/// A single-scope failure is not fatal, but it is no longer silent: the
+/// surviving packages come back alongside a warning that `scan_all` surfaces to
+/// the UI, so a half-empty Flatpak list is explained instead of invisible.
 fn merge_scopes(
     user: Result<Vec<InstalledPackage>>,
     system: Result<Vec<InstalledPackage>>,
-) -> Result<Vec<InstalledPackage>> {
+) -> Result<(Vec<InstalledPackage>, Option<String>)> {
     match (user, system) {
         (Ok(mut user_packages), Ok(mut system_packages)) => {
             user_packages.append(&mut system_packages);
-            Ok(user_packages)
+            Ok((user_packages, None))
         }
-        (Ok(packages), Err(_)) | (Err(_), Ok(packages)) => Ok(packages),
+        (Ok(packages), Err(err)) => Ok((
+            packages,
+            Some(format!("flatpak system scan failed: {err:#}")),
+        )),
+        (Err(err), Ok(packages)) => Ok((
+            packages,
+            Some(format!("flatpak user scan failed: {err:#}")),
+        )),
         (Err(user_err), Err(system_err)) => {
             Err(user_err.context(format!("flatpak system scan also failed: {system_err}")))
         }

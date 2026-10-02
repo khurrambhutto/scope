@@ -15,7 +15,7 @@ use tokio::fs;
 use walkdir::WalkDir;
 
 use crate::domain::package::{AppKind, InstalledPackage, PackageSource};
-use crate::domain::scanner::Scanner;
+use crate::domain::scanner::{ScanReport, Scanner};
 
 pub struct AppImageScanner {
     dirs: Vec<PathBuf>,
@@ -43,9 +43,9 @@ impl Scanner for AppImageScanner {
         Box::pin(async { true })
     }
 
-    fn scan(&self) -> Pin<Box<dyn Future<Output = Result<Vec<InstalledPackage>>> + Send + '_>> {
+    fn scan(&self) -> Pin<Box<dyn Future<Output = Result<ScanReport>> + Send + '_>> {
         let dirs = self.dirs.clone();
-        Box::pin(async move { scan(dirs).await })
+        Box::pin(async move { scan(dirs).await.map(ScanReport::ok) })
     }
 }
 
