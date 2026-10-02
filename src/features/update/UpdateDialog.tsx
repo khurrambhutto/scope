@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { InstalledPackage } from "../../shared/types/package";
 import type {
   OperationPlan,
@@ -9,9 +9,10 @@ import {
   previewUpdate,
   applyUpdate,
   onOperationStatus,
+  onOperationLog,
   isCancelledResult,
 } from "../../shared/api/operations";
-import { formatSize } from "../packages/format";
+import { formatSize, formatElapsed } from "../packages/format";
 
 type Phase = "loading" | "confirm" | "running" | "done" | "error";
 
@@ -28,6 +29,9 @@ export function UpdateDialog({ pkg, onClose, onUpdated }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [showLogs, setShowLogs] = useState(false);
   const [stage, setStage] = useState<OperationStage>("verifying");
+  const [lines, setLines] = useState<string[]>([]);
+  const [elapsed, setElapsed] = useState(0);
+  const logRef = useRef<HTMLPreElement | null>(null);
 
   // Build the preview plan when the dialog opens.
   useEffect(() => {
@@ -50,17 +54,37 @@ export function UpdateDialog({ pkg, onClose, onUpdated }: Props) {
     };
   }, [pkg.key]);
 
+  // Auto-scroll the live log to the newest line. The panel is display-only:
+  // `overflow: hidden` in CSS means the user cannot scroll it themselves.
+  useEffect(() => {
+    const el = logRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [lines]);
+
   async function confirm() {
     if (!plan) return;
     setPhase("running");
     setStage("verifying");
     setError(null);
-    let unlisten: (() => void) | undefined;
+    setLines([]);
+    setElapsed(0);
+    const startedAt = Date.now();
+    const timer = window.setInterval(
+      () => setElapsed(Math.floor((Date.now() - startedAt) / 1000)),
+      1000,
+    );
+    let unlistenStatus: (() => void) | undefined;
+    let unlistenLog: (() => void) | undefined;
     try {
       try {
-        unlisten = await onOperationStatus((status) => {
+        unlistenStatus = await onOperationStatus((status) => {
           if (status.plan_id === plan.plan_id) {
             setStage(status.stage);
+          }
+        });
+        unlistenLog = await onOperationLog((log) => {
+          if (log.plan_id === plan.plan_id) {
+            setLines((prev) => [...prev, log.line]);
           }
         });
       } catch {
@@ -76,7 +100,9 @@ export function UpdateDialog({ pkg, onClose, onUpdated }: Props) {
       setError(String(e));
       setPhase("error");
     } finally {
-      unlisten?.();
+      window.clearInterval(timer);
+      unlistenStatus?.();
+      unlistenLog?.();
     }
   }
 
@@ -169,20 +195,27 @@ export function UpdateDialog({ pkg, onClose, onUpdated }: Props) {
 
         {phase === "running" && (
           <div className="modal__body">
-            {stage === "verifying" ? (
-              <p className="modal__muted">
-                Checking that {title} can be updated…{" "}
-                {plan?.requires_auth &&
-                  "A system password prompt will appear next."}
+            <div className="run-head">
+              <div className="spinner" aria-hidden />
+              <p className="modal__muted run-head__text">
+                {stage === "verifying" ? (
+                  <>
+                    Checking that {title} can be updated…{" "}
+                    {plan?.requires_auth && "A system password prompt will appear next."}
+                  </>
+                ) : (
+                  <>
+                    Updating {title}…{" "}
+                    {plan?.requires_auth &&
+                      "If a password dialog appears, enter your administrator password."}
+                  </>
+                )}
               </p>
-            ) : (
-              <p className="modal__muted">
-                Updating {title}…{" "}
-                {plan?.requires_auth &&
-                  "If a password dialog appears, enter your administrator password."}
-              </p>
-            )}
-            <div className="spinner" aria-hidden />
+              <span className="run-head__timer">{formatElapsed(elapsed)}</span>
+            </div>
+            <pre className="modal__live-logs" ref={logRef}>
+              {lines.length ? lines.join("\n") : "Waiting for output…"}
+            </pre>
           </div>
         )}
 

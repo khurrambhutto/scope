@@ -132,12 +132,18 @@ pub fn revalidate(plan: &OperationPlan, probed: &super::probe::ProbedPackage) ->
     Ok(())
 }
 
-/// Execute the plan's update command for the given source, capturing logs.
-pub async fn apply(plan: &OperationPlan) -> OperationResult {
+/// Execute the plan's update command for the given source, streaming output.
+///
+/// `on_line` receives each output line as it is produced so the UI can show
+/// live progress during the possibly-lengthy download/install.
+pub async fn apply(
+    plan: &OperationPlan,
+    on_line: &(dyn Fn(&str) + Send + Sync),
+) -> OperationResult {
     match plan.source {
-        PackageSource::Apt => apt_update(&plan.package_id).await,
-        PackageSource::Snap => snap_refresh(&plan.package_id).await,
-        PackageSource::Flatpak => flatpak_update(&plan.package_id, plan.install_scope).await,
+        PackageSource::Apt => apt_update(&plan.package_id, on_line).await,
+        PackageSource::Snap => snap_refresh(&plan.package_id, on_line).await,
+        PackageSource::Flatpak => flatpak_update(&plan.package_id, plan.install_scope, on_line).await,
         PackageSource::AppImage => OperationResult {
             success: false,
             message: "AppImage auto-update is not yet implemented. Download the latest version from the project website.".into(),
@@ -147,32 +153,38 @@ pub async fn apply(plan: &OperationPlan) -> OperationResult {
     }
 }
 
-async fn apt_update(pkg: &str) -> OperationResult {
+async fn apt_update(pkg: &str, on_line: &(dyn Fn(&str) + Send + Sync)) -> OperationResult {
     run_elevated(
         "apt",
         &["install", "-y", pkg],
         AuthMethod::Pkexec,
         UPDATE_TIMEOUT,
+        on_line,
     )
     .await
 }
 
-async fn snap_refresh(pkg: &str) -> OperationResult {
+async fn snap_refresh(pkg: &str, on_line: &(dyn Fn(&str) + Send + Sync)) -> OperationResult {
     run_elevated(
         "snap",
         &["refresh", pkg],
         AuthMethod::Pkexec,
         UPDATE_TIMEOUT,
+        on_line,
     )
     .await
 }
 
-async fn flatpak_update(app_id: &str, scope: Option<InstallScope>) -> OperationResult {
+async fn flatpak_update(
+    app_id: &str,
+    scope: Option<InstallScope>,
+    on_line: &(dyn Fn(&str) + Send + Sync),
+) -> OperationResult {
     let (auth, args): (AuthMethod, Vec<&str>) = match scope {
         Some(InstallScope::User) => (AuthMethod::None, vec!["update", "-y", "--user", app_id]),
         Some(InstallScope::System) | None => (AuthMethod::Pkexec, vec!["update", "-y", "--system", app_id]),
     };
-    run_elevated("flatpak", &args, auth, UPDATE_TIMEOUT).await
+    run_elevated("flatpak", &args, auth, UPDATE_TIMEOUT, on_line).await
 }
 
 #[cfg(test)]

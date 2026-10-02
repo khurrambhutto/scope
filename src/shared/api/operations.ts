@@ -2,7 +2,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { OperationPlan, OperationResult, OperationStatus } from "../types/operations";
+import type { OperationLog, OperationPlan, OperationResult, OperationStatus } from "../types/operations";
 
 /// Ask the backend to build (and store) an uninstall preview plan for the
 /// package with the given backend key (`<source>:<package_id>`).
@@ -34,6 +34,16 @@ export function onOperationStatus(
   handler: (status: OperationStatus) => void,
 ): Promise<UnlistenFn> {
   return listen<OperationStatus>("operation-status", (event) => {
+    handler(event.payload);
+  });
+}
+
+/// Subscribe to live command output, one line at a time, while an apply
+/// command runs. Returns an unlisten function.
+export function onOperationLog(
+  handler: (log: OperationLog) => void,
+): Promise<UnlistenFn> {
+  return listen<OperationLog>("operation-log", (event) => {
     handler(event.payload);
   });
 }

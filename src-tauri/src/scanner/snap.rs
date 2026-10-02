@@ -210,7 +210,7 @@ fn parse_du_totals(stdout: &str) -> HashMap<String, u64> {
 /// Run `snap refresh --list` and mark snaps that have available updates.
 /// Note: the list shows current version, not the target, so we set
 /// `has_update = true` without a specific target version for v1.
-async fn check_updates(packages: &mut Vec<InstalledPackage>) {
+async fn check_updates(packages: &mut [InstalledPackage]) {
     let output = match capture_stdout("snap", &["refresh", "--list"], SNAP_TIMEOUT).await {
         Ok(o) => o,
         Err(_) => return,

@@ -710,6 +710,42 @@ body {
   word-break: break-word;
 }
 
+/* Live command output during an operation. Display-only: `overflow: hidden`
+ * blocks user scrolling, and the dialog scrolls it to the newest line itself. */
+.run-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.run-head .spinner {
+  flex: 0 0 auto;
+}
+.run-head__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+}
+.run-head__timer {
+  flex: 0 0 auto;
+  font-size: 13px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.modal__live-logs {
+  margin: 14px 0 0;
+  max-height: 200px;
+  overflow: hidden;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* ---------- Plan ---------- */
 .plan {
   margin: 0 0 14px;

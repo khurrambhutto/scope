@@ -131,15 +131,19 @@ pub fn revalidate(plan: &OperationPlan, probed: &super::probe::ProbedPackage) ->
     Ok(())
 }
 
-/// Execute the plan's uninstall command for the given source, capturing logs.
+/// Execute the plan's uninstall command for the given source, streaming output.
 ///
-/// AppImages never reach here: preview marks them protected and apply-time
-/// revalidation refuses them, so only package-manager sources execute.
-pub async fn apply(plan: &OperationPlan) -> OperationResult {
+/// `on_line` receives each output line as it is produced so the UI can show
+/// live progress. AppImages never reach here: preview marks them protected and
+/// apply-time revalidation refuses them, so only package-manager sources run.
+pub async fn apply(
+    plan: &OperationPlan,
+    on_line: &(dyn Fn(&str) + Send + Sync),
+) -> OperationResult {
     match plan.source {
-        PackageSource::Apt => apt_remove(&plan.package_id).await,
-        PackageSource::Snap => snap_remove(&plan.package_id).await,
-        PackageSource::Flatpak => flatpak_uninstall(&plan.package_id, plan.install_scope).await,
+        PackageSource::Apt => apt_remove(&plan.package_id, on_line).await,
+        PackageSource::Snap => snap_remove(&plan.package_id, on_line).await,
+        PackageSource::Flatpak => flatpak_uninstall(&plan.package_id, plan.install_scope, on_line).await,
         PackageSource::AppImage => {
             let _ = &plan.package_id;
             OperationResult {
@@ -152,27 +156,33 @@ pub async fn apply(plan: &OperationPlan) -> OperationResult {
     }
 }
 
-async fn apt_remove(pkg: &str) -> OperationResult {
+async fn apt_remove(pkg: &str, on_line: &(dyn Fn(&str) + Send + Sync)) -> OperationResult {
     run_elevated(
         "apt",
         &["remove", "-y", pkg],
         AuthMethod::Pkexec,
         UNINSTALL_TIMEOUT,
+        on_line,
     )
     .await
 }
 
-async fn snap_remove(pkg: &str) -> OperationResult {
+async fn snap_remove(pkg: &str, on_line: &(dyn Fn(&str) + Send + Sync)) -> OperationResult {
     run_elevated(
         "snap",
         &["remove", pkg],
         AuthMethod::Pkexec,
         UNINSTALL_TIMEOUT,
+        on_line,
     )
     .await
 }
 
-async fn flatpak_uninstall(app_id: &str, scope: Option<InstallScope>) -> OperationResult {
+async fn flatpak_uninstall(
+    app_id: &str,
+    scope: Option<InstallScope>,
+    on_line: &(dyn Fn(&str) + Send + Sync),
+) -> OperationResult {
     let (auth, args): (AuthMethod, Vec<&str>) = match scope {
         Some(InstallScope::User) => (AuthMethod::None, vec!["uninstall", "-y", "--user", app_id]),
         Some(InstallScope::System) | None => (
@@ -180,7 +190,7 @@ async fn flatpak_uninstall(app_id: &str, scope: Option<InstallScope>) -> Operati
             vec!["uninstall", "-y", "--system", app_id],
         ),
     };
-    run_elevated("flatpak", &args, auth, UNINSTALL_TIMEOUT).await
+    run_elevated("flatpak", &args, auth, UNINSTALL_TIMEOUT, on_line).await
 }
 
 #[cfg(test)]
