@@ -562,8 +562,18 @@ impl Render for ScopeApp {
             .text_color(text())
             // Keyboard shortcuts bubble up from the focused search box to the
             // root: Escape closes the operation dialog, Ctrl/Cmd+R rescans.
+            // Standard search behavior: Escape closes the dialog first,
+            // otherwise clears the query if one is present.
             .on_action(cx.listener(|this, _: &CloseDialog, _window, cx| {
-                this.close_dialog(cx)
+                if this.dialog.is_some() {
+                    this.close_dialog(cx);
+                } else {
+                    this.search_input.update(cx, |input, cx| {
+                        if !input.is_empty() {
+                            input.clear(cx);
+                        }
+                    });
+                }
             }))
             .on_action(cx.listener(|this, _: &Rescan, _window, cx| {
                 if !this.refreshing {
