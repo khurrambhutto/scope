@@ -1,0 +1,30 @@
+[package]
+name = "scope-gpui"
+version = "0.2.0"
+edition = "2021"
+description = "Scope — a GPUI rewrite of the Tauri desktop app"
+
+[[bin]]
+name = "scope-gpui"
+path = "src/main.rs"
+
+[dependencies]
+# UI framework (Zed's GPUI, published on crates.io). On Linux this links
+# libxkbcommon-x11, so `libxkbcommon-x11-dev` is a build requirement.
+gpui = "0.2"
+
+# Shared backend: the exact same modules the Tauri shell compiles, pulled in
+# with #[path] so there is a single source of truth (see src/backend.rs).
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+tokio = { version = "1", features = ["process", "fs", "rt-multi-thread", "time", "macros", "sync"] }
+walkdir = "2"
+regex = "1"
+futures = "0.3"
+unicode-segmentation = "1"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1

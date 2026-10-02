@@ -41,6 +41,7 @@ src-tauri/src/            Rust backend
   system/                 command execution, timeouts, pkexec
   package.rs              InstalledPackage plus source/scope enums
 docs/                     GitHub Pages site
+gpui-rewrite/             second shell: same product on GPUI (see below)
 ```
 
 ## Module rules
@@ -50,6 +51,17 @@ docs/                     GitHub Pages site
 - Frontend reaches the backend only through `shared/api/` wrappers. Changing a Rust DTO means updating its TypeScript twin in the same change.
 - A feature that fits no existing module gets a new small module instead of growing a file past a few hundred lines.
 - Keep screens operational and app-like, never marketing pages.
+
+## GPUI rewrite
+
+`gpui-rewrite/` is a second shell for the same product, built on Zed's GPUI instead of Tauri + React. It targets the same screen, palette, and flows.
+
+- The backend domain modules are reused verbatim: `gpui-rewrite/src/main.rs` pulls in `src-tauri/src/{package,scanner,desktop_entries,icons,safety,system,operations}` with `#[path]`. Those files stay the single source of truth for both shells — change a scanner, DTO, or safety rule once and both pick it up.
+- `src-tauri/src/commands/*` and `lib.rs` are Tauri-only and are not reused. `gpui-rewrite/src/backend.rs` is the thin, GPUI-side equivalent: scan + persistent cache, plan preview/apply with streamed logs, and `scope-icon://` URL decoding.
+- UI lives in `gpui-rewrite/src/ui/`: `app_view.rs` is the screen (header, filters, list, inline detail, uninstall/update dialogs), `text_input.rs` is the search field, `theme.rs` holds the palette and formatting helpers.
+- Run `cd gpui-rewrite && cargo run`. Linux needs GPUI's system deps; notably `libxkbcommon-x11-dev`, because GPUI links `-lxkbcommon-x11` on Linux even in Wayland-only builds.
+- Check/test with `cargo check --manifest-path gpui-rewrite/Cargo.toml` and `cargo test --manifest-path gpui-rewrite/Cargo.toml`.
+- Not yet ported: the self-updater banner and list virtualization (the list renders all filtered rows).
 
 ## Product rules
 
@@ -108,6 +120,8 @@ npm run build
 cargo check --manifest-path src-tauri/Cargo.toml
 cargo test  --manifest-path src-tauri/Cargo.toml
 ```
+
+For the GPUI shell, also: `cargo check --manifest-path gpui-rewrite/Cargo.toml`.
 
 - All three pass and the diff contains only the requested change.
 - Safety-sensitive backend changes (probe, revalidate, deny-list, PlanStore) ship with targeted Rust tests in the same change.

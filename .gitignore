@@ -1,5 +1,6 @@
 # Build artifacts
 /target
+/gpui-rewrite/target
 /dist
 /node_modules
 
