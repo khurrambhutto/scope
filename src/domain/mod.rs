@@ -11,3 +11,4 @@ pub mod package;
 pub mod safety;
 pub mod scanner;
 pub mod system;
+pub mod updater;

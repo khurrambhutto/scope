@@ -198,6 +198,68 @@ pub fn spawn_apply(plans: PlanStore, plan: OperationPlan, tx: mpsc::UnboundedSen
     });
 }
 
+/// Check for a self-update off the UI thread.
+pub fn spawn_updater_check(
+    tx: oneshot::Sender<Option<crate::domain::updater::UpdateCheck>>,
+) {
+    std::thread::spawn(move || {
+        let result = block_on(async {
+            let kind = crate::domain::updater::detect();
+            let current = env!("CARGO_PKG_VERSION").to_string();
+            match crate::domain::updater::fetch_latest().await {
+                Ok(release) => crate::domain::updater::check_update(&current, &release, kind),
+                Err(_) => None,
+            }
+        });
+        let _ = tx.send(result);
+    });
+}
+
+/// Download and install a self-update, streaming progress to the UI.
+/// Reuses [`OpMsg`] so the banner needs no new message pump.
+pub fn spawn_updater_install(
+    check: crate::domain::updater::UpdateCheck,
+    tx: mpsc::UnboundedSender<OpMsg>,
+) {
+    std::thread::spawn(move || {
+        block_on(async move {
+            let _ = tx.unbounded_send(OpMsg::Stage(OperationStage::Verifying));
+            let _ = tx.unbounded_send(OpMsg::Log(format!(
+                "Downloading Scope {} ...",
+                check.latest
+            )));
+            let file_name = check
+                .url
+                .rsplit('/')
+                .next()
+                .filter(|s| !s.is_empty())
+                .unwrap_or("scope-update");
+            let dest = std::env::temp_dir().join(file_name);
+            let line_tx = tx.clone();
+            let on_line = move |line: &str| {
+                let _ = line_tx.unbounded_send(OpMsg::Log(line.to_string()));
+            };
+            if let Err(e) = crate::domain::updater::download(&check.url, &dest, &on_line).await
+            {
+                let _ = tx.unbounded_send(OpMsg::Done(failed(format!(
+                    "Update download failed: {e}"
+                ))));
+                return;
+            }
+            let _ = tx.unbounded_send(OpMsg::Stage(OperationStage::Executing));
+            let appimage_target = std::env::var_os("APPIMAGE").map(std::path::PathBuf::from);
+            let result = crate::domain::updater::install(
+                check.kind,
+                &dest,
+                appimage_target.as_deref(),
+                &on_line,
+            )
+            .await;
+            let _ = tx.unbounded_send(OpMsg::Done(result));
+        });
+    });
+}
+
 /// Turn the backend's `scope-icon://localhost/<percent-encoded-path>` URL back
 /// into the on-disk path GPUI can load directly. The URL is produced by
 /// `icons::icon_url`, so decoding it is lossless.

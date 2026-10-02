@@ -28,6 +28,7 @@ use super::dialog::Dialog;
 use super::filters::{KindFilter, OpenSelect, SourceFilter, ViewMode};
 use super::row::row_element;
 use super::title_bar::title_bar;
+use super::updater::{updater_banner, UpdaterStatus, UpdaterUi};
 use super::widgets::{banner, empty_state, loading_state, BannerKind};
 
 // ---- Keyboard actions ------------------------------------------------------
@@ -75,6 +76,8 @@ pub struct ScopeApp {
     pub(super) open_select: Option<OpenSelect>,
     pub(super) dialog: Option<Dialog>,
     pub(super) plans: PlanStore,
+    pub(super) updater: UpdaterUi,
+    pub(super) updater_busy: bool,
     /// Virtualized list state; scroll position lives here, not in the element.
     pub(super) list_state: ListState,
     /// The currently visible rows, owned so the list's render closure can read
@@ -111,6 +114,8 @@ impl ScopeApp {
             open_select: None,
             dialog: None,
             plans: PlanStore::default(),
+            updater: UpdaterUi::default(),
+            updater_busy: false,
             // A non-zero overdraw is required: the list measures rows lazily,
             // and unmeasured rows count as zero height, so without look-ahead
             // the scrollable extent would equal only the visible rows.
@@ -121,6 +126,7 @@ impl ScopeApp {
             scan_gen: 0,
         };
         app.start_scan(cx);
+        app.check_updater(cx);
         app
     }
 
@@ -327,6 +333,89 @@ impl ScopeApp {
         cx.notify();
     }
 
+    pub(super) fn check_updater(&mut self, cx: &mut Context<Self>) {
+        self.updater.status = UpdaterStatus::Checking;
+        let (tx, rx) = oneshot::channel::<Option<crate::domain::updater::UpdateCheck>>();
+        std::thread::spawn(move || {
+            // Small delay so the list paints first, like the old shell.
+            std::thread::sleep(Duration::from_millis(1000));
+            backend::spawn_updater_check(tx);
+        });
+        let entity = cx.entity().downgrade();
+        cx.spawn(async move |_this, cx| {
+            let result = rx.await;
+            entity
+                .update(cx, |this, cx| {
+                    match result {
+                        Ok(Some(check)) => {
+                            this.updater.check = Some(check);
+                            this.updater.status = UpdaterStatus::Available;
+                        }
+                        _ => {
+                            this.updater.status = UpdaterStatus::Dismissed;
+                        }
+                    }
+                    cx.notify();
+                })
+                .ok();
+        })
+        .detach();
+    }
+
+    pub(super) fn dismiss_updater(&mut self, cx: &mut Context<Self>) {
+        self.updater.status = UpdaterStatus::Dismissed;
+        cx.notify();
+    }
+
+    pub(super) fn start_update(&mut self, cx: &mut Context<Self>) {
+        let Some(check) = self.updater.check.clone() else {
+            return;
+        };
+        if self.updater_busy {
+            return;
+        }
+        self.updater_busy = true;
+        self.updater.status = UpdaterStatus::Installing;
+        self.updater.lines.clear();
+        let (tx, mut rx) = mpsc::unbounded::<OpMsg>();
+        backend::spawn_updater_install(check, tx);
+        let entity = cx.entity().downgrade();
+        cx.spawn(async move |_this, cx| {
+            while let Some(message) = rx.next().await {
+                entity
+                    .update(cx, |this, cx| match message {
+                        OpMsg::Stage(_) => {
+                            cx.notify();
+                        }
+                        OpMsg::Log(line) => {
+                            this.updater.lines.push(line);
+                            if this.updater.lines.len() > 5 {
+                                let excess = this.updater.lines.len() - 5;
+                                this.updater.lines.drain(..excess);
+                            }
+                            cx.notify();
+                        }
+                        OpMsg::Done(result) => {
+                            this.updater_busy = false;
+                            if result.success {
+                                this.updater.status = UpdaterStatus::Ready;
+                                this.updater.message = format!(
+                                    "{}. Restart Scope to use the new version.",
+                                    result.message
+                                );
+                            } else {
+                                this.updater.status = UpdaterStatus::Error;
+                                this.updater.message = result.message.clone();
+                            }
+                            cx.notify();
+                        }
+                    })
+                    .ok();
+            }
+        })
+        .detach();
+    }
+
     fn filtered(&self, query: &str) -> Vec<InstalledPackage> {
         let mut out = Vec::new();
         let Some(scan) = &self.scan else {
@@ -409,6 +498,15 @@ impl Render for ScopeApp {
 
         let warnings = self.source_warnings();
         let mut banner_children: Vec<AnyElement> = Vec::new();
+        if self.updater.show_banner() {
+            let busy = self.updater_busy;
+            banner_children.push(updater_banner(
+                &self.updater,
+                !busy,
+                act(&entity, |this, cx| this.start_update(cx)),
+                act(&entity, |this, cx| this.dismiss_updater(cx)),
+            ));
+        }
         if let Some(error) = self.error.clone() {
             banner_children.push(banner(&error, BannerKind::Error).into_any_element());
         } else {
