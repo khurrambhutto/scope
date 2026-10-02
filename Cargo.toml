@@ -9,9 +9,9 @@ name = "scope-gpui"
 path = "src/main.rs"
 
 [dependencies]
-# UI framework (Zed's GPUI, published on crates.io). On Linux this links
-# libxkbcommon-x11, so `libxkbcommon-x11-dev` is a build requirement.
-gpui = "0.2"
+# UI framework via GPUI Kit (brings the pinned gpui-pre snapshot; do not
+# list gpui separately). On Linux this needs libxkbcommon-x11-dev etc.
+gpui-kit = "0.7"
 
 # Shared backend: the exact same modules the Tauri shell compiles, pulled in
 # with #[path] so there is a single source of truth (see src/backend.rs).
@@ -19,7 +19,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"
 thiserror = "2"
-tokio = { version = "1", features = ["process", "fs", "rt", "time", "macros", "sync"] }
+tokio = { version = "1", features = ["process", "fs", "rt", "time", "macros", "sync", "io-util"] }
 walkdir = "2"
 regex = "1"
 futures = "0.3"
@@ -45,3 +45,17 @@ needless_collect = { level = "deny", priority = 9 }
 opt-level = 3
 lto = "thin"
 codegen-units = 1
+
+# Per gpui-kit installation docs: dev builds leave the framework
+# unoptimized and feel sluggish. Optimize framework deps in dev while
+# keeping our own code debuggable. Slows the first compile, not required.
+[profile.dev.package]
+gpui-pre = { opt-level = 3 }
+gpui-pre-macros = { opt-level = 3 }
+gpui-pre-platform = { opt-level = 3 }
+gpui-component = { opt-level = 3 }
+gpui-kit = { opt-level = 3 }
+gpui-kit-assets = { opt-level = 3 }
+rustybuzz = { opt-level = 3 }
+taffy = { opt-level = 3 }
+ttf-parser = { opt-level = 3 }

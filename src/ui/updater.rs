@@ -3,8 +3,8 @@
 //! Small module so `app_view.rs` stays composition-only: this owns the
 //! updater status machine, `app_view` owns the async pumps that drive it.
 
-use gpui::prelude::*;
-use gpui::{div, px, AnyElement, IntoElement, SharedString};
+use gpui_kit::prelude::*;
+use gpui_kit::{div, px, AnyElement, IntoElement, SharedString};
 
 use crate::domain::operations::OperationResult;
 use crate::domain::updater::UpdateCheck;
@@ -139,8 +139,8 @@ impl UpdaterUi {
 pub fn updater_banner(
     ui: &UpdaterUi,
     can_act: bool,
-    on_update: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-    on_dismiss: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+    on_update: impl Fn(&gpui_kit::ClickEvent, &mut gpui_kit::Window, &mut gpui_kit::App) + 'static,
+    on_dismiss: impl Fn(&gpui_kit::ClickEvent, &mut gpui_kit::Window, &mut gpui_kit::App) + 'static,
 ) -> AnyElement {
     let kind = match ui.status {
         UpdaterStatus::Error { .. } => BannerKind::Error,

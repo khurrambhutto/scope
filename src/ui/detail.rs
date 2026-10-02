@@ -1,7 +1,7 @@
 //! Inline detail panel shown beneath the selected row.
 
-use gpui::prelude::*;
-use gpui::{div, px, rgba, AnyElement, FontWeight};
+use gpui_kit::prelude::*;
+use gpui_kit::{div, px, rgba, AnyElement, FontWeight};
 
 use crate::domain::package::InstalledPackage;
 use crate::theme::{self, display_title, text_dim};

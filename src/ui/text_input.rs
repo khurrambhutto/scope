@@ -6,12 +6,12 @@
 
 use std::ops::Range;
 
-use gpui::{
+use gpui_kit::{
     actions, div, fill, img, point, prelude::*, px, relative, rgb, rgba, size, App, Bounds, Context,
     CursorStyle, ElementId, ElementInputHandler, Entity, EntityInputHandler, FocusHandle, Focusable,
     GlobalElementId, ImageSource, KeyBinding, LayoutId, MouseButton, MouseDownEvent, MouseMoveEvent,
-    MouseUpEvent, PaintQuad, Pixels, Point, Resource, ShapedLine, SharedString, Style, TextRun,
-    UTF16Selection, UnderlineStyle, Window,
+    MouseUpEvent, PaintQuad, Pixels, Point, Resource, ShapedLine, SharedString, Style, TextAlign,
+    TextRun, UTF16Selection, UnderlineStyle, Window,
 };
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -168,7 +168,7 @@ impl TextInput {
     }
 
     fn on_mouse_down(&mut self, event: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
-        window.focus(&self.focus_handle);
+        window.focus(&self.focus_handle, cx);
         self.is_selecting = true;
         if event.modifiers.shift {
             self.select_to(self.index_for_mouse_position(event.position), cx);
@@ -372,13 +372,13 @@ impl EntityInputHandler for TextInput {
     fn bounds_for_range(
         &mut self,
         range_utf16: Range<usize>,
-        bounds: gpui::Bounds<Pixels>,
+        bounds: gpui_kit::Bounds<Pixels>,
         _window: &mut Window,
         _cx: &mut Context<Self>,
-    ) -> Option<gpui::Bounds<Pixels>> {
+    ) -> Option<gpui_kit::Bounds<Pixels>> {
         let last_layout = self.last_layout.as_ref()?;
         let range = self.range_from_utf16(&range_utf16);
-        Some(gpui::Bounds::from_corners(
+        Some(gpui_kit::Bounds::from_corners(
             point(
                 bounds.left() + last_layout.x_for_index(range.start),
                 bounds.top(),
@@ -392,7 +392,7 @@ impl EntityInputHandler for TextInput {
 
     fn character_index_for_point(
         &mut self,
-        point: gpui::Point<Pixels>,
+        point: gpui_kit::Point<Pixels>,
         _window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<usize> {
@@ -421,7 +421,7 @@ impl IntoElement for TextElement {
     }
 }
 
-impl gpui::Element for TextElement {
+impl gpui_kit::Element for TextElement {
     type RequestLayoutState = ();
     type PrepaintState = PrepaintState;
 
@@ -436,7 +436,7 @@ impl gpui::Element for TextElement {
     fn request_layout(
         &mut self,
         _id: Option<&GlobalElementId>,
-        _inspector_id: Option<&gpui::InspectorElementId>,
+        _inspector_id: Option<&gpui_kit::InspectorElementId>,
         window: &mut Window,
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
@@ -449,8 +449,8 @@ impl gpui::Element for TextElement {
     fn prepaint(
         &mut self,
         _id: Option<&GlobalElementId>,
-        _inspector_id: Option<&gpui::InspectorElementId>,
-        bounds: gpui::Bounds<Pixels>,
+        _inspector_id: Option<&gpui_kit::InspectorElementId>,
+        bounds: gpui_kit::Bounds<Pixels>,
         _request_layout: &mut Self::RequestLayoutState,
         window: &mut Window,
         cx: &mut App,
@@ -512,7 +512,7 @@ impl gpui::Element for TextElement {
             (
                 None,
                 Some(fill(
-                    gpui::Bounds::new(
+                    gpui_kit::Bounds::new(
                         point(bounds.left() + cursor_pos, bounds.top()),
                         size(px(2.), bounds.bottom() - bounds.top()),
                     ),
@@ -522,7 +522,7 @@ impl gpui::Element for TextElement {
         } else {
             (
                 Some(fill(
-                    gpui::Bounds::from_corners(
+                    gpui_kit::Bounds::from_corners(
                         point(
                             bounds.left() + line.x_for_index(selected_range.start),
                             bounds.top(),
@@ -532,7 +532,7 @@ impl gpui::Element for TextElement {
                             bounds.bottom(),
                         ),
                     ),
-                    gpui::rgba(0xd4504a30),
+                    gpui_kit::rgba(0xd4504a30),
                 )),
                 None,
             )
@@ -547,8 +547,8 @@ impl gpui::Element for TextElement {
     fn paint(
         &mut self,
         _id: Option<&GlobalElementId>,
-        _inspector_id: Option<&gpui::InspectorElementId>,
-        bounds: gpui::Bounds<Pixels>,
+        _inspector_id: Option<&gpui_kit::InspectorElementId>,
+        bounds: gpui_kit::Bounds<Pixels>,
         _request_layout: &mut Self::RequestLayoutState,
         prepaint: &mut Self::PrepaintState,
         window: &mut Window,
@@ -567,8 +567,15 @@ impl gpui::Element for TextElement {
             .line
             .take()
             .expect("line is shaped during prepaint");
-        line.paint(bounds.origin, window.line_height(), window, cx)
-            .expect("painting the shaped line succeeds");
+        line.paint(
+            bounds.origin,
+            window.line_height(),
+            TextAlign::Left,
+            None,
+            window,
+            cx,
+        )
+        .expect("painting the shaped line succeeds");
 
         if focus_handle.is_focused(window) {
             if let Some(cursor) = prepaint.cursor.take() {
@@ -608,7 +615,8 @@ impl Render for TextInput {
                 .on_click(move |_, window, cx| {
                     cx.stop_propagation();
                     entity.update(cx, |this, cx| this.clear(cx));
-                    window.focus(&entity.read(cx).focus_handle);
+                    let handle = entity.read(cx).focus_handle();
+                    window.focus(&handle, cx);
                 })
                 .child(
                     img(ImageSource::Resource(Resource::Embedded(

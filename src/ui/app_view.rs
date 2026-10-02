@@ -10,8 +10,8 @@ use std::time::Duration;
 
 use futures::channel::{mpsc, oneshot};
 use futures::StreamExt;
-use gpui::prelude::*;
-use gpui::{
+use gpui_kit::prelude::*;
+use gpui_kit::{
     actions, div, linear_color_stop, linear_gradient, list, px, rgb, AnyElement, App, ClickEvent,
     Context, Entity, IntoElement, KeyBinding, ListAlignment, ListState, Render, Window,
     WeakEntity,
@@ -142,7 +142,7 @@ impl ScopeApp {
     /// Focus the search box once the window exists.
     pub fn focus_search(&mut self, window: &mut Window, cx: &mut App) {
         let handle = self.search_input.read(cx).focus_handle();
-        window.focus(&handle);
+        window.focus(&handle, cx);
     }
 
     pub(super) fn start_scan(&mut self, cx: &mut Context<Self>) {

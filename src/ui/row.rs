@@ -1,7 +1,7 @@
 //! One row in the package list: icon, title/meta line, hover action button.
 
-use gpui::prelude::*;
-use gpui::{div, img, px, rgba, rgb, AnyElement, FontWeight, Hsla, WeakEntity};
+use gpui_kit::prelude::*;
+use gpui_kit::{div, img, px, rgba, rgb, AnyElement, FontWeight, Hsla, WeakEntity};
 
 use crate::backend::{self, OpKind};
 use crate::domain::package::InstalledPackage;

@@ -14,9 +14,10 @@ mod ui;
 
 use std::borrow::Cow;
 
-use gpui::{
-    px, size, App, AppContext, Application, AssetSource, Bounds, SharedString, TitlebarOptions,
-    WindowBounds, WindowDecorations, WindowOptions,
+use gpui_kit::prelude::*;
+use gpui_kit::{
+    px, size, App, AssetSource, Bounds, SharedString, TitlebarOptions, WindowBounds,
+    WindowDecorations, WindowOptions,
 };
 
 use ui::app_view::ScopeApp;
@@ -73,14 +74,17 @@ impl AssetSource for Assets {
 }
 
 fn main() {
-    Application::new()
+    gpui_kit::application()
         .with_assets(Assets)
         .run(|cx: &mut App| {
+            // Kit layers (theme, dialogs, notifications). Required once,
+            // before opening windows or using any gpui-kit component.
+            gpui_kit::init(cx);
             cx.bind_keys(ui::text_input::key_bindings());
             cx.bind_keys(ui::app_view::key_bindings());
 
             // Single-window app: closing the window quits.
-            cx.on_window_closed(|cx| {
+            cx.on_window_closed(|cx, _| {
                 if cx.windows().is_empty() {
                     cx.quit();
                 }
@@ -88,27 +92,29 @@ fn main() {
             .detach();
 
             let bounds = Bounds::centered(None, size(px(1120.), px(740.)), cx);
-            let window = cx
-                .open_window(
-                    WindowOptions {
-                        window_bounds: Some(WindowBounds::Windowed(bounds)),
-                        titlebar: Some(TitlebarOptions {
-                            title: Some("Scope".into()),
-                            ..Default::default()
-                        }),
-                        app_id: Some("scope".into()),
-                        // GNOME on Wayland has no server-side decorations, so the
-                        // app draws its own title bar (see `ui::app_view::title_bar`).
-                        window_decorations: Some(WindowDecorations::Client),
-                        focus: true,
+            let (window, view) = gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(bounds)),
+                    titlebar: Some(TitlebarOptions {
+                        title: Some("Scope".into()),
                         ..Default::default()
-                    },
-                    |_window, cx| cx.new(ScopeApp::new),
-                )
-                .expect("failed to open the Scope window");
+                    }),
+                    app_id: Some("scope".into()),
+                    // GNOME on Wayland has no server-side decorations, so the
+                    // app draws its own title bar (see `ui::app_view::title_bar`).
+                    window_decorations: Some(WindowDecorations::Client),
+                    focus: true,
+                    ..Default::default()
+                },
+                cx,
+                |_window, cx| cx.new(ScopeApp::new),
+            )
+            .expect("failed to open the Scope window");
 
             window
-                .update(cx, |app, window, cx| app.focus_search(window, cx))
+                .update(cx, |_, window, cx| {
+                    view.update(cx, |app, cx| app.focus_search(window, cx));
+                })
                 .ok();
             cx.activate(true);
         });

@@ -3,7 +3,7 @@
 //! Mirrors the palette and copy in the original `src/App.css` / `src/features/
 //! packages/format.ts` so the GPUI rewrite reads the same as the Tauri build.
 
-use gpui::{rgb, Hsla};
+use gpui_kit::{rgb, Hsla};
 
 use crate::domain::package::{AppKind, InstalledPackage, PackageSource};
 

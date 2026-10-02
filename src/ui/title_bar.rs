@@ -1,8 +1,8 @@
 //! Client-side title bar. GNOME on Wayland ships no server-side decorations, so
 //! the app draws its own controls; GPUI drives them through `Window` methods.
 
-use gpui::prelude::*;
-use gpui::{div, img, px, rgb, svg, FontWeight, ImageSource, MouseButton, Resource, Window, WindowControlArea};
+use gpui_kit::prelude::*;
+use gpui_kit::{div, img, px, rgb, svg, FontWeight, ImageSource, MouseButton, Resource, Window, WindowControlArea};
 
 use crate::theme::{danger, elev2, text_dim};
 
@@ -89,7 +89,7 @@ pub(super) fn window_control_button(
     id: &'static str,
     icon: &'static str,
     area: WindowControlArea,
-    hover_bg: gpui::Hsla,
+    hover_bg: gpui_kit::Hsla,
     action: impl Fn(&mut Window) + 'static,
 ) -> impl IntoElement {
     div()

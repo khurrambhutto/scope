@@ -4,7 +4,7 @@ Linux desktop app that unifies installed packages and apps across APT, Snap, Fla
 
 ## Stack
 
-- GPUI shell (Zed's GPUI, no webview). Rust binary in `src/`, `Cargo.toml` at root.
+- GPUI shell via the `gpui-kit 0.7` facade (Zed's GPUI snapshot, no webview). Rust binary in `src/`, `Cargo.toml` at root.
 - `tokio` for async process execution with per-command timeouts. DTOs are `serde` in Rust.
 - History: the domain was vendored from the old Tauri backend (`src-tauri/`, React in `src/`). Tauri is archived on tag `tauri-final` / branch `archive/tauri`.
 
@@ -57,6 +57,7 @@ docs/                     GitHub Pages site
 ## GPUI notes
 
 - Run `cargo run`. Linux needs GPUI's system deps; notably `libxkbcommon-x11-dev`, because GPUI links `-lxkbcommon-x11` on Linux even in Wayland-only builds.
+- Depend on `gpui-kit` alone (it brings the pinned `gpui-pre` snapshot); never list `gpui` separately. Import UI types via `use gpui_kit::*` / `gpui_kit::prelude::*`. Windows open through `gpui_kit::open_window` after `gpui_kit::init`, so the view sits under Base `Root`.
 - The crate pins `[lints]` in its `Cargo.toml` (`unsafe_code = "forbid"`, deny `dbg_macro`/`todo`/`unimplemented`).
 - Not yet ported: the self-updater banner.
 

@@ -2,8 +2,8 @@
 
 use std::time::Duration;
 
-use gpui::prelude::*;
-use gpui::{div, px, rgba, rgb, AnyElement, App, ClickEvent, FontWeight, WeakEntity, Window};
+use gpui_kit::prelude::*;
+use gpui_kit::{div, px, rgba, rgb, AnyElement, App, ClickEvent, FontWeight, WeakEntity, Window};
 
 use crate::backend::OpKind;
 use crate::domain::operations::{OperationPlan, OperationResult, OperationStage};
@@ -365,7 +365,7 @@ fn running_body(
 /// A simple pulsing dot standing in for the CSS spinner (GPUI has no
 /// transform animation on `Div`, so we animate opacity instead).
 fn spinner() -> impl IntoElement {
-    use gpui::{Animation, AnimationExt};
+    use gpui_kit::{Animation, AnimationExt};
     div()
         .flex_none()
         .size(px(10.))
