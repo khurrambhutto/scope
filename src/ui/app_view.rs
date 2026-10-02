@@ -405,7 +405,7 @@ impl ScopeApp {
                                 );
                             } else {
                                 this.updater.status = UpdaterStatus::Error;
-                                this.updater.message = result.message.clone();
+                                this.updater.message = result.message;
                             }
                             cx.notify();
                         }
