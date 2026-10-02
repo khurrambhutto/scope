@@ -81,15 +81,14 @@ pub fn format_elapsed(seconds: u64) -> String {
 
 /// Colored-initials fallback for packages without a resolvable icon.
 pub fn initials(name: &str) -> String {
-    let parts: Vec<&str> = name
+    let mut parts = name
         .trim()
         .split(|c: char| c.is_whitespace() || c == '_' || c == '-')
-        .filter(|p| !p.is_empty())
-        .collect();
-    match parts.as_slice() {
-        [] => "?".to_string(),
-        [only] => only.chars().take(2).collect::<String>().to_uppercase(),
-        [first, second, ..] => {
+        .filter(|p| !p.is_empty());
+    match (parts.next(), parts.next()) {
+        (None, _) => "?".to_string(),
+        (Some(only), None) => only.chars().take(2).collect::<String>().to_uppercase(),
+        (Some(first), Some(second)) => {
             let a = first.chars().next().unwrap_or('?');
             let b = second.chars().next().unwrap_or('?');
             format!("{a}{b}").to_uppercase()
@@ -223,10 +222,17 @@ mod tests {
     }
 
     #[test]
-    fn labels_are_stable_copy() {
+    fn source_label_covers_every_source() {
         assert_eq!(source_label(PackageSource::Apt), "APT");
+        assert_eq!(source_label(PackageSource::Snap), "Snap");
+        assert_eq!(source_label(PackageSource::Flatpak), "Flatpak");
         assert_eq!(source_label(PackageSource::AppImage), "AppImage");
+    }
+
+    #[test]
+    fn kind_label_covers_every_kind() {
         assert_eq!(kind_label(AppKind::Gui), "GUI");
+        assert_eq!(kind_label(AppKind::Cli), "CLI");
         assert_eq!(kind_label(AppKind::Unknown), "Unknown");
     }
 }

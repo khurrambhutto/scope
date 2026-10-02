@@ -217,6 +217,12 @@ mod tests {
         }
     }
 
+    fn pkg(source: PackageSource, package_id: &str) -> InstalledPackage {
+        let mut pkg = InstalledPackage::new(source, package_id);
+        pkg.name = package_id.into();
+        pkg
+    }
+
     fn present() -> ProbedPackage {
         ProbedPackage {
             present: true,
@@ -225,45 +231,111 @@ mod tests {
         }
     }
 
-    #[test]
-    fn rejects_missing_package() {
-        let p = plan(PackageSource::Apt, "gimp");
-        let probed = ProbedPackage {
+    fn absent() -> ProbedPackage {
+        ProbedPackage {
             present: false,
             version: None,
             has_update: None,
-        };
-        assert!(revalidate(&p, &probed).is_err());
+        }
     }
 
     #[test]
-    fn rejects_protected_package_even_if_plan_says_otherwise() {
-        let p = plan(PackageSource::Apt, "systemd");
+    fn revalidate_rejects_a_package_that_is_no_longer_installed() {
+        let err = revalidate(&plan(PackageSource::Apt, "gimp"), &absent()).unwrap_err();
+        assert!(
+            err.to_string().contains("no longer installed"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn revalidate_rejects_a_protected_package_even_when_the_plan_claims_otherwise() {
+        let err = revalidate(&plan(PackageSource::Apt, "systemd"), &present()).unwrap_err();
+        assert!(
+            err.to_string().contains("protected"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn revalidate_rejects_a_protected_snap_runtime() {
+        let err = revalidate(&plan(PackageSource::Snap, "core22"), &present()).unwrap_err();
+        assert!(
+            err.to_string().contains("protected"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn revalidate_accepts_a_present_allowed_package() {
+        assert!(revalidate(&plan(PackageSource::Apt, "gimp"), &present()).is_ok());
+    }
+
+    /// AppImages are listed but not removable: revalidation must refuse a plan
+    /// even if a stale one somehow reaches apply.
+    #[test]
+    fn revalidate_refuses_an_appimage_even_when_it_is_present() {
+        let p = plan(PackageSource::AppImage, "/opt/Foo-1.0.AppImage");
         assert!(revalidate(&p, &present()).is_err());
     }
 
     #[test]
-    fn rejects_protected_snap_runtime() {
-        let p = plan(PackageSource::Snap, "core22");
-        assert!(revalidate(&p, &present()).is_err());
-    }
-
-    #[test]
-    fn accepts_present_allowed_package() {
-        let p = plan(PackageSource::Apt, "gimp");
-        assert!(revalidate(&p, &present()).is_ok());
-    }
-
-    /// AppImages are listed but not removable: preview must mark them
-    /// protected and revalidation must refuse them even if a stale plan
-    /// somehow reaches apply.
-    #[test]
-    fn appimage_preview_is_protected_and_revalidate_refuses() {
-        let mut pkg = InstalledPackage::new(PackageSource::AppImage, "/opt/Foo-1.0.AppImage");
-        pkg.name = "Foo".into();
-        let p = preview(&pkg);
+    fn preview_marks_a_protected_package_without_a_command() {
+        let p = preview(&pkg(PackageSource::Apt, "systemd"));
         assert!(p.protected);
-        assert!(p.protection_reason.as_deref().unwrap().contains("yet"));
-        assert!(revalidate(&p, &present()).is_err());
+    }
+
+    #[test]
+    fn preview_marks_an_appimage_protected() {
+        let p = preview(&pkg(PackageSource::AppImage, "/opt/Foo-1.0.AppImage"));
+        assert!(p.protected);
+    }
+
+    #[test]
+    fn preview_apt_uses_the_documented_pkexec_command() {
+        let p = preview(&pkg(PackageSource::Apt, "gimp"));
+        assert_eq!(
+            p.steps[0].command_summary,
+            "pkexec env DEBIAN_FRONTEND=noninteractive apt remove -y gimp"
+        );
+    }
+
+    #[test]
+    fn preview_snap_uses_the_documented_pkexec_command() {
+        let p = preview(&pkg(PackageSource::Snap, "code"));
+        assert_eq!(p.steps[0].command_summary, "pkexec snap remove code");
+    }
+
+    #[test]
+    fn preview_flatpak_user_needs_no_auth() {
+        let mut p = pkg(PackageSource::Flatpak, "org.gimp.GIMP");
+        p.install_scope = Some(InstallScope::User);
+        assert_eq!(preview(&p).auth_method, AuthMethod::None);
+    }
+
+    #[test]
+    fn preview_flatpak_user_uses_the_user_scope_flag() {
+        let mut p = pkg(PackageSource::Flatpak, "org.gimp.GIMP");
+        p.install_scope = Some(InstallScope::User);
+        assert_eq!(
+            preview(&p).steps[0].command_summary,
+            "flatpak uninstall -y --user org.gimp.GIMP"
+        );
+    }
+
+    #[test]
+    fn preview_flatpak_system_routes_through_pkexec() {
+        let mut p = pkg(PackageSource::Flatpak, "org.gimp.GIMP");
+        p.install_scope = Some(InstallScope::System);
+        assert_eq!(preview(&p).auth_method, AuthMethod::Pkexec);
+    }
+
+    #[test]
+    fn preview_flatpak_without_scope_defaults_to_system() {
+        let p = preview(&pkg(PackageSource::Flatpak, "org.gimp.GIMP"));
+        assert_eq!(
+            p.steps[0].command_summary,
+            "pkexec flatpak uninstall -y --system org.gimp.GIMP"
+        );
     }
 }

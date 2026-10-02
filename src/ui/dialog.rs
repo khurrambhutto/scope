@@ -130,65 +130,68 @@ impl ScopeApp {
             } => done_body(entity, result, *show_logs),
         };
 
-        div()
-            .id("modal-overlay")
-            .absolute()
-            .top_0()
-            .right_0()
-            .bottom_0()
-            .left_0()
-            .flex()
-            .items_center()
-            .justify_center()
-            .bg(rgba(0x00000099))
-            .on_click(act(entity, |this, cx| this.close_dialog(cx)))
-            .child(
-                div()
-                    .id("modal-card")
-                    .on_click(|_ev: &ClickEvent, _window: &mut Window, cx: &mut App| {
-                        cx.stop_propagation();
-                    })
-                    .w(px(560.))
-                    .max_h(px(600.))
-                    .overflow_y_scroll()
-                    .rounded(px(16.))
-                    .border_1()
-                    .border_color(border())
-                    .bg(elev())
-                    .shadow_lg()
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .px(px(20.))
-                            .py(px(16.))
-                            .border_b_1()
-                            .border_color(border())
-                            .child(
-                                div()
-                                    .text_size(px(17.))
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .child(heading),
-                            )
-                            .child(
-                                div()
-                                    .id("modal-close")
-                                    .cursor_pointer()
-                                    .px(px(6.))
-                                    .rounded(px(6.))
-                                    .text_color(text_dim())
-                                    .hover(|this| {
-                                        this.text_color(text()).bg(elev2())
-                                    })
-                                    .on_click(act(entity, |this, cx| this.close_dialog(cx)))
-                                    .child("✕"),
-                            ),
-                    )
-                    .child(body),
-            )
-            .into_any_element()
+        modal_shell(heading, body, entity)
     }
+}
+
+/// The modal overlay and card chrome shared by every dialog phase.
+fn modal_shell(heading: String, body: AnyElement, entity: &WeakEntity<ScopeApp>) -> AnyElement {
+    div()
+        .id("modal-overlay")
+        .absolute()
+        .top_0()
+        .right_0()
+        .bottom_0()
+        .left_0()
+        .flex()
+        .items_center()
+        .justify_center()
+        .bg(rgba(0x00000099))
+        .on_click(act(entity, |this, cx| this.close_dialog(cx)))
+        .child(
+            div()
+                .id("modal-card")
+                .on_click(|_ev: &ClickEvent, _window: &mut Window, cx: &mut App| {
+                    cx.stop_propagation();
+                })
+                .w(px(560.))
+                .max_h(px(600.))
+                .overflow_y_scroll()
+                .rounded(px(16.))
+                .border_1()
+                .border_color(border())
+                .bg(elev())
+                .shadow_lg()
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .px(px(20.))
+                        .py(px(16.))
+                        .border_b_1()
+                        .border_color(border())
+                        .child(
+                            div()
+                                .text_size(px(17.))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child(heading),
+                        )
+                        .child(
+                            div()
+                                .id("modal-close")
+                                .cursor_pointer()
+                                .px(px(6.))
+                                .rounded(px(6.))
+                                .text_color(text_dim())
+                                .hover(|this| this.text_color(text()).bg(elev2()))
+                                .on_click(act(entity, |this, cx| this.close_dialog(cx)))
+                                .child("✕"),
+                        ),
+                )
+                .child(body),
+        )
+        .into_any_element()
 }
 
 fn confirm_body(

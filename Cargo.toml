@@ -18,6 +18,7 @@ gpui = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"
+thiserror = "2"
 tokio = { version = "1", features = ["process", "fs", "rt", "time", "macros", "sync"] }
 walkdir = "2"
 regex = "1"
@@ -29,10 +30,16 @@ unicode-segmentation = "1"
 unsafe_code = "forbid"
 
 [lints.clippy]
+# Start from clippy's default set and make every warning fatal, so CI and
+# `cargo clippy -- -D warnings` agree.
+all = { level = "deny", priority = 10 }
 # No half-finished states may ship in either shell.
-dbg_macro = "deny"
-todo = "deny"
-unimplemented = "deny"
+dbg_macro = { level = "deny", priority = 11 }
+todo = { level = "deny", priority = 11 }
+unimplemented = { level = "deny", priority = 11 }
+# Apollo rust-best-practices §2.3 recommendations.
+redundant_clone = { level = "deny", priority = 9 }
+needless_collect = { level = "deny", priority = 9 }
 
 [profile.release]
 opt-level = 3

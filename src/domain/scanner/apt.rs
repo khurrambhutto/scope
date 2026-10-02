@@ -13,7 +13,7 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 
 use crate::domain::package::{AppKind, InstalledPackage, PackageSource};
-use crate::domain::scanner::Scanner;
+use crate::domain::scanner::{ScanReport, Scanner};
 use crate::domain::system::{capture_stdout, which, SCAN_TIMEOUT};
 
 pub struct AptScanner;
@@ -27,8 +27,8 @@ impl Scanner for AptScanner {
         Box::pin(async { which("dpkg-query") && which("apt-mark") })
     }
 
-    fn scan(&self) -> Pin<Box<dyn Future<Output = Result<Vec<InstalledPackage>>> + Send + '_>> {
-        Box::pin(scan())
+    fn scan(&self) -> Pin<Box<dyn Future<Output = Result<ScanReport>> + Send + '_>> {
+        Box::pin(async { scan().await.map(ScanReport::ok) })
     }
 }
 
@@ -41,8 +41,10 @@ async fn scan() -> Result<Vec<InstalledPackage>> {
         .context("read manually-installed packages")?;
     let manual: HashSet<String> = manual
         .lines()
-        .map(|l| l.trim().to_string())
-        .filter(|l| !l.is_empty())
+        .filter_map(|l| {
+            let trimmed = l.trim();
+            (!trimmed.is_empty()).then(|| trimmed.to_string())
+        })
         .collect();
     if manual.is_empty() {
         return Ok(Vec::new());
@@ -67,24 +69,23 @@ async fn scan() -> Result<Vec<InstalledPackage>> {
     // every package key stays unique.
     let mut seen: HashSet<String> = HashSet::new();
     for line in output.lines() {
-        let parts: Vec<&str> = line.split(SEP).collect();
-        if parts.len() < 3 {
+        let mut fields = line.split(SEP);
+        let (Some(name), Some(version), Some(kib)) =
+            (fields.next(), fields.next(), fields.next())
+        else {
+            continue;
+        };
+        if !seen.insert(name.to_string()) {
             continue;
         }
-        let name = parts[0].to_string();
-        if !seen.insert(name.clone()) {
-            continue;
-        }
-        let version = parts[1].to_string();
-        let kib: u64 = parts[2].parse().unwrap_or(0);
-        let summary = parts.get(3).copied().unwrap_or("").to_string();
+        let summary = fields.next().unwrap_or("");
 
-        let mut pkg = InstalledPackage::new(PackageSource::Apt, name.clone());
-        pkg.name = name;
-        pkg.version = version;
-        pkg.size_bytes = kib * 1024;
+        let mut pkg = InstalledPackage::new(PackageSource::Apt, name);
+        pkg.name = pkg.package_id.clone();
+        pkg.version = version.to_string();
+        pkg.size_bytes = kib.parse().unwrap_or(0) * 1024;
         if !summary.is_empty() {
-            pkg.description = Some(summary);
+            pkg.description = Some(summary.to_string());
         }
         pkg.app_kind = classify(&pkg.name);
         packages.push(pkg);
@@ -122,11 +123,8 @@ async fn check_updates(packages: &mut [InstalledPackage]) {
 
     // Line format: "package/suite candidate_version arch [upgradable from: old_version]"
     // Or:          "package/arch candidate_version arch [held]"
-    let re = match regex::Regex::new(
-        r"^(\S+)/(\S+)\s+(\S+)\s+\S+\s+\[upgradable from: (\S+)\]",
-    ) {
-        Ok(r) => r,
-        Err(_) => return,
+    let Some(re) = upgrade_regex() else {
+        return;
     };
 
     for line in output.lines() {
@@ -135,14 +133,23 @@ async fn check_updates(packages: &mut [InstalledPackage]) {
             continue;
         }
         if let Some(caps) = re.captures(line) {
-            let name = caps[1].to_string();
-            let candidate = caps[3].to_string();
+            let name = &caps[1];
+            let candidate = &caps[3];
             if let Some(pkg) = packages.iter_mut().find(|p| p.package_id == name) {
                 pkg.has_update = true;
-                pkg.update_version = Some(candidate);
+                pkg.update_version = Some(candidate.to_string());
             }
         }
     }
+}
+
+/// Compiled once for the process; `None` if the pattern is somehow invalid.
+fn upgrade_regex() -> Option<&'static regex::Regex> {
+    static RE: std::sync::OnceLock<Option<regex::Regex>> = std::sync::OnceLock::new();
+    RE.get_or_init(|| {
+        regex::Regex::new(r"^(\S+)/(\S+)\s+(\S+)\s+\S+\s+\[upgradable from: (\S+)\]").ok()
+    })
+    .as_ref()
 }
 
 fn has_binary(name: &str) -> bool {

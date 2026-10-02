@@ -137,7 +137,7 @@ pub fn spawn_preview(
             }
         };
         if !plan.protected {
-            block_on(plans.issue(plan.clone()));
+            plans.issue(plan.clone());
         }
         let _ = tx.send(Ok(plan));
     });
@@ -150,7 +150,7 @@ pub fn spawn_preview(
 pub fn spawn_apply(plans: PlanStore, plan: OperationPlan, tx: mpsc::UnboundedSender<OpMsg>) {
     std::thread::spawn(move || {
         block_on(async move {
-            let Some(plan) = plans.take(&plan.plan_id).await else {
+            let Some(plan) = plans.take(&plan.plan_id) else {
                 let _ = tx.unbounded_send(OpMsg::Done(failed(
                     "Stale or unknown plan. Please preview again.",
                 )));
@@ -333,5 +333,39 @@ mod tests {
 
         pkg.icon = None;
         assert_eq!(icon_path(&pkg), None);
+    }
+
+    fn apt_package(id: &str) -> InstalledPackage {
+        let mut pkg = InstalledPackage::new(PackageSource::Apt, id);
+        pkg.name = id.to_string();
+        pkg
+    }
+
+    #[test]
+    fn spawn_preview_rejects_an_update_without_an_update_available() {
+        let (tx, rx) = oneshot::channel();
+        let mut pkg = apt_package("gimp");
+        pkg.has_update = false;
+        spawn_preview(PlanStore::default(), OpKind::Update, pkg, tx);
+        assert!(block_on(rx).unwrap().is_err());
+    }
+
+    #[test]
+    fn spawn_preview_registers_a_non_protected_plan() {
+        let store = PlanStore::default();
+        let (tx, rx) = oneshot::channel();
+        spawn_preview(store.clone(), OpKind::Uninstall, apt_package("gimp"), tx);
+        let plan = block_on(rx).unwrap().unwrap();
+        assert!(store.take(&plan.plan_id).is_some());
+    }
+
+    #[test]
+    fn spawn_preview_does_not_register_a_protected_plan() {
+        let store = PlanStore::default();
+        let (tx, rx) = oneshot::channel();
+        spawn_preview(store.clone(), OpKind::Uninstall, apt_package("systemd"), tx);
+        let plan = block_on(rx).unwrap().unwrap();
+        assert!(plan.protected);
+        assert!(store.take(&plan.plan_id).is_none());
     }
 }

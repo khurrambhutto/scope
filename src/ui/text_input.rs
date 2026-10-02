@@ -49,8 +49,11 @@ pub fn key_bindings() -> Vec<KeyBinding> {
     ]
 }
 
+/// A minimal single-line text field: content, caret, selection, clipboard, and
+/// IME-backed replacement.
 pub struct TextInput {
     focus_handle: FocusHandle,
+    /// Current text content.
     pub content: SharedString,
     placeholder: SharedString,
     selected_range: Range<usize>,
@@ -62,6 +65,7 @@ pub struct TextInput {
 }
 
 impl TextInput {
+    /// Create an empty input with a "Search" placeholder.
     pub fn new(cx: &mut Context<Self>) -> Self {
         Self {
             focus_handle: cx.focus_handle(),
@@ -76,10 +80,12 @@ impl TextInput {
         }
     }
 
-    pub fn text(&self) -> String {
-        self.content.to_string()
+    /// The current content as a shared string (cheap to clone).
+    pub fn text(&self) -> SharedString {
+        self.content.clone()
     }
 
+    /// Handle used to focus the input.
     pub fn focus_handle(&self) -> FocusHandle {
         self.focus_handle.clone()
     }
@@ -536,9 +542,12 @@ impl gpui::Element for TextElement {
         if let Some(selection) = prepaint.selection.take() {
             window.paint_quad(selection)
         }
-        let line = prepaint.line.take().unwrap();
+        let line = prepaint
+            .line
+            .take()
+            .expect("line is shaped during prepaint");
         line.paint(bounds.origin, window.line_height(), window, cx)
-            .unwrap();
+            .expect("painting the shaped line succeeds");
 
         if focus_handle.is_focused(window) {
             if let Some(cursor) = prepaint.cursor.take() {

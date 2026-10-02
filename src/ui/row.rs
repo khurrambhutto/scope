@@ -26,9 +26,21 @@ pub(super) fn row_element(
     };
 
     let action: Option<AnyElement> = if view_mode == ViewMode::Updates && pkg.has_update {
-        Some(action_button(entity, pkg, OpKind::Update, "Update", update_green()))
+        Some(action_button(
+            entity,
+            pkg.key.clone(),
+            OpKind::Update,
+            "Update",
+            update_green(),
+        ))
     } else if view_mode == ViewMode::Uninstall {
-        Some(action_button(entity, pkg, OpKind::Uninstall, "Uninstall", danger()))
+        Some(action_button(
+            entity,
+            pkg.key.clone(),
+            OpKind::Uninstall,
+            "Uninstall",
+            danger(),
+        ))
     } else {
         None
     };
@@ -58,7 +70,7 @@ pub(super) fn row_element(
             rgba(0x00000000)
         })
         .hover(|this| this.bg(rgba(0xffffff0a)))
-        .on_click(act(entity, move |this, cx| this.toggle_select(key.clone(), cx)))
+        .on_click(act(entity, move |this, cx| this.toggle_select(&key, cx)))
         .child(package_icon(pkg, 40.))
         .child(
             div()
@@ -111,13 +123,12 @@ pub(super) fn row_element(
 
 fn action_button(
     entity: &WeakEntity<ScopeApp>,
-    pkg: &InstalledPackage,
+    key: String,
     kind: OpKind,
     label: &'static str,
     color: Hsla,
 ) -> AnyElement {
     let entity = entity.clone();
-    let pkg = pkg.clone();
     let action_id = match kind {
         OpKind::Uninstall => "action-uninstall",
         OpKind::Update => "action-update",
@@ -137,8 +148,10 @@ fn action_button(
         .hover(|this| this.opacity(0.9))
         .on_click(move |_ev, _window, cx| {
             cx.stop_propagation();
+            // Resolve the package by key at click time instead of cloning the
+            // whole package into every visible row on every frame.
             entity
-                .update(cx, |this, cx| this.open_op(kind, pkg.clone(), cx))
+                .update(cx, |this, cx| this.open_op_by_key(kind, &key, cx))
                 .ok();
         })
         .child(label)

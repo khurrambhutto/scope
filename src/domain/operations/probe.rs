@@ -258,7 +258,7 @@ mod tests {
     }
 
     #[test]
-    fn policy_update_flags() {
+    fn has_update_from_policy_compares_installed_against_candidate() {
         assert!(has_update_from_policy("1.0", "2.0"));
         assert!(!has_update_from_policy("1.0", "1.0"));
         assert!(!has_update_from_policy("1.0", "(none)"));
@@ -291,11 +291,15 @@ mod tests {
     }
 
     #[test]
-    fn flatpak_missing_error_messages_are_detected() {
+    fn is_dpkg_not_found_matches_the_dpkg_message() {
         assert!(is_dpkg_not_found(
             "dpkg-query: no packages found matching foo"
         ));
         assert!(!is_dpkg_not_found("dpkg-query: error: something broke"));
+    }
+
+    #[test]
+    fn is_snap_not_installed_matches_the_snap_message() {
         assert!(is_snap_not_installed("error: no matching snaps installed"));
         assert!(!is_snap_not_installed(
             "error: cannot communicate with server"

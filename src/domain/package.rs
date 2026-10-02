@@ -155,3 +155,54 @@ impl InstalledPackage {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_prefixes_the_key_with_the_source() {
+        assert_eq!(
+            InstalledPackage::new(PackageSource::Apt, "gimp").key,
+            "apt:gimp"
+        );
+    }
+
+    #[test]
+    fn new_records_no_install_scope() {
+        assert_eq!(
+            InstalledPackage::new(PackageSource::Snap, "code").install_scope,
+            None
+        );
+    }
+
+    #[test]
+    fn new_scoped_embeds_the_scope_in_the_key() {
+        assert_eq!(
+            InstalledPackage::new_scoped(PackageSource::Flatpak, "org.gimp.GIMP", InstallScope::User)
+                .key,
+            "flatpak:user:org.gimp.GIMP"
+        );
+    }
+
+    #[test]
+    fn new_scoped_distinguishes_user_and_system_installs() {
+        let user =
+            InstalledPackage::new_scoped(PackageSource::Flatpak, "org.gimp.GIMP", InstallScope::User);
+        let system = InstalledPackage::new_scoped(
+            PackageSource::Flatpak,
+            "org.gimp.GIMP",
+            InstallScope::System,
+        );
+        assert_ne!(user.key, system.key);
+    }
+
+    #[test]
+    fn new_scoped_records_the_install_scope() {
+        assert_eq!(
+            InstalledPackage::new_scoped(PackageSource::Flatpak, "org.gimp.GIMP", InstallScope::System)
+                .install_scope,
+            Some(InstallScope::System)
+        );
+    }
+}

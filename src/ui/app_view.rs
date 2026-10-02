@@ -25,7 +25,7 @@ use crate::ui::text_input::TextInput;
 
 use super::detail::detail_element;
 use super::dialog::Dialog;
-use super::filters::{KindFilter, OpenSelect, SourceFilter, ViewMode};
+use super::filters::{OpenSelect, SourceFilter, ViewMode};
 use super::row::row_element;
 use super::title_bar::title_bar;
 use super::updater::{updater_banner, UpdaterStatus, UpdaterUi};
@@ -61,8 +61,10 @@ pub(super) fn act(
 
 /// Query + filters + scan identity: everything [`ScopeApp::sync_entries`]
 /// needs to know the visible set is already up to date.
-type FilterInputs = (String, SourceFilter, KindFilter, ViewMode, u64);
+type FilterInputs = (String, SourceFilter, ViewMode, u64);
 
+/// The Scope window: header, filters, a virtualized package list with inline
+/// detail, and the uninstall/update dialog flow.
 pub struct ScopeApp {
     pub(super) search_input: Entity<TextInput>,
     pub(super) scan: Option<backend::Scan>,
@@ -70,7 +72,6 @@ pub struct ScopeApp {
     pub(super) refreshing: bool,
     pub(super) error: Option<String>,
     pub(super) source_filter: SourceFilter,
-    pub(super) kind_filter: KindFilter,
     pub(super) view_mode: ViewMode,
     pub(super) selected_key: Option<String>,
     pub(super) open_select: Option<OpenSelect>,
@@ -87,12 +88,19 @@ pub struct ScopeApp {
     /// Last inputs [`ScopeApp::sync_entries`] rebuilt from; unchanged inputs
     /// skip the rebuild (and its package clones) entirely.
     filter_inputs: Option<FilterInputs>,
+    /// Lowercased search blob per package in `scan.packages`, rebuilt only when
+    /// a new scan arrives so filtering never re-joins and re-lowercases every
+    /// package on each keystroke.
+    search_blobs: Vec<String>,
+    /// `scan_gen` value [`Self::search_blobs`] was built from.
+    blob_gen: u64,
     /// Bumped whenever a fresh scan replaces `scan`, so a rescan that arrives
     /// with identical filters still triggers a rebuild.
     scan_gen: u64,
 }
 
 impl ScopeApp {
+    /// Create the app state and kick off the first scan and updater check.
     pub fn new(cx: &mut Context<Self>) -> Self {
         let search_input = cx.new(TextInput::new);
         cx.observe(&search_input, |_this, _input, cx| cx.notify())
@@ -108,7 +116,6 @@ impl ScopeApp {
             refreshing: false,
             error: None,
             source_filter: SourceFilter::All,
-            kind_filter: KindFilter::All,
             view_mode: ViewMode::Uninstall,
             selected_key: None,
             open_select: None,
@@ -123,6 +130,8 @@ impl ScopeApp {
             entries: Vec::new(),
             entry_keys: Vec::new(),
             filter_inputs: None,
+            search_blobs: Vec::new(),
+            blob_gen: u64::MAX,
             scan_gen: 0,
         };
         app.start_scan(cx);
@@ -162,14 +171,13 @@ impl ScopeApp {
         .detach();
     }
 
-    pub(super) fn toggle_select(&mut self, key: String, cx: &mut Context<Self>) {
+    pub(super) fn toggle_select(&mut self, key: &str, cx: &mut Context<Self>) {
         let previous = self.selected_key.clone();
-        let next = if previous.as_deref() == Some(key.as_str()) {
+        let next = if previous.as_deref() == Some(key) {
             None
         } else {
-            Some(key)
+            Some(key.to_owned())
         };
-        self.selected_key = next.clone();
 
         // Mark the rows whose height changed (the row that now carries an
         // inline detail panel, and the one that lost it) for re-measuring,
@@ -179,6 +187,7 @@ impl ScopeApp {
                 self.list_state.splice(index..index + 1, 1);
             }
         }
+        self.selected_key = next;
         cx.notify();
     }
 
@@ -189,10 +198,9 @@ impl ScopeApp {
     /// the user's scroll position.
     fn sync_entries(&mut self, cx: &App) {
         let query = self.search_input.read(cx).text().trim().to_lowercase();
-        let unchanged = self.filter_inputs.as_ref().is_some_and(|(q, s, k, v, g)| {
+        let unchanged = self.filter_inputs.as_ref().is_some_and(|(q, s, v, g)| {
             *q == query
                 && *s == self.source_filter
-                && *k == self.kind_filter
                 && *v == self.view_mode
                 && *g == self.scan_gen
         });
@@ -202,10 +210,19 @@ impl ScopeApp {
         self.filter_inputs = Some((
             query.clone(),
             self.source_filter,
-            self.kind_filter,
             self.view_mode,
             self.scan_gen,
         ));
+
+        // Rebuild the lowercased search blobs only when a new scan arrives, not
+        // on every keystroke.
+        if self.blob_gen != self.scan_gen {
+            self.search_blobs = match &self.scan {
+                Some(scan) => scan.packages.iter().map(theme::search_text).collect(),
+                None => Vec::new(),
+            };
+            self.blob_gen = self.scan_gen;
+        }
 
         let filtered = self.filtered(&query);
         let keys: Vec<String> = filtered.iter().map(|pkg| pkg.key.clone()).collect();
@@ -245,6 +262,15 @@ impl ScopeApp {
                 .ok();
         })
         .detach();
+    }
+
+    /// Open the operation dialog for a visible row by its stable key. The row
+    /// handler captures only the key, so no package is cloned per frame.
+    pub(super) fn open_op_by_key(&mut self, kind: OpKind, key: &str, cx: &mut Context<Self>) {
+        let Some(pkg) = self.entries.iter().find(|p| p.key == key).cloned() else {
+            return;
+        };
+        self.open_op(kind, pkg, cx);
     }
 
     pub(super) fn confirm_op(&mut self, cx: &mut Context<Self>) {
@@ -347,13 +373,8 @@ impl ScopeApp {
             entity
                 .update(cx, |this, cx| {
                     match result {
-                        Ok(Some(check)) => {
-                            this.updater.check = Some(check);
-                            this.updater.status = UpdaterStatus::Available;
-                        }
-                        _ => {
-                            this.updater.status = UpdaterStatus::Dismissed;
-                        }
+                        Ok(Some(check)) => this.updater.status = UpdaterStatus::Available(check),
+                        _ => this.updater.status = UpdaterStatus::Dismissed,
                     }
                     cx.notify();
                 })
@@ -368,15 +389,13 @@ impl ScopeApp {
     }
 
     pub(super) fn start_update(&mut self, cx: &mut Context<Self>) {
-        let Some(check) = self.updater.check.clone() else {
-            return;
-        };
         if self.updater_busy {
             return;
         }
+        let Some(check) = self.updater.begin_install() else {
+            return;
+        };
         self.updater_busy = true;
-        self.updater.status = UpdaterStatus::Installing;
-        self.updater.lines.clear();
         let (tx, mut rx) = mpsc::unbounded::<OpMsg>();
         backend::spawn_updater_install(check, tx);
         let entity = cx.entity().downgrade();
@@ -388,25 +407,12 @@ impl ScopeApp {
                             cx.notify();
                         }
                         OpMsg::Log(line) => {
-                            this.updater.lines.push(line);
-                            if this.updater.lines.len() > 5 {
-                                let excess = this.updater.lines.len() - 5;
-                                this.updater.lines.drain(..excess);
-                            }
+                            this.updater.push_line(line);
                             cx.notify();
                         }
                         OpMsg::Done(result) => {
                             this.updater_busy = false;
-                            if result.success {
-                                this.updater.status = UpdaterStatus::Ready;
-                                this.updater.message = format!(
-                                    "{}. Restart Scope to use the new version.",
-                                    result.message
-                                );
-                            } else {
-                                this.updater.status = UpdaterStatus::Error;
-                                this.updater.message = result.message.clone();
-                            }
+                            this.updater.finish(result);
                             cx.notify();
                         }
                     })
@@ -421,22 +427,84 @@ impl ScopeApp {
         let Some(scan) = &self.scan else {
             return out;
         };
-        for pkg in &scan.packages {
+        for (index, pkg) in scan.packages.iter().enumerate() {
             if !self.source_filter.matches(pkg.source) {
-                continue;
-            }
-            if !self.kind_filter.matches(pkg.app_kind) {
                 continue;
             }
             if self.view_mode == ViewMode::Updates && !pkg.has_update {
                 continue;
             }
-            if !query.is_empty() && !theme::search_text(pkg).contains(query) {
+            if !query.is_empty()
+                && !self
+                    .search_blobs
+                    .get(index)
+                    .is_some_and(|blob| blob.contains(query))
+            {
                 continue;
             }
             out.push(pkg.clone());
         }
         out
+    }
+
+    /// Updater banner (if any) plus either the scan error or the per-source
+    /// warnings, in the order they should stack.
+    fn banner_stack(&self, entity: &WeakEntity<ScopeApp>) -> Vec<AnyElement> {
+        let mut banners: Vec<AnyElement> = Vec::new();
+        if self.updater.show_banner() {
+            let busy = self.updater_busy;
+            banners.push(updater_banner(
+                &self.updater,
+                !busy,
+                act(entity, |this, cx| this.start_update(cx)),
+                act(entity, |this, cx| this.dismiss_updater(cx)),
+            ));
+        }
+        if let Some(error) = &self.error {
+            banners.push(banner(error, BannerKind::Error).into_any_element());
+        } else {
+            for (label, message) in self.source_warnings() {
+                banners.push(
+                    banner(&format!("{label}: {message}"), BannerKind::Warn).into_any_element(),
+                );
+            }
+        }
+        banners
+    }
+
+    /// The virtualized package list, or a loading/empty state.
+    fn list_element(&self, list_entity: &Entity<ScopeApp>) -> AnyElement {
+        if self.loading && self.entries.is_empty() {
+            loading_state().into_any_element()
+        } else if self.entries.is_empty() {
+            empty_state().into_any_element()
+        } else {
+            let state = self.list_state.clone();
+            let list_entity = list_entity.clone();
+            list(state, move |index, _window, cx| {
+                let this = list_entity.read(cx);
+                match this.entries.get(index) {
+                    Some(pkg) => {
+                        let selected = this.selected_key.as_deref() == Some(pkg.key.as_str());
+                        let mut column = div().flex().flex_col().w_full();
+                        column = column.child(row_element(
+                            &list_entity.downgrade(),
+                            pkg,
+                            selected,
+                            this.view_mode,
+                            index,
+                        ));
+                        if selected {
+                            column = column.child(detail_element(pkg));
+                        }
+                        column.into_any_element()
+                    }
+                    None => div().into_any_element(),
+                }
+            })
+            .size_full()
+            .into_any_element()
+        }
     }
 
     fn source_warnings(&self) -> Vec<(String, String)> {
@@ -465,57 +533,9 @@ impl Render for ScopeApp {
         let total = self.scan.as_ref().map(|s| s.packages.len()).unwrap_or(0);
         let rows_len = self.entries.len();
 
-        let list_element: AnyElement = if self.loading && rows_len == 0 {
-            loading_state().into_any_element()
-        } else if rows_len == 0 {
-            empty_state().into_any_element()
-        } else {
-            let state = self.list_state.clone();
-            list(state, move |index, _window, cx| {
-                let this = list_entity.read(cx);
-                match this.entries.get(index) {
-                    Some(pkg) => {
-                        let selected = this.selected_key.as_deref() == Some(pkg.key.as_str());
-                        let mut column = div().flex().flex_col().w_full();
-                        column = column.child(row_element(
-                            &list_entity.downgrade(),
-                            pkg,
-                            selected,
-                            this.view_mode,
-                            index,
-                        ));
-                        if selected {
-                            column = column.child(detail_element(pkg));
-                        }
-                        column.into_any_element()
-                    }
-                    None => div().into_any_element(),
-                }
-            })
-            .size_full()
-            .into_any_element()
-        };
+        let list_element = self.list_element(&list_entity);
 
-        let warnings = self.source_warnings();
-        let mut banner_children: Vec<AnyElement> = Vec::new();
-        if self.updater.show_banner() {
-            let busy = self.updater_busy;
-            banner_children.push(updater_banner(
-                &self.updater,
-                !busy,
-                act(&entity, |this, cx| this.start_update(cx)),
-                act(&entity, |this, cx| this.dismiss_updater(cx)),
-            ));
-        }
-        if let Some(error) = self.error.clone() {
-            banner_children.push(banner(&error, BannerKind::Error).into_any_element());
-        } else {
-            for (label, message) in warnings {
-                banner_children.push(
-                    banner(&format!("{label}: {message}"), BannerKind::Warn).into_any_element(),
-                );
-            }
-        }
+        let banner_children = self.banner_stack(&entity);
 
         let footer = if self.loading {
             String::new()

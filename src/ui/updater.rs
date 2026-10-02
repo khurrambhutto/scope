@@ -6,85 +6,131 @@
 use gpui::prelude::*;
 use gpui::{div, px, AnyElement, IntoElement, SharedString};
 
+use crate::domain::operations::OperationResult;
 use crate::domain::updater::UpdateCheck;
 use crate::ui::widgets::{banner, BannerKind};
 
+/// The updater lifecycle. Each phase carries exactly the data it needs, so an
+/// "available" banner cannot render without a check and a finished banner cannot
+/// render without a message — the invalid combinations are unrepresentable.
 #[derive(Debug, Default)]
 pub enum UpdaterStatus {
     #[default]
     Idle,
     Checking,
-    Available,
-    Installing,
-    Ready,
-    Error,
     Dismissed,
+    /// A newer release is available and can be acted on.
+    Available(UpdateCheck),
+    /// Download/install in progress, with the tail of live output.
+    Installing {
+        check: UpdateCheck,
+        lines: Vec<String>,
+    },
+    /// Finished successfully.
+    Ready { message: String },
+    /// Finished with an error.
+    Error { message: String },
 }
 
 #[derive(Debug, Default)]
 pub struct UpdaterUi {
     pub status: UpdaterStatus,
-    pub check: Option<UpdateCheck>,
-    pub lines: Vec<String>,
-    pub message: String,
 }
 
 impl UpdaterUi {
     pub fn show_banner(&self) -> bool {
-        match &self.status {
-            UpdaterStatus::Available
-            | UpdaterStatus::Installing
-            | UpdaterStatus::Ready
-            | UpdaterStatus::Error => self.check.is_some() || !self.message.is_empty(),
-            UpdaterStatus::Idle | UpdaterStatus::Checking | UpdaterStatus::Dismissed => false,
-        }
+        matches!(
+            self.status,
+            UpdaterStatus::Available(_)
+                | UpdaterStatus::Installing { .. }
+                | UpdaterStatus::Ready { .. }
+                | UpdaterStatus::Error { .. }
+        )
     }
 
     pub fn title(&self) -> SharedString {
         match &self.status {
-            UpdaterStatus::Available => "A new version of Scope is available".into(),
-            UpdaterStatus::Installing => "Installing update…".into(),
-            UpdaterStatus::Ready => "Update ready".into(),
-            UpdaterStatus::Error => "Update failed".into(),
+            UpdaterStatus::Available(_) => "A new version of Scope is available".into(),
+            UpdaterStatus::Installing { .. } => "Installing update…".into(),
+            UpdaterStatus::Ready { .. } => "Update ready".into(),
+            UpdaterStatus::Error { .. } => "Update failed".into(),
             _ => "".into(),
         }
     }
 
     pub fn body(&self) -> String {
         match &self.status {
-            UpdaterStatus::Available => {
-                if let Some(check) = &self.check {
-                    let mut s = format!("{} → {}", check.current, check.latest);
-                    if !check.can_self_update {
-                        s.push_str(&format!(
-                            "\nThis install can't update itself. Download from {}",
-                            check.url
-                        ));
-                    } else if check.kind == crate::domain::updater::InstallKind::Deb
-                        || check.kind == crate::domain::updater::InstallKind::Rpm
-                    {
-                        s.push_str("\nYour desktop will ask for your administrator password.");
-                    }
-                    if !check.notes.is_empty() {
-                        let first: String =
-                            check.notes.lines().take(3).collect::<Vec<_>>().join("\n");
-                        s.push_str(&format!("\n{first}"));
-                    }
-                    s
+            UpdaterStatus::Available(check) => {
+                let mut s = format!("{} → {}", check.current, check.latest);
+                if !check.can_self_update {
+                    s.push_str(&format!(
+                        "\nThis install can't update itself. Download from {}",
+                        check.url
+                    ));
+                } else if check.kind == crate::domain::updater::InstallKind::Deb
+                    || check.kind == crate::domain::updater::InstallKind::Rpm
+                {
+                    s.push_str("\nYour desktop will ask for your administrator password.");
+                }
+                if !check.notes.is_empty() {
+                    let first: String =
+                        check.notes.lines().take(3).collect::<Vec<_>>().join("\n");
+                    s.push_str(&format!("\n{first}"));
+                }
+                s
+            }
+            UpdaterStatus::Installing { check, lines } => {
+                if lines.is_empty() {
+                    format!("Downloading {}…", check.latest)
                 } else {
-                    String::new()
+                    lines.last().cloned().unwrap_or_default()
                 }
             }
-            UpdaterStatus::Installing => {
-                if self.lines.is_empty() {
-                    "Downloading…".to_string()
-                } else {
-                    self.lines.last().cloned().unwrap_or_default()
-                }
-            }
-            UpdaterStatus::Ready | UpdaterStatus::Error => self.message.clone(),
+            UpdaterStatus::Ready { message } | UpdaterStatus::Error { message } => message.clone(),
             _ => String::new(),
         }
+    }
+
+    /// The update that can be installed, if one is available.
+    pub fn available(&self) -> Option<&UpdateCheck> {
+        match &self.status {
+            UpdaterStatus::Available(check) => Some(check),
+            _ => None,
+        }
+    }
+
+    /// Transition into the installing phase, returning the check to install.
+    pub fn begin_install(&mut self) -> Option<UpdateCheck> {
+        let check = self.available()?.clone();
+        self.status = UpdaterStatus::Installing {
+            check: check.clone(),
+            lines: Vec::new(),
+        };
+        Some(check)
+    }
+
+    /// Append one line of install output, keeping only the last five.
+    pub fn push_line(&mut self, line: String) {
+        if let UpdaterStatus::Installing { lines, .. } = &mut self.status {
+            lines.push(line);
+            if lines.len() > 5 {
+                let excess = lines.len() - 5;
+                lines.drain(..excess);
+            }
+        }
+    }
+
+    /// Record the outcome of an install attempt.
+    pub fn finish(&mut self, result: OperationResult) {
+        self.status = if result.success {
+            UpdaterStatus::Ready {
+                message: format!("{}. Restart Scope to use the new version.", result.message),
+            }
+        } else {
+            UpdaterStatus::Error {
+                message: result.message,
+            }
+        };
     }
 }
 
@@ -97,18 +143,18 @@ pub fn updater_banner(
     on_dismiss: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 ) -> AnyElement {
     let kind = match ui.status {
-        UpdaterStatus::Error => BannerKind::Error,
-        UpdaterStatus::Ready => BannerKind::Ok,
+        UpdaterStatus::Error { .. } => BannerKind::Error,
+        UpdaterStatus::Ready { .. } => BannerKind::Ok,
         _ => BannerKind::Warn,
     };
     let text = format!("{}\n{}", ui.title(), ui.body());
-    let show_update = matches!(ui.status, UpdaterStatus::Available)
-        && ui.check.as_ref().is_some_and(|c| c.can_self_update)
+    let show_update = matches!(ui.status, UpdaterStatus::Available(_))
+        && ui.available().is_some_and(|c| c.can_self_update)
         && can_act;
     let action_label: &'static str = match ui.status {
-        UpdaterStatus::Available => "Update",
-        UpdaterStatus::Ready | UpdaterStatus::Error => "Dismiss",
-        UpdaterStatus::Installing => "Working…",
+        UpdaterStatus::Available(_) => "Update",
+        UpdaterStatus::Ready { .. } | UpdaterStatus::Error { .. } => "Dismiss",
+        UpdaterStatus::Installing { .. } => "Working…",
         _ => "Dismiss",
     };
     // Build manually: message banner + action row (widgets::banner is
@@ -151,4 +197,95 @@ pub fn updater_banner(
                 }),
         )
         .into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::updater::InstallKind;
+
+    fn check() -> UpdateCheck {
+        UpdateCheck {
+            current: "0.3.0".into(),
+            latest: "0.4.0".into(),
+            notes: String::new(),
+            url: "https://example.com/scope".into(),
+            kind: InstallKind::Deb,
+            can_self_update: true,
+        }
+    }
+
+    #[test]
+    fn available_status_shows_a_banner() {
+        let ui = UpdaterUi {
+            status: UpdaterStatus::Available(check()),
+        };
+        assert!(ui.show_banner());
+    }
+
+    #[test]
+    fn idle_and_checking_do_not_show_a_banner() {
+        assert!(!UpdaterUi::default().show_banner());
+        let ui = UpdaterUi {
+            status: UpdaterStatus::Checking,
+        };
+        assert!(!ui.show_banner());
+    }
+
+    #[test]
+    fn available_returns_the_check_to_install() {
+        let ui = UpdaterUi {
+            status: UpdaterStatus::Available(check()),
+        };
+        assert_eq!(ui.available().map(|c| c.latest.as_str()), Some("0.4.0"));
+    }
+
+    #[test]
+    fn begin_install_moves_into_installing_with_the_check() {
+        let mut ui = UpdaterUi {
+            status: UpdaterStatus::Available(check()),
+        };
+        assert_eq!(ui.begin_install().map(|c| c.latest), Some("0.4.0".into()));
+    }
+
+    #[test]
+    fn push_line_keeps_only_the_last_five() {
+        let mut ui = UpdaterUi {
+            status: UpdaterStatus::Available(check()),
+        };
+        let _ = ui.begin_install();
+        for i in 0..8 {
+            ui.push_line(format!("line {i}"));
+        }
+        match &ui.status {
+            UpdaterStatus::Installing { lines, .. } => {
+                assert_eq!(lines.first().map(String::as_str), Some("line 3"));
+            }
+            other => panic!("expected Installing, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn finish_records_a_success_message() {
+        let mut ui = UpdaterUi::default();
+        ui.finish(OperationResult {
+            success: true,
+            message: "installed".into(),
+            logs: String::new(),
+            exit_code: Some(0),
+        });
+        assert!(ui.body().contains("Restart Scope"));
+    }
+
+    #[test]
+    fn finish_records_a_failure_message() {
+        let mut ui = UpdaterUi::default();
+        ui.finish(OperationResult {
+            success: false,
+            message: "boom".into(),
+            logs: String::new(),
+            exit_code: Some(1),
+        });
+        assert_eq!(ui.body(), "boom");
+    }
 }

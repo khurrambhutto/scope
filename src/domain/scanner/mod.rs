@@ -20,9 +20,11 @@ mod tests {
 
     /// Smoke test that runs the real scanners on the live system. Asserts that
     /// if a source is available it returns at least one package, and that the
-    /// merge step produces stable, unique keys. Gated behind `live-scanners` so
-    /// CI without flatpak/snap can opt out.
+    /// merge step produces stable, unique keys. Ignored by default so `cargo
+    /// test` stays hermetic on machines without apt/snap/flatpak; run it with
+    /// `cargo test -- --ignored`.
     #[tokio::test]
+    #[ignore = "runs the live package managers; run with `cargo test -- --ignored`"]
     async fn scan_all_runs_on_live_system() {
         let (pkgs, avail) = scan_all().await;
         assert!(
@@ -67,6 +69,46 @@ mod tests {
         );
         let _ = AppKind::Gui;
     }
+
+    fn desktop_app(id: &str, name: &str, exec: &str) -> crate::domain::desktop_entries::DesktopApp {
+        crate::domain::desktop_entries::DesktopApp {
+            id: id.into(),
+            name: name.into(),
+            comment: None,
+            exec: exec.into(),
+            icon: None,
+            categories: Vec::new(),
+            terminal: false,
+            no_display: false,
+        }
+    }
+
+    #[test]
+    fn enrich_gives_a_matching_package_its_desktop_display_name() {
+        let index = DesktopIndex::from_apps(vec![desktop_app("firefox", "Firefox", "firefox %U")]);
+        let mut pkg = InstalledPackage::new(PackageSource::Apt, "firefox");
+        pkg.name = "firefox".into();
+        enrich(&mut pkg, &index);
+        assert_eq!(pkg.display_name.as_deref(), Some("Firefox"));
+    }
+
+    #[test]
+    fn enrich_marks_a_matching_package_as_gui() {
+        let index = DesktopIndex::from_apps(vec![desktop_app("firefox", "Firefox", "firefox %U")]);
+        let mut pkg = InstalledPackage::new(PackageSource::Apt, "firefox");
+        pkg.name = "firefox".into();
+        enrich(&mut pkg, &index);
+        assert_eq!(pkg.app_kind, AppKind::Gui);
+    }
+
+    #[test]
+    fn enrich_leaves_an_unmatched_package_alone() {
+        let mut pkg = InstalledPackage::new(PackageSource::Apt, "htop");
+        pkg.name = "htop".into();
+        pkg.app_kind = AppKind::Cli;
+        enrich(&mut pkg, &DesktopIndex::empty());
+        assert_eq!(pkg.app_kind, AppKind::Cli);
+    }
 }
 use tokio::task::JoinSet;
 
@@ -82,10 +124,30 @@ pub trait Scanner: Send + Sync {
     fn is_available(&self) -> Pin<Box<dyn Future<Output = bool> + Send + '_>>;
 
     /// List installed packages for this source.
-    fn scan(&self) -> Pin<Box<dyn Future<Output = Result<Vec<InstalledPackage>>> + Send + '_>>;
+    fn scan(&self) -> Pin<Box<dyn Future<Output = Result<ScanReport>> + Send + '_>>;
 }
 
 use std::pin::Pin;
+
+/// Result of one source's scan: the packages plus an optional non-fatal warning.
+///
+/// A warning records a partial failure (for example, one Flatpak scope failed
+/// while the other succeeded). It is surfaced to the UI as a source warning
+/// without discarding the packages that were found.
+#[derive(Debug, Default)]
+pub struct ScanReport {
+    pub packages: Vec<InstalledPackage>,
+    pub warning: Option<String>,
+}
+
+impl ScanReport {
+    pub fn ok(packages: Vec<InstalledPackage>) -> Self {
+        Self {
+            packages,
+            warning: None,
+        }
+    }
+}
 
 /// Build the full set of scanners (in a stable order for predictable results).
 fn scanners() -> Vec<Box<dyn Scanner>> {
@@ -124,17 +186,17 @@ pub async fn scan_all() -> (Vec<InstalledPackage>, ScanAvailability) {
         join.spawn(async move {
             if scanner.is_available().await {
                 match scanner.scan().await {
-                    Ok(packages) => ScanOutcome {
+                    Ok(report) => ScanOutcome {
                         source,
                         available: true,
-                        packages,
-                        error: None,
+                        packages: report.packages,
+                        error: report.warning,
                     },
                     Err(e) => ScanOutcome {
                         source,
                         available: true,
                         packages: Vec::new(),
-                        error: Some(e.to_string()),
+                        error: Some(scan_error_message(&e)),
                     },
                 }
             } else {
@@ -182,14 +244,13 @@ pub async fn scan_all() -> (Vec<InstalledPackage>, ScanAvailability) {
         for pkg in merged.iter_mut() {
             enrich(pkg, &desktop);
         }
-        merged.sort_by(|a, b| {
-            let ka = kind_rank(a.app_kind);
-            let kb = kind_rank(b.app_kind);
-            ka.cmp(&kb).then_with(|| {
-                display_name(a)
-                    .to_lowercase()
-                    .cmp(&display_name(b).to_lowercase())
-            })
+        // `sort_by_cached_key` computes the lowercase display name once per
+        // package instead of once per comparison.
+        merged.sort_by_cached_key(|p| {
+            (
+                kind_rank(p.app_kind),
+                p.display_name.as_deref().unwrap_or(&p.name).to_lowercase(),
+            )
         });
         (merged, availability)
     })
@@ -207,8 +268,24 @@ fn kind_rank(k: AppKind) -> u8 {
     }
 }
 
-fn display_name(p: &InstalledPackage) -> String {
-    p.display_name.clone().unwrap_or_else(|| p.name.clone())
+/// Turn a scanner failure into a short, source-specific availability message.
+///
+/// `capture_stdout` reports a typed [`SystemError`], so a timeout reads as a
+/// timeout instead of an opaque command string. Any other error keeps its full
+/// `anyhow` context.
+fn scan_error_message(error: &anyhow::Error) -> String {
+    match error.downcast_ref::<crate::domain::system::SystemError>() {
+        Some(crate::domain::system::SystemError::Timeout { program, timeout }) => {
+            format!("{program} timed out after {timeout:?}")
+        }
+        Some(crate::domain::system::SystemError::Spawn { program, .. }) => {
+            format!("could not run {program}")
+        }
+        Some(crate::domain::system::SystemError::NonZero { program, exit_code, .. }) => {
+            format!("{program} exited with {exit_code:?}")
+        }
+        None => error.to_string(),
+    }
 }
 
 /// Apply desktop-entry metadata to a package (display name, icon, categories...).

@@ -211,6 +211,13 @@ mod tests {
         }
     }
 
+    fn pkg(source: PackageSource, package_id: &str) -> InstalledPackage {
+        let mut pkg = InstalledPackage::new(source, package_id);
+        pkg.name = package_id.into();
+        pkg.update_version = Some("2.0".into());
+        pkg
+    }
+
     fn present(version: &str, has_update: Option<bool>) -> ProbedPackage {
         ProbedPackage {
             present: true,
@@ -220,70 +227,109 @@ mod tests {
     }
 
     #[test]
-    fn rejects_missing_package() {
-        let p = plan("gimp");
+    fn revalidate_rejects_a_package_that_is_no_longer_installed() {
         let probed = ProbedPackage {
             present: false,
             version: None,
             has_update: None,
         };
-        assert!(revalidate(&p, &probed).is_err());
+        let err = revalidate(&plan("gimp"), &probed).unwrap_err();
+        assert!(
+            err.to_string().contains("no longer installed"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]
-    fn rejects_protected_package() {
-        let p = plan("libc6");
-        assert!(revalidate(&p, &present("1.0", None)).is_err());
+    fn revalidate_rejects_a_protected_package() {
+        let err = revalidate(&plan("libc6"), &present("1.0", None)).unwrap_err();
+        assert!(
+            err.to_string().contains("protected"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]
-    fn rejects_when_update_disappeared() {
-        let p = plan("gimp");
-        assert!(revalidate(&p, &present("1.0", Some(false))).is_err());
+    fn revalidate_rejects_when_the_update_disappeared() {
+        let err = revalidate(&plan("gimp"), &present("1.0", Some(false))).unwrap_err();
+        assert!(
+            err.to_string().contains("no longer has updates"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]
-    fn rejects_when_version_changed_since_preview() {
-        let p = plan("gimp");
-        assert!(revalidate(&p, &present("2.0", None)).is_err());
+    fn revalidate_rejects_when_the_version_changed_since_preview() {
+        let err = revalidate(&plan("gimp"), &present("2.0", None)).unwrap_err();
+        assert!(
+            err.to_string().contains("changed since the preview"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]
-    fn accepts_unchanged_package_with_update_still_pending() {
-        let p = plan("gimp");
-        assert!(revalidate(&p, &present("1.0", Some(true))).is_ok());
+    fn revalidate_accepts_an_unchanged_package_with_an_update_pending() {
+        assert!(revalidate(&plan("gimp"), &present("1.0", Some(true))).is_ok());
     }
 
     #[test]
-    fn accepts_when_update_state_unknown_but_version_unchanged() {
-        let p = plan("gimp");
-        assert!(revalidate(&p, &present("1.0", None)).is_ok());
+    fn revalidate_accepts_when_update_state_is_unknown_but_version_is_unchanged() {
+        assert!(revalidate(&plan("gimp"), &present("1.0", None)).is_ok());
     }
 
     #[test]
-    fn accepts_when_version_unknown_but_present() {
-        let p = plan("gimp");
+    fn revalidate_accepts_when_the_installed_version_is_unknown() {
         let probed = ProbedPackage {
             present: true,
             version: None,
             has_update: None,
         };
-        assert!(revalidate(&p, &probed).is_ok());
+        assert!(revalidate(&plan("gimp"), &probed).is_ok());
     }
 
     #[test]
-    fn accepts_when_preview_version_was_unknown() {
+    fn revalidate_accepts_when_the_preview_version_was_unknown() {
         let mut p = plan("gimp");
         p.current_version = String::new();
         assert!(revalidate(&p, &present("9.9", None)).is_ok());
     }
 
-    /// AppImage update plans can never execute: preview marks them protected
-    /// and revalidation refuses them.
+    /// AppImage update plans can never execute: revalidation refuses them.
     #[test]
-    fn appimage_revalidate_refuses() {
+    fn revalidate_refuses_an_appimage() {
         let mut p = plan("/opt/Foo-1.0.AppImage");
         p.source = PackageSource::AppImage;
         assert!(revalidate(&p, &present("1.0", Some(true))).is_err());
+    }
+
+    #[test]
+    fn preview_apt_uses_the_documented_pkexec_command() {
+        let p = preview(&pkg(PackageSource::Apt, "gimp"));
+        assert_eq!(
+            p.steps[0].command_summary,
+            "pkexec env DEBIAN_FRONTEND=noninteractive apt install -y gimp"
+        );
+    }
+
+    #[test]
+    fn preview_snap_uses_the_documented_pkexec_command() {
+        let p = preview(&pkg(PackageSource::Snap, "code"));
+        assert_eq!(p.steps[0].command_summary, "pkexec snap refresh code");
+    }
+
+    #[test]
+    fn preview_flatpak_user_uses_the_user_scope_flag_without_auth() {
+        let mut p = pkg(PackageSource::Flatpak, "org.gimp.GIMP");
+        p.install_scope = Some(InstallScope::User);
+        assert_eq!(
+            preview(&p).steps[0].command_summary,
+            "flatpak update -y --user org.gimp.GIMP"
+        );
+    }
+
+    #[test]
+    fn preview_flatpak_system_routes_through_pkexec() {
+        let p = preview(&pkg(PackageSource::Flatpak, "org.gimp.GIMP"));
+        assert_eq!(p.auth_method, AuthMethod::Pkexec);
     }
 }

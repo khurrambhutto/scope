@@ -43,7 +43,6 @@ fn embedded_asset(path: &str) -> Option<&'static [u8]> {
         "win-min.svg" => Some(include_bytes!("../assets/win-min.svg")),
         "win-max.svg" => Some(include_bytes!("../assets/win-max.svg")),
         "win-close.svg" => Some(include_bytes!("../assets/win-close.svg")),
-        "filter.svg" => Some(include_bytes!("../assets/filter.svg")),
         "refresh.svg" => Some(include_bytes!("../assets/refresh.svg")),
         _ => None,
     }
@@ -127,7 +126,6 @@ mod tests {
             "win-min.svg",
             "win-max.svg",
             "win-close.svg",
-            "filter.svg",
             "refresh.svg",
         ] {
             let ci_path = format!("/home/runner/work/scope/scope/assets/{name}");
