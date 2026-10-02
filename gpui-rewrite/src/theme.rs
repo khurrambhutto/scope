@@ -118,3 +118,35 @@ pub fn display_title(pkg: &InstalledPackage) -> String {
         .clone()
         .unwrap_or_else(|| pkg.name.clone())
 }
+
+// ---- Scope palette (moved from the app view) ------------------------------
+
+// ---- Palette ---------------------------------------------------------------
+
+pub fn border() -> Hsla {
+    rgb(0x2d2325).into()
+}
+pub fn text() -> Hsla {
+    rgb(0xefe6e4).into()
+}
+pub fn text_dim() -> Hsla {
+    rgb(0xa69692).into()
+}
+pub fn text_faint() -> Hsla {
+    rgb(0x786c68).into()
+}
+pub fn accent() -> Hsla {
+    rgb(0xd4504a).into()
+}
+pub fn danger() -> Hsla {
+    rgb(0xc9443e).into()
+}
+pub fn update_green() -> Hsla {
+    rgb(0x24795f).into()
+}
+pub fn elev() -> Hsla {
+    rgb(0x171315).into()
+}
+pub fn elev2() -> Hsla {
+    rgb(0x1e181a).into()
+}
