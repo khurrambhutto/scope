@@ -1,8 +1,6 @@
 //! Client-side title bar. GNOME on Wayland ships no server-side decorations, so
 //! the app draws its own controls; GPUI drives them through `Window` methods.
 
-use std::path::PathBuf;
-
 use gpui::prelude::*;
 use gpui::{div, img, px, rgb, svg, FontWeight, MouseButton, Window, WindowControlArea};
 
@@ -36,7 +34,7 @@ pub(super) fn title_bar() -> impl IntoElement {
                 .flex()
                 .items_center()
                 .gap(px(8.))
-                .child(img(PathBuf::from(LOGO)).size(px(28.)).flex_none())
+                .child(img(LOGO).size(px(28.)).flex_none())
                 .child(
                     div()
                         .text_size(px(18.))

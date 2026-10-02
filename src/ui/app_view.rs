@@ -25,7 +25,7 @@ use crate::ui::text_input::TextInput;
 
 use super::detail::detail_element;
 use super::dialog::Dialog;
-use super::filters::{KindFilter, OpenSelect, SourceFilter, ViewMode};
+use super::filters::{OpenSelect, SourceFilter, ViewMode};
 use super::row::row_element;
 use super::title_bar::title_bar;
 use super::updater::{updater_banner, UpdaterStatus, UpdaterUi};
@@ -61,7 +61,7 @@ pub(super) fn act(
 
 /// Query + filters + scan identity: everything [`ScopeApp::sync_entries`]
 /// needs to know the visible set is already up to date.
-type FilterInputs = (String, SourceFilter, KindFilter, ViewMode, u64);
+type FilterInputs = (String, SourceFilter, ViewMode, u64);
 
 pub struct ScopeApp {
     pub(super) search_input: Entity<TextInput>,
@@ -70,7 +70,6 @@ pub struct ScopeApp {
     pub(super) refreshing: bool,
     pub(super) error: Option<String>,
     pub(super) source_filter: SourceFilter,
-    pub(super) kind_filter: KindFilter,
     pub(super) view_mode: ViewMode,
     pub(super) selected_key: Option<String>,
     pub(super) open_select: Option<OpenSelect>,
@@ -114,7 +113,6 @@ impl ScopeApp {
             refreshing: false,
             error: None,
             source_filter: SourceFilter::All,
-            kind_filter: KindFilter::All,
             view_mode: ViewMode::Uninstall,
             selected_key: None,
             open_select: None,
@@ -197,10 +195,9 @@ impl ScopeApp {
     /// the user's scroll position.
     fn sync_entries(&mut self, cx: &App) {
         let query = self.search_input.read(cx).text().trim().to_lowercase();
-        let unchanged = self.filter_inputs.as_ref().is_some_and(|(q, s, k, v, g)| {
+        let unchanged = self.filter_inputs.as_ref().is_some_and(|(q, s, v, g)| {
             *q == query
                 && *s == self.source_filter
-                && *k == self.kind_filter
                 && *v == self.view_mode
                 && *g == self.scan_gen
         });
@@ -210,7 +207,6 @@ impl ScopeApp {
         self.filter_inputs = Some((
             query.clone(),
             self.source_filter,
-            self.kind_filter,
             self.view_mode,
             self.scan_gen,
         ));
@@ -374,13 +370,8 @@ impl ScopeApp {
             entity
                 .update(cx, |this, cx| {
                     match result {
-                        Ok(Some(check)) => {
-                            this.updater.check = Some(check);
-                            this.updater.status = UpdaterStatus::Available;
-                        }
-                        _ => {
-                            this.updater.status = UpdaterStatus::Dismissed;
-                        }
+                        Ok(Some(check)) => this.updater.status = UpdaterStatus::Available(check),
+                        _ => this.updater.status = UpdaterStatus::Dismissed,
                     }
                     cx.notify();
                 })
@@ -395,15 +386,13 @@ impl ScopeApp {
     }
 
     pub(super) fn start_update(&mut self, cx: &mut Context<Self>) {
-        let Some(check) = self.updater.check.clone() else {
-            return;
-        };
         if self.updater_busy {
             return;
         }
+        let Some(check) = self.updater.begin_install() else {
+            return;
+        };
         self.updater_busy = true;
-        self.updater.status = UpdaterStatus::Installing;
-        self.updater.lines.clear();
         let (tx, mut rx) = mpsc::unbounded::<OpMsg>();
         backend::spawn_updater_install(check, tx);
         let entity = cx.entity().downgrade();
@@ -415,25 +404,12 @@ impl ScopeApp {
                             cx.notify();
                         }
                         OpMsg::Log(line) => {
-                            this.updater.lines.push(line);
-                            if this.updater.lines.len() > 5 {
-                                let excess = this.updater.lines.len() - 5;
-                                this.updater.lines.drain(..excess);
-                            }
+                            this.updater.push_line(line);
                             cx.notify();
                         }
                         OpMsg::Done(result) => {
                             this.updater_busy = false;
-                            if result.success {
-                                this.updater.status = UpdaterStatus::Ready;
-                                this.updater.message = format!(
-                                    "{}. Restart Scope to use the new version.",
-                                    result.message
-                                );
-                            } else {
-                                this.updater.status = UpdaterStatus::Error;
-                                this.updater.message = result.message;
-                            }
+                            this.updater.finish(result);
                             cx.notify();
                         }
                     })
@@ -450,9 +426,6 @@ impl ScopeApp {
         };
         for (index, pkg) in scan.packages.iter().enumerate() {
             if !self.source_filter.matches(pkg.source) {
-                continue;
-            }
-            if !self.kind_filter.matches(pkg.app_kind) {
                 continue;
             }
             if self.view_mode == ViewMode::Updates && !pkg.has_update {

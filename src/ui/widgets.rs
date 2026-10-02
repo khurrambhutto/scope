@@ -1,7 +1,5 @@
 //! Small reusable building blocks shared by the list, filters, and dialog.
 
-use std::path::PathBuf;
-
 use gpui::prelude::*;
 use gpui::{
     deferred, div, img, linear_color_stop, linear_gradient, px, rgb, rgba, AnyElement, App,
@@ -66,7 +64,7 @@ pub(super) fn select_widget(
             this.px(px(14.)).py(px(9.)).text_size(px(14.)).child(label)
         })
         .when_some(icon, |this, icon| {
-            this.px(px(12.)).py(px(8.)).child(img(PathBuf::from(icon)).size(px(16.)).flex_none())
+            this.px(px(12.)).py(px(8.)).child(img(icon).size(px(16.)).flex_none())
         })
         .child(div().text_color(text_dim()).child(if open { "▴" } else { "▾" }));
 
