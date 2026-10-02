@@ -1,7 +1,7 @@
 //! Filter enums and the header filter bar: search, view toggle, selects, rescan.
 
 use gpui::prelude::*;
-use gpui::{div, img, px, AnyElement, Context};
+use gpui::{div, img, px, AnyElement, Context, ImageSource, Resource};
 
 use crate::domain::package::PackageSource;
 use crate::theme::{border, elev2};
@@ -152,7 +152,13 @@ impl ScopeApp {
                     this.start_scan(cx);
                 }
             }))
-            .child(img(ICON_REFRESH).size(px(16.)).flex_none());
+            .child(
+                img(ImageSource::Resource(Resource::Embedded(
+                    ICON_REFRESH.into(),
+                )))
+                .size(px(16.))
+                .flex_none(),
+            );
 
         div()
             .flex_none()

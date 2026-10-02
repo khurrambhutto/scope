@@ -2,7 +2,7 @@
 //! the app draws its own controls; GPUI drives them through `Window` methods.
 
 use gpui::prelude::*;
-use gpui::{div, img, px, rgb, svg, FontWeight, MouseButton, Window, WindowControlArea};
+use gpui::{div, img, px, rgb, svg, FontWeight, ImageSource, MouseButton, Resource, Window, WindowControlArea};
 
 use crate::theme::{danger, elev2, text_dim};
 
@@ -34,7 +34,17 @@ pub(super) fn title_bar() -> impl IntoElement {
                 .flex()
                 .items_center()
                 .gap(px(8.))
-                .child(img(LOGO).size(px(28.)).flex_none())
+                // `Resource::Embedded` (not a bare `&str`): GPUI treats a plain
+                // string path as a URI and tries an HTTP fetch, which fails
+                // silently. Embedded goes through our `AssetSource`, which
+                // serves the bytes compiled into the binary on any machine.
+                // `svg()` is wrong here — it tints everything monochrome and
+                // would flatten the multicolor mark into a white disc.
+                .child(
+                    img(ImageSource::Resource(Resource::Embedded(LOGO.into())))
+                        .size(px(28.))
+                        .flex_none(),
+                )
                 .child(
                     div()
                         .text_size(px(18.))
