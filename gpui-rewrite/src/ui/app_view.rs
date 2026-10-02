@@ -573,9 +573,8 @@ impl ScopeApp {
 
         let source_select = select_widget(
             "source-select",
-            "source-menu",
-            SourceFilter::All.label(),
             Some(self.source_filter.label()),
+            None,
             open == Some(OpenSelect::Source),
             {
                 let entity = entity.clone();
@@ -628,10 +627,10 @@ impl ScopeApp {
             },
         );
 
-        let kind_select = select_widget_icon(
+        let kind_select = select_widget(
             "kind-select",
-            "kind-menu",
-            ICON_FILTER,
+            None,
+            Some(ICON_FILTER),
             open == Some(OpenSelect::Kind),
             {
                 let entity = entity.clone();
@@ -973,72 +972,39 @@ fn view_toggle_button(
         .child(label)
 }
 
-/// A pill select trigger plus its deferred dropdown menu.
+/// A pill select trigger plus its deferred dropdown menu. The trigger shows
+/// either a text label or an icon.
 fn select_widget(
     trigger_id: &'static str,
-    _menu_id: &'static str,
-    _any_label: &'static str,
     value_label: Option<&'static str>,
+    icon: Option<&'static str>,
     open: bool,
     on_trigger: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     menu: impl Fn() -> Vec<AnyElement> + 'static,
 ) -> impl IntoElement {
-    div()
-        .relative()
-        .flex_none()
-        .child(
-            div()
-                .id(trigger_id)
-                .flex()
-                .items_center()
-                .gap(px(6.))
-                .px(px(14.))
-                .py(px(9.))
-                .rounded_full()
-                .border_1()
-                .border_color(if open { accent() } else { border() })
-                .text_size(px(14.))
-                .cursor_pointer()
-                .hover(|this| this.bg(rgba(0xffffff08)).border_color(accent()))
-                .on_click(on_trigger)
-                .child(value_label.unwrap_or("—"))
-                .child(
-                    div()
-                        .text_color(text_dim())
-                        .child(if open { "▴" } else { "▾" }),
-                ),
-        )
-        .when(open, |this| this.child(deferred(menu_popup(menu()))))
-}
+    let trigger = div()
+        .id(trigger_id)
+        .flex()
+        .items_center()
+        .gap(px(6.))
+        .rounded_full()
+        .border_1()
+        .border_color(if open { accent() } else { border() })
+        .cursor_pointer()
+        .hover(|this| this.bg(rgba(0xffffff08)).border_color(accent()))
+        .on_click(on_trigger)
+        .when_some(value_label, |this, label| {
+            this.px(px(14.)).py(px(9.)).text_size(px(14.)).child(label)
+        })
+        .when_some(icon, |this, icon| {
+            this.px(px(12.)).py(px(8.)).child(img(PathBuf::from(icon)).size(px(16.)).flex_none())
+        })
+        .child(div().text_color(text_dim()).child(if open { "▴" } else { "▾" }));
 
-fn select_widget_icon(
-    trigger_id: &'static str,
-    _menu_id: &'static str,
-    icon: &'static str,
-    open: bool,
-    on_trigger: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    menu: impl Fn() -> Vec<AnyElement> + 'static,
-) -> impl IntoElement {
     div()
         .relative()
         .flex_none()
-        .child(
-            div()
-                .id(trigger_id)
-                .flex()
-                .items_center()
-                .gap(px(6.))
-                .px(px(12.))
-                .py(px(8.))
-                .rounded_full()
-                .border_1()
-                .border_color(if open { accent() } else { border() })
-                .cursor_pointer()
-                .hover(|this| this.bg(rgba(0xffffff08)).border_color(accent()))
-                .on_click(on_trigger)
-                .child(img(PathBuf::from(icon)).size(px(16.)).flex_none())
-                .child(div().text_color(text_dim()).child(if open { "▴" } else { "▾" })),
-        )
+        .child(trigger)
         .when(open, |this| this.child(deferred(menu_popup(menu()))))
 }
 
@@ -1195,12 +1161,12 @@ fn action_button(
 ) -> AnyElement {
     let entity = entity.clone();
     let pkg = pkg.clone();
+    let action_id = match kind {
+        OpKind::Uninstall => format!("action-uninstall-{}", pkg.key),
+        OpKind::Update => format!("action-update-{}", pkg.key),
+    };
     div()
-        .id(SharedString::from(format!(
-            "action-{}-{}",
-            kind_id(kind),
-            pkg.key
-        )))
+        .id(SharedString::from(action_id))
         .h_full()
         .px(px(18.))
         .flex()
@@ -1220,13 +1186,6 @@ fn action_button(
         })
         .child(label)
         .into_any_element()
-}
-
-fn kind_id(kind: OpKind) -> &'static str {
-    match kind {
-        OpKind::Uninstall => "uninstall",
-        OpKind::Update => "update",
-    }
 }
 
 fn package_icon(pkg: &InstalledPackage, size: f32) -> AnyElement {
@@ -1334,30 +1293,10 @@ fn detail_element(pkg: &InstalledPackage) -> AnyElement {
             div()
                 .flex()
                 .flex_col()
-                .children(rows.into_iter().map(|(label, value)| {
-                    div()
-                        .flex()
-                        .items_start()
-                        .justify_between()
-                        .gap(px(12.))
-                        .py(px(8.))
-                        .border_b_1()
-                        .border_color(border())
-                        .child(
-                            div()
-                                .flex_none()
-                                .w(px(120.))
-                                .text_size(px(13.))
-                                .text_color(text_faint())
-                                .child(label),
-                        )
-                        .child(
-                            div()
-                                .flex_1()
-                                .text_size(px(14.))
-                                .child(value),
-                        )
-                })),
+                .children(
+                    rows.into_iter()
+                        .map(|(label, value)| kv_row(label, value)),
+                ),
         )
         .into_any_element()
 }
@@ -1461,32 +1400,34 @@ fn button(
         .child(label)
 }
 
+/// One label/value line in the inline detail panel or a plan summary.
+fn kv_row(label: impl Into<SharedString>, value: impl Into<SharedString>) -> impl IntoElement {
+    let (label, value): (SharedString, SharedString) = (label.into(), value.into());
+    div()
+        .flex()
+        .items_start()
+        .justify_between()
+        .gap(px(12.))
+        .py(px(8.))
+        .border_b_1()
+        .border_color(border())
+        .child(
+            div()
+                .flex_none()
+                .w(px(120.))
+                .text_size(px(13.))
+                .text_color(text_faint())
+                .child(label),
+        )
+        .child(div().flex_1().text_size(px(14.)).child(value))
+}
+
 fn plan_rows(rows: Vec<(&'static str, String)>) -> impl IntoElement {
     div()
         .flex()
         .flex_col()
         .mb(px(14.))
-        .children(rows.into_iter().map(|(label, value)| {
-            div()
-                .flex()
-                .items_start()
-                .justify_between()
-                .gap(px(12.))
-                .py(px(5.))
-                .border_b_1()
-                .border_color(border())
-                .child(
-                    div()
-                        .text_size(px(13.))
-                        .text_color(text_faint())
-                        .child(label),
-                )
-                .child(
-                    div()
-                        .text_size(px(13.))
-                        .child(value),
-                )
-        }))
+        .children(rows.into_iter().map(|(label, value)| kv_row(label, value)))
 }
 
 fn dialog_actions(children: Vec<AnyElement>) -> impl IntoElement {
@@ -1503,33 +1444,9 @@ fn confirm_body(entity: &WeakEntity<ScopeApp>, dialog: &OpDialog) -> AnyElement 
         return div().into_any_element();
     };
     let pkg = &dialog.pkg;
-    let title = display_title(pkg);
 
-    if pkg.source == PackageSource::AppImage {
-        return div()
-            .p(px(20.))
-            .flex()
-            .flex_col()
-            .items_center()
-            .child(banner(
-                "Sorry, AppImage uninstall is not supported yet.",
-                BannerKind::Warn,
-            ))
-            .child(dialog_actions(vec![button(
-                "dlg-appimage-cancel",
-                "Cancel",
-                ButtonStyle::Neutral,
-                {
-                    let entity = entity.clone();
-                    move |_ev, _window, cx| {
-                        entity.update(cx, |this, cx| this.close_dialog(cx)).ok();
-                    }
-                },
-            )
-            .into_any_element()]))
-            .into_any_element();
-    }
-
+    // Protected covers AppImages too: `safety::check_package` denies every
+    // AppImage path, so their preview plans always arrive protected.
     if plan.protected {
         let reason = plan
             .protection_reason
@@ -1591,16 +1508,11 @@ fn confirm_body(entity: &WeakEntity<ScopeApp>, dialog: &OpDialog) -> AnyElement 
     }
     rows.push(("Size", theme::format_size(pkg.size_bytes)));
 
-    let confirm_label = match dialog.kind {
-        OpKind::Uninstall => "Confirm",
-        OpKind::Update => "Confirm",
-    };
     let confirm_style = match dialog.kind {
         OpKind::Uninstall => ButtonStyle::Danger,
         OpKind::Update => ButtonStyle::Update,
     };
 
-    let _ = title;
     div()
         .p(px(20.))
         .child(plan_rows(rows))
@@ -1612,7 +1524,7 @@ fn confirm_body(entity: &WeakEntity<ScopeApp>, dialog: &OpDialog) -> AnyElement 
                 }
             })
             .into_any_element(),
-            button("dlg-confirm", confirm_label, confirm_style, {
+            button("dlg-confirm", "Confirm", confirm_style, {
                 let entity = entity.clone();
                 move |_ev, _window, cx| {
                     entity
@@ -1661,7 +1573,7 @@ fn running_body(dialog: &OpDialog) -> AnyElement {
                 .flex()
                 .items_center()
                 .gap(px(12.))
-                .child(spinner(dialog.elapsed))
+                .child(spinner())
                 .child(
                     div()
                         .flex_1()
@@ -1697,14 +1609,13 @@ fn running_body(dialog: &OpDialog) -> AnyElement {
 
 /// A simple pulsing dot standing in for the CSS spinner (GPUI has no
 /// transform animation on `Div`, so we animate opacity instead).
-fn spinner(seed: u64) -> impl IntoElement {
+fn spinner() -> impl IntoElement {
     use gpui::{Animation, AnimationExt};
-    let alpha = 0.35 + ((seed % 4) as f32) * 0.15;
     div()
         .flex_none()
         .size(px(10.))
         .rounded_full()
-        .bg(accent().opacity(alpha))
+        .bg(accent())
         .with_animation(
             "spinner-pulse",
             Animation::new(Duration::from_millis(800)).repeat(),
