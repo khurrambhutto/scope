@@ -4,63 +4,60 @@ Linux desktop app that unifies installed packages and apps across APT, Snap, Fla
 
 ## Stack
 
-- Tauri v2 shell. Rust backend in `src-tauri/`, React 19 + TypeScript in `src/`, Vite 7 build. Webview is WebKitGTK.
-- `tokio` for async process execution with per-command timeouts. DTOs are `serde` in Rust, mirrored field-for-field (snake_case) in `src/shared/types/`.
-- App self-update via `tauri-plugin-updater` + `tauri-plugin-process`.
+- GPUI shell (Zed's GPUI, no webview). Rust binary in `src/`, `Cargo.toml` at root.
+- `tokio` for async process execution with per-command timeouts. DTOs are `serde` in Rust.
+- History: the domain was vendored from the old Tauri backend (`src-tauri/`, React in `src/`). Tauri is archived on tag `tauri-final` / branch `archive/tauri`.
 
 ## Commands
 
 ```bash
-npm install                                  # frontend deps
-npm run tauri dev                            # run the app
-npm run build                                # type-check + build frontend
-cargo check --manifest-path src-tauri/Cargo.toml
-cargo test  --manifest-path src-tauri/Cargo.toml
-cargo test  --manifest-path src-tauri/Cargo.toml operations::   # one module
+cargo run
+cargo check
+cargo test
+cargo test operations::   # one module
+cargo clippy
 ```
 
 ## Repository map
 
 ```
-src/                      React frontend
-  app/                    app shell, top-level composition only
-  features/packages/      unified list, filters, search, inline detail panel
-  features/uninstall/     uninstall preview + confirmation dialog
-  features/update/        per-package update preview + confirmation dialog
-  features/updater/       Scope self-update banner (distinct from package updates)
-  shared/api/             typed invoke wrappers, the only place that calls invoke
-  shared/types/           TypeScript DTOs matching Rust
-  shared/components/      reusable UI (AppIcon, Select, Logo)
-src-tauri/src/            Rust backend
-  commands/               thin Tauri command handlers, orchestration only
-  scanner/                per-source scanners (apt.rs, snap.rs, flatpak.rs, appimage.rs)
-  desktop_entries/        .desktop discovery and parsing
-  icons/                  icon theme resolution and the scope-icon:// protocol
-  operations/             preview/apply flows: probe.rs, uninstall.rs, update.rs, PlanStore
-  safety/                 deny-lists for packages and paths
-  system/                 command execution, timeouts, pkexec
-  package.rs              InstalledPackage plus source/scope enums
+src/                      GPUI app
+  main.rs                 composition and wiring only
+  backend.rs              thin orchestration: scan + persistent cache,
+                          plan preview/apply with streamed logs,
+                          scope-icon:// URL decoding
+  domain/                 backend domain (vendored from old src-tauri/src/)
+    scanner/              per-source scanners (apt.rs, snap.rs, flatpak.rs, appimage.rs)
+    desktop_entries/      .desktop discovery and parsing
+    icons/                icon theme resolution and scope-icon:// URLs
+    operations/           preview/apply flows: probe.rs, uninstall.rs, update.rs, PlanStore
+    safety/               deny-lists for packages and paths
+    system/               command execution, timeouts, pkexec
+    package.rs            InstalledPackage plus source/scope enums
+  theme.rs                palette and formatting helpers
+  ui/                     screen state and composition
+    app_view.rs           header, filters, virtualized list, inline detail, dialogs
+    filters.rs            search, view toggle, selects, rescan
+    row.rs / detail.rs    list row + inline detail panel
+    dialog.rs             uninstall/update dialogs
+    title_bar.rs          client-side title bar
+    text_input.rs         search field
+    widgets.rs            banners, empty/loading states
+assets/                   SVG icons (filter, refresh, logo, window controls)
 docs/                     GitHub Pages site
-gpui-rewrite/             second shell: same product on GPUI (see below)
 ```
 
 ## Module rules
 
-- Feature logic lives in domain modules. `App.tsx`, `lib.rs`, and `main.rs` only compose and wire.
-- Tauri commands are thin wrappers: look up state, delegate to `scanner/` / `operations/` / `safety/`, return DTOs.
-- Frontend reaches the backend only through `shared/api/` wrappers. Changing a Rust DTO means updating its TypeScript twin in the same change.
+- Feature logic lives in domain modules. `main.rs` and `app_view.rs` only compose and wire.
+- `backend.rs` is a thin wrapper: look up state, delegate to `domain/scanner/` / `domain/operations/` / `domain/safety/`, return DTOs.
 - A feature that fits no existing module gets a new small module instead of growing a file past a few hundred lines.
 - Keep screens operational and app-like, never marketing pages.
 
-## GPUI rewrite
+## GPUI notes
 
-`gpui-rewrite/` is a second shell for the same product, built on Zed's GPUI instead of Tauri + React. It targets the same screen, palette, and flows.
-
-- The backend domain is vendored: `gpui-rewrite/src/domain/{package,scanner,desktop_entries,icons,safety,system,operations}` is a copy of `src-tauri/src/`. The GPUI crate builds standalone via `mod domain` — no `#[path]` imports. Sync intentionally when a scanner, DTO, or safety rule changes.
-- `src-tauri/src/commands/*` and `lib.rs` are Tauri-only and are not reused. `gpui-rewrite/src/backend.rs` is the thin, GPUI-side equivalent: scan + persistent cache, plan preview/apply with streamed logs, and `scope-icon://` URL decoding.
-- UI lives in `gpui-rewrite/src/ui/`: `app_view.rs` holds screen state and composition (header, filters, virtualized list, inline detail, uninstall/update dialogs), split into `filters.rs`, `row.rs`, `detail.rs`, `dialog.rs`, `title_bar.rs`, and `widgets.rs`; `text_input.rs` is the search field. `gpui-rewrite/src/theme.rs` holds the palette and formatting helpers.
-- Run `cd gpui-rewrite && cargo run`. Linux needs GPUI's system deps; notably `libxkbcommon-x11-dev`, because GPUI links `-lxkbcommon-x11` on Linux even in Wayland-only builds.
-- Check/test/clippy with `cargo check --manifest-path gpui-rewrite/Cargo.toml`, `cargo test --manifest-path gpui-rewrite/Cargo.toml`, and `cargo clippy --manifest-path gpui-rewrite/Cargo.toml`. The crate pins `[lints]` in its `Cargo.toml` (`unsafe_code = "forbid"`, deny `dbg_macro`/`todo`/`unimplemented`).
+- Run `cargo run`. Linux needs GPUI's system deps; notably `libxkbcommon-x11-dev`, because GPUI links `-lxkbcommon-x11` on Linux even in Wayland-only builds.
+- The crate pins `[lints]` in its `Cargo.toml` (`unsafe_code = "forbid"`, deny `dbg_macro`/`todo`/`unimplemented`).
 - Not yet ported: the self-updater banner.
 
 ## Product rules
@@ -85,7 +82,7 @@ Commands that previews display and apply runs:
 | Flatpak system | `pkexec flatpak uninstall -y --system <id>` | `pkexec flatpak update -y --system <id>` |
 | AppImage | not supported yet — protected plan, no command runs | not supported yet — protected plan, no command runs |
 
-Icon contract: the webview renders icons only from `scope-icon://localhost/<path>` URLs produced by `icons::icon_url`. The frontend never touches the filesystem and holds no `fs`/`shell` Tauri permissions.
+Icon contract: icons load only from `scope-icon://localhost/<path>` URLs produced by `icons::icon_url`, decoded by `backend::icon_path` into on-disk paths GPUI renders directly.
 
 ## Safety
 
@@ -116,16 +113,13 @@ Until updates are complete and tested, do not build whole-system clean, disk ana
 ## Definition of done
 
 ```bash
-npm run build
-cargo check --manifest-path src-tauri/Cargo.toml
-cargo test  --manifest-path src-tauri/Cargo.toml
+cargo check
+cargo test
+cargo clippy
 ```
-
-For the GPUI shell, also run the check, test, and clippy commands listed under **GPUI rewrite**.
 
 - All of the above pass and the diff contains only the requested change.
 - Safety-sensitive backend changes (probe, revalidate, deny-list, PlanStore) ship with targeted Rust tests in the same change.
-- A changed command or DTO is reflected in `src/shared/types/`.
-- `package.json`, `package-lock.json`, and `src-tauri/Cargo.lock` stay committed.
+- `Cargo.lock` stays committed.
 - Commit style is conventional: `feat:`, `fix:`, `chore:`, `docs:`, `style:`.
 - Update this file in the same change as any convention it describes.
