@@ -12,8 +12,9 @@ use futures::channel::{mpsc, oneshot};
 use futures::StreamExt;
 use gpui::prelude::*;
 use gpui::{
-    div, linear_color_stop, linear_gradient, list, px, rgb, AnyElement, App, Context, Entity,
-    IntoElement, ListAlignment, ListState, Render, Window,
+    actions, div, linear_color_stop, linear_gradient, list, px, rgb, AnyElement, App, ClickEvent,
+    Context, Entity, IntoElement, KeyBinding, ListAlignment, ListState, Render, Window,
+    WeakEntity,
 };
 
 use crate::backend::{self, OpKind, OpMsg};
@@ -28,6 +29,32 @@ use super::filters::{KindFilter, OpenSelect, SourceFilter, ViewMode};
 use super::row::row_element;
 use super::title_bar::title_bar;
 use super::widgets::{banner, empty_state, loading_state, BannerKind};
+
+// ---- Keyboard actions ------------------------------------------------------
+
+actions!(scope, [CloseDialog, Rescan]);
+
+/// Scope-level keybindings, registered alongside the search input's at startup.
+pub fn key_bindings() -> Vec<KeyBinding> {
+    vec![
+        KeyBinding::new("escape", CloseDialog, None),
+        KeyBinding::new("ctrl-r", Rescan, None),
+        KeyBinding::new("cmd-r", Rescan, None),
+    ]
+}
+
+/// Build an `on_click` handler that updates this view, replacing the
+/// clone-entity / `update` / `.ok()` dance repeated at every call site.
+pub(super) fn act(
+    entity: &WeakEntity<ScopeApp>,
+    f: impl Fn(&mut ScopeApp, &mut Context<ScopeApp>) + 'static,
+) -> impl Fn(&ClickEvent, &mut Window, &mut App) + 'static {
+    let entity = entity.clone();
+    move |_ev, _window, cx| {
+        // `&f` implements `Fn` too, so the handler stays callable per click.
+        entity.update(cx, &f).ok();
+    }
+}
 
 // ---- App state -------------------------------------------------------------
 
@@ -380,6 +407,16 @@ impl Render for ScopeApp {
                 linear_color_stop(rgb(0x0b0c0f), 1.),
             ))
             .text_color(text())
+            // Keyboard shortcuts bubble up from the focused search box to the
+            // root: Escape closes the operation dialog, Ctrl/Cmd+R rescans.
+            .on_action(cx.listener(|this, _: &CloseDialog, _window, cx| {
+                this.close_dialog(cx)
+            }))
+            .on_action(cx.listener(|this, _: &Rescan, _window, cx| {
+                if !this.refreshing {
+                    this.start_scan(cx);
+                }
+            }))
             .child(title_bar())
             .child(self.filters(cx))
             .children(banner_children)

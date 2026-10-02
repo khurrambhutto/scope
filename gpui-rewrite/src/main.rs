@@ -66,6 +66,7 @@ fn main() {
         .with_assets(Assets)
         .run(|cx: &mut App| {
             cx.bind_keys(ui::text_input::key_bindings());
+            cx.bind_keys(ui::app_view::key_bindings());
 
             // Single-window app: closing the window quits.
             cx.on_window_closed(|cx| {

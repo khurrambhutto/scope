@@ -8,7 +8,7 @@ use gpui::{div, img, px, AnyElement, Context};
 use crate::package::{AppKind, PackageSource};
 use crate::theme::{border, elev2};
 
-use super::app_view::ScopeApp;
+use super::app_view::{act, ScopeApp};
 use super::widgets::{menu_item, select_widget, view_toggle_button};
 
 const ICON_FILTER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/filter.svg");
@@ -97,34 +97,20 @@ impl ScopeApp {
                     "view-uninstall",
                     "Uninstall",
                     self.view_mode == ViewMode::Uninstall,
-                    {
-                        let entity = entity.clone();
-                        move |_ev, _window, cx| {
-                            entity
-                                .update(cx, |this, cx| {
-                                    this.view_mode = ViewMode::Uninstall;
-                                    cx.notify();
-                                })
-                                .ok();
-                        }
-                    },
+                    act(&entity, |this, cx| {
+                        this.view_mode = ViewMode::Uninstall;
+                        cx.notify();
+                    }),
                 ),
             )
             .child(view_toggle_button(
                 "view-updates",
                 "Updates",
                 self.view_mode == ViewMode::Updates,
-                {
-                    let entity = entity.clone();
-                    move |_ev, _window, cx| {
-                        entity
-                            .update(cx, |this, cx| {
-                                this.view_mode = ViewMode::Updates;
-                                cx.notify();
-                            })
-                            .ok();
-                    }
-                },
+                act(&entity, |this, cx| {
+                    this.view_mode = ViewMode::Updates;
+                    cx.notify();
+                }),
             ));
 
         let source_select = select_widget(
@@ -132,20 +118,13 @@ impl ScopeApp {
             Some(self.source_filter.label()),
             None,
             open == Some(OpenSelect::Source),
-            {
-                let entity = entity.clone();
-                move |_ev, _window, cx| {
-                    entity
-                        .update(cx, |this, cx| {
-                            this.open_select = match this.open_select {
-                                Some(OpenSelect::Source) => None,
-                                _ => Some(OpenSelect::Source),
-                            };
-                            cx.notify();
-                        })
-                        .ok();
-                }
-            },
+            act(&entity, |this, cx| {
+                this.open_select = match this.open_select {
+                    Some(OpenSelect::Source) => None,
+                    _ => Some(OpenSelect::Source),
+                };
+                cx.notify();
+            }),
             {
                 let entity = entity.clone();
                 let current = self.source_filter;
@@ -161,20 +140,15 @@ impl ScopeApp {
                         .into_iter()
                         .enumerate()
                         .map(|(ix, (value, label))| {
-                            let entity = entity.clone();
                             menu_item(
                                 ("source-item", ix).into(),
                                 label,
                                 value == current,
-                                move |_ev, _window, cx| {
-                                    entity
-                                        .update(cx, |this, cx| {
-                                            this.source_filter = value;
-                                            this.open_select = None;
-                                            cx.notify();
-                                        })
-                                        .ok();
-                                },
+                                act(&entity, move |this, cx| {
+                                    this.source_filter = value;
+                                    this.open_select = None;
+                                    cx.notify();
+                                }),
                             )
                             .into_any_element()
                         })
@@ -188,20 +162,13 @@ impl ScopeApp {
             None,
             Some(ICON_FILTER),
             open == Some(OpenSelect::Kind),
-            {
-                let entity = entity.clone();
-                move |_ev, _window, cx| {
-                    entity
-                        .update(cx, |this, cx| {
-                            this.open_select = match this.open_select {
-                                Some(OpenSelect::Kind) => None,
-                                _ => Some(OpenSelect::Kind),
-                            };
-                            cx.notify();
-                        })
-                        .ok();
-                }
-            },
+            act(&entity, |this, cx| {
+                this.open_select = match this.open_select {
+                    Some(OpenSelect::Kind) => None,
+                    _ => Some(OpenSelect::Kind),
+                };
+                cx.notify();
+            }),
             {
                 let entity = entity.clone();
                 let current = self.kind_filter;
@@ -216,20 +183,15 @@ impl ScopeApp {
                         .into_iter()
                         .enumerate()
                         .map(|(ix, (value, label))| {
-                            let entity = entity.clone();
                             menu_item(
                                 ("kind-item", ix).into(),
                                 label,
                                 value == current,
-                                move |_ev, _window, cx| {
-                                    entity
-                                        .update(cx, |this, cx| {
-                                            this.kind_filter = value;
-                                            this.open_select = None;
-                                            cx.notify();
-                                        })
-                                        .ok();
-                                },
+                                act(&entity, move |this, cx| {
+                                    this.kind_filter = value;
+                                    this.open_select = None;
+                                    cx.notify();
+                                }),
                             )
                             .into_any_element()
                         })
@@ -251,18 +213,11 @@ impl ScopeApp {
             .cursor_pointer()
             .opacity(if self.refreshing { 0.5 } else { 1.0 })
             .hover(|this| this.bg(elev2()))
-            .on_click({
-                let entity = entity.clone();
-                move |_ev, _window, cx| {
-                    entity
-                        .update(cx, |this, cx| {
-                            if !this.refreshing {
-                                this.start_scan(cx);
-                            }
-                        })
-                        .ok();
+            .on_click(act(&entity, |this, cx| {
+                if !this.refreshing {
+                    this.start_scan(cx);
                 }
-            })
+            }))
             .child(img(PathBuf::from(ICON_REFRESH)).size(px(16.)).flex_none());
 
         div()

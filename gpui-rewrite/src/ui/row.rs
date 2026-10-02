@@ -7,7 +7,7 @@ use crate::backend::{self, OpKind};
 use crate::package::InstalledPackage;
 use crate::theme::{self, danger, display_title, text_dim, update_green};
 
-use super::app_view::ScopeApp;
+use super::app_view::{act, ScopeApp};
 use super::filters::ViewMode;
 
 pub(super) fn row_element(
@@ -57,15 +57,7 @@ pub(super) fn row_element(
             rgba(0x00000000)
         })
         .hover(|this| this.bg(rgba(0xffffff0a)))
-        .on_click({
-            let entity = entity.clone();
-            let key = key.clone();
-            move |_ev, _window, cx| {
-                entity
-                    .update(cx, |this, cx| this.toggle_select(key.clone(), cx))
-                    .ok();
-            }
-        })
+        .on_click(act(entity, move |this, cx| this.toggle_select(key.clone(), cx)))
         .child(package_icon(pkg, 40.))
         .child(
             div()

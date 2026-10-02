@@ -12,7 +12,7 @@ use crate::theme::{
     self, accent, border, display_title, elev, elev2, text, text_dim, text_faint,
 };
 
-use super::app_view::ScopeApp;
+use super::app_view::{act, ScopeApp};
 use super::widgets::{banner, button, dialog_actions, plan_rows, BannerKind, ButtonStyle};
 
 // ---- Operation dialog ------------------------------------------------------
@@ -49,7 +49,6 @@ impl ScopeApp {
             OpKind::Uninstall => format!("Uninstall {title}"),
             OpKind::Update => format!("Update {title}"),
         };
-        let entity = entity.clone();
 
         let body: AnyElement = match dialog.phase {
             Phase::Loading => div()
@@ -81,18 +80,13 @@ impl ScopeApp {
                             "dlg-error-close",
                             "Close",
                             ButtonStyle::Neutral,
-                            {
-                                let entity = entity.clone();
-                                move |_ev, _window, cx| {
-                                    entity.update(cx, |this, cx| this.close_dialog(cx)).ok();
-                                }
-                            },
+                            act(entity, |this, cx| this.close_dialog(cx)),
                         )),
                 )
                 .into_any_element(),
-            Phase::Confirm => confirm_body(&entity, dialog),
+            Phase::Confirm => confirm_body(entity, dialog),
             Phase::Running => running_body(dialog),
-            Phase::Done => done_body(&entity, dialog),
+            Phase::Done => done_body(entity, dialog),
         };
 
         div()
@@ -106,12 +100,7 @@ impl ScopeApp {
             .items_center()
             .justify_center()
             .bg(rgba(0x00000099))
-            .on_click({
-                let entity = entity.clone();
-                move |_ev, _window, cx| {
-                    entity.update(cx, |this, cx| this.close_dialog(cx)).ok();
-                }
-            })
+            .on_click(act(entity, |this, cx| this.close_dialog(cx)))
             .child(
                 div()
                     .id("modal-card")
@@ -151,14 +140,7 @@ impl ScopeApp {
                                     .hover(|this| {
                                         this.text_color(text()).bg(elev2())
                                     })
-                                    .on_click({
-                                        let entity = entity.clone();
-                                        move |_ev, _window, cx| {
-                                            entity
-                                                .update(cx, |this, cx| this.close_dialog(cx))
-                                                .ok();
-                                        }
-                                    })
+                                    .on_click(act(entity, |this, cx| this.close_dialog(cx)))
                                     .child("✕"),
                             ),
                     )
@@ -190,12 +172,7 @@ fn confirm_body(entity: &WeakEntity<ScopeApp>, dialog: &OpDialog) -> AnyElement 
                 "dlg-protected-cancel",
                 "Close",
                 ButtonStyle::Neutral,
-                {
-                    let entity = entity.clone();
-                    move |_ev, _window, cx| {
-                        entity.update(cx, |this, cx| this.close_dialog(cx)).ok();
-                    }
-                },
+                act(entity, |this, cx| this.close_dialog(cx)),
             )
             .into_any_element()]))
             .into_any_element();
@@ -246,21 +223,19 @@ fn confirm_body(entity: &WeakEntity<ScopeApp>, dialog: &OpDialog) -> AnyElement 
         .p(px(20.))
         .child(plan_rows(rows))
         .child(dialog_actions(vec![
-            button("dlg-cancel", "Cancel", ButtonStyle::Neutral, {
-                let entity = entity.clone();
-                move |_ev, _window, cx| {
-                    entity.update(cx, |this, cx| this.close_dialog(cx)).ok();
-                }
-            })
+            button(
+                "dlg-cancel",
+                "Cancel",
+                ButtonStyle::Neutral,
+                act(entity, |this, cx| this.close_dialog(cx)),
+            )
             .into_any_element(),
-            button("dlg-confirm", "Confirm", confirm_style, {
-                let entity = entity.clone();
-                move |_ev, _window, cx| {
-                    entity
-                        .update(cx, |this, cx| this.confirm_op(cx))
-                        .ok();
-                }
-            })
+            button(
+                "dlg-confirm",
+                "Confirm",
+                confirm_style,
+                act(entity, |this, cx| this.confirm_op(cx)),
+            )
             .into_any_element(),
         ]))
         .into_any_element()
@@ -367,12 +342,7 @@ fn done_body(entity: &WeakEntity<ScopeApp>, dialog: &OpDialog) -> AnyElement {
                 "dlg-cancelled-close",
                 "Close",
                 ButtonStyle::Neutral,
-                {
-                    let entity = entity.clone();
-                    move |_ev, _window, cx| {
-                        entity.update(cx, |this, cx| this.close_dialog(cx)).ok();
-                    }
-                },
+                act(entity, |this, cx| this.close_dialog(cx)),
             )
             .into_any_element()]))
             .into_any_element();
@@ -395,19 +365,12 @@ fn done_body(entity: &WeakEntity<ScopeApp>, dialog: &OpDialog) -> AnyElement {
                 .text_size(px(13.))
                 .text_color(accent())
                 .cursor_pointer()
-                .on_click({
-                    let entity = entity.clone();
-                    move |_ev, _window, cx| {
-                        entity
-                            .update(cx, |this, cx| {
-                                if let Some(dialog) = &mut this.dialog {
-                                    dialog.show_logs = !dialog.show_logs;
-                                }
-                                cx.notify();
-                            })
-                            .ok();
+                .on_click(act(entity, |this, cx| {
+                    if let Some(dialog) = &mut this.dialog {
+                        dialog.show_logs = !dialog.show_logs;
                     }
-                })
+                    cx.notify();
+                }))
                 .child(format!(
                     "{} command output",
                     if dialog.show_logs { "Hide" } else { "Show" }
@@ -434,12 +397,7 @@ fn done_body(entity: &WeakEntity<ScopeApp>, dialog: &OpDialog) -> AnyElement {
             "dlg-done",
             label,
             ButtonStyle::Neutral,
-            {
-                let entity = entity.clone();
-                move |_ev, _window, cx| {
-                    entity.update(cx, |this, cx| this.close_dialog(cx)).ok();
-                }
-            },
+            act(entity, |this, cx| this.close_dialog(cx)),
         )
         .into_any_element()]))
         .into_any_element()
