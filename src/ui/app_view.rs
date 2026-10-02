@@ -87,6 +87,12 @@ pub struct ScopeApp {
     /// Last inputs [`ScopeApp::sync_entries`] rebuilt from; unchanged inputs
     /// skip the rebuild (and its package clones) entirely.
     filter_inputs: Option<FilterInputs>,
+    /// Lowercased search blob per package in `scan.packages`, rebuilt only when
+    /// a new scan arrives so filtering never re-joins and re-lowercases every
+    /// package on each keystroke.
+    search_blobs: Vec<String>,
+    /// `scan_gen` value [`Self::search_blobs`] was built from.
+    blob_gen: u64,
     /// Bumped whenever a fresh scan replaces `scan`, so a rescan that arrives
     /// with identical filters still triggers a rebuild.
     scan_gen: u64,
@@ -123,6 +129,8 @@ impl ScopeApp {
             entries: Vec::new(),
             entry_keys: Vec::new(),
             filter_inputs: None,
+            search_blobs: Vec::new(),
+            blob_gen: u64::MAX,
             scan_gen: 0,
         };
         app.start_scan(cx);
@@ -162,14 +170,13 @@ impl ScopeApp {
         .detach();
     }
 
-    pub(super) fn toggle_select(&mut self, key: String, cx: &mut Context<Self>) {
+    pub(super) fn toggle_select(&mut self, key: &str, cx: &mut Context<Self>) {
         let previous = self.selected_key.clone();
-        let next = if previous.as_deref() == Some(key.as_str()) {
+        let next = if previous.as_deref() == Some(key) {
             None
         } else {
-            Some(key)
+            Some(key.to_owned())
         };
-        self.selected_key = next.clone();
 
         // Mark the rows whose height changed (the row that now carries an
         // inline detail panel, and the one that lost it) for re-measuring,
@@ -179,6 +186,7 @@ impl ScopeApp {
                 self.list_state.splice(index..index + 1, 1);
             }
         }
+        self.selected_key = next;
         cx.notify();
     }
 
@@ -206,6 +214,16 @@ impl ScopeApp {
             self.view_mode,
             self.scan_gen,
         ));
+
+        // Rebuild the lowercased search blobs only when a new scan arrives, not
+        // on every keystroke.
+        if self.blob_gen != self.scan_gen {
+            self.search_blobs = match &self.scan {
+                Some(scan) => scan.packages.iter().map(theme::search_text).collect(),
+                None => Vec::new(),
+            };
+            self.blob_gen = self.scan_gen;
+        }
 
         let filtered = self.filtered(&query);
         let keys: Vec<String> = filtered.iter().map(|pkg| pkg.key.clone()).collect();
@@ -245,6 +263,15 @@ impl ScopeApp {
                 .ok();
         })
         .detach();
+    }
+
+    /// Open the operation dialog for a visible row by its stable key. The row
+    /// handler captures only the key, so no package is cloned per frame.
+    pub(super) fn open_op_by_key(&mut self, kind: OpKind, key: &str, cx: &mut Context<Self>) {
+        let Some(pkg) = self.entries.iter().find(|p| p.key == key).cloned() else {
+            return;
+        };
+        self.open_op(kind, pkg, cx);
     }
 
     pub(super) fn confirm_op(&mut self, cx: &mut Context<Self>) {
@@ -421,7 +448,7 @@ impl ScopeApp {
         let Some(scan) = &self.scan else {
             return out;
         };
-        for pkg in &scan.packages {
+        for (index, pkg) in scan.packages.iter().enumerate() {
             if !self.source_filter.matches(pkg.source) {
                 continue;
             }
@@ -431,7 +458,12 @@ impl ScopeApp {
             if self.view_mode == ViewMode::Updates && !pkg.has_update {
                 continue;
             }
-            if !query.is_empty() && !theme::search_text(pkg).contains(query) {
+            if !query.is_empty()
+                && !self
+                    .search_blobs
+                    .get(index)
+                    .is_some_and(|blob| blob.contains(query))
+            {
                 continue;
             }
             out.push(pkg.clone());
@@ -507,8 +539,8 @@ impl Render for ScopeApp {
                 act(&entity, |this, cx| this.dismiss_updater(cx)),
             ));
         }
-        if let Some(error) = self.error.clone() {
-            banner_children.push(banner(&error, BannerKind::Error).into_any_element());
+        if let Some(error) = &self.error {
+            banner_children.push(banner(error, BannerKind::Error).into_any_element());
         } else {
             for (label, message) in warnings {
                 banner_children.push(

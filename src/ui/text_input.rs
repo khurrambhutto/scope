@@ -76,8 +76,8 @@ impl TextInput {
         }
     }
 
-    pub fn text(&self) -> String {
-        self.content.to_string()
+    pub fn text(&self) -> SharedString {
+        self.content.clone()
     }
 
     pub fn focus_handle(&self) -> FocusHandle {

@@ -14,6 +14,7 @@ use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 pub use parser::DesktopApp;
 
@@ -133,11 +134,14 @@ fn is_blacklisted(path: &Path) -> bool {
 /// An index of discovered GUI apps for fast enrichment of package lists.
 pub struct DesktopIndex {
     /// Indexed by normalized .desktop id (e.g. "org.gnome.Calculator").
-    by_id: HashMap<String, DesktopApp>,
+    by_id: HashMap<String, Arc<DesktopApp>>,
     /// Indexed by the executable basename (e.g. "firefox") parsed from `Exec=`.
-    by_exec: HashMap<String, DesktopApp>,
+    by_exec: HashMap<String, Arc<DesktopApp>>,
     /// Lowercased display names for fuzzy fallback matching.
-    by_name_lower: HashMap<String, DesktopApp>,
+    by_name_lower: HashMap<String, Arc<DesktopApp>>,
+    /// Snap desktop ids are `<snap>_<app>`; keyed by the leading segment so Snap
+    /// lookups are O(1) instead of a linear scan of every entry.
+    by_snap_prefix: HashMap<String, Arc<DesktopApp>>,
 }
 
 impl DesktopIndex {
@@ -145,21 +149,30 @@ impl DesktopIndex {
         let mut by_id = HashMap::new();
         let mut by_exec = HashMap::new();
         let mut by_name_lower = HashMap::new();
+        let mut by_snap_prefix = HashMap::new();
         for app in apps {
+            // One shared allocation per app across all four maps.
+            let app = Arc::new(app);
             if let Some(bin) = exec_binary(&app.exec) {
                 by_exec
                     .entry(bin.to_lowercase())
-                    .or_insert_with(|| app.clone());
+                    .or_insert_with(|| Arc::clone(&app));
             }
             by_name_lower
                 .entry(app.name.to_lowercase())
-                .or_insert_with(|| app.clone());
+                .or_insert_with(|| Arc::clone(&app));
+            if let Some(prefix) = app.id.split('_').next() {
+                by_snap_prefix
+                    .entry(prefix.to_string())
+                    .or_insert_with(|| Arc::clone(&app));
+            }
             by_id.insert(app.id.clone(), app);
         }
         Self {
             by_id,
             by_exec,
             by_name_lower,
+            by_snap_prefix,
         }
     }
 
@@ -168,6 +181,7 @@ impl DesktopIndex {
             by_id: HashMap::new(),
             by_exec: HashMap::new(),
             by_name_lower: HashMap::new(),
+            by_snap_prefix: HashMap::new(),
         }
     }
 
@@ -179,23 +193,22 @@ impl DesktopIndex {
         name: &str,
     ) -> Option<&DesktopApp> {
         match source {
-            crate::domain::package::PackageSource::Flatpak => self.by_id.get(package_id),
-            crate::domain::package::PackageSource::Snap => {
-                // Snap desktop ids are often "<snap>_<app>.desktop" or "<app>.desktop".
-                let needle = format!("{package_id}_");
-                self.by_id
-                    .iter()
-                    .find(|(id, _)| id.starts_with(&needle) || id.as_str() == package_id)
-                    .map(|(_, app)| app)
-                    .or_else(|| self.by_id.get(package_id))
-                    .or_else(|| self.by_exec.get(&package_id.to_lowercase()))
+            crate::domain::package::PackageSource::Flatpak => {
+                self.by_id.get(package_id).map(Arc::as_ref)
             }
+            crate::domain::package::PackageSource::Snap => self
+                .by_snap_prefix
+                .get(package_id)
+                .or_else(|| self.by_id.get(package_id))
+                .or_else(|| self.by_exec.get(&package_id.to_lowercase()))
+                .map(Arc::as_ref),
             crate::domain::package::PackageSource::Apt | crate::domain::package::PackageSource::AppImage => {
                 let lc = package_id.to_lowercase();
                 self.by_id
                     .get(&lc)
                     .or_else(|| self.by_exec.get(&lc))
                     .or_else(|| self.by_name_lower.get(&name.to_lowercase()))
+                    .map(Arc::as_ref)
                     .or_else(|| self.lookup_stripped(package_id))
             }
         }
@@ -223,7 +236,7 @@ impl DesktopIndex {
                 .or_else(|| self.by_exec.get(base))
                 .or_else(|| self.by_name_lower.get(base))
             {
-                return Some(app);
+                return Some(app.as_ref());
             }
         }
         None

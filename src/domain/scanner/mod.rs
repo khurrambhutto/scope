@@ -184,14 +184,13 @@ pub async fn scan_all() -> (Vec<InstalledPackage>, ScanAvailability) {
         for pkg in merged.iter_mut() {
             enrich(pkg, &desktop);
         }
-        merged.sort_by(|a, b| {
-            let ka = kind_rank(a.app_kind);
-            let kb = kind_rank(b.app_kind);
-            ka.cmp(&kb).then_with(|| {
-                display_name(a)
-                    .to_lowercase()
-                    .cmp(&display_name(b).to_lowercase())
-            })
+        // `sort_by_cached_key` computes the lowercase display name once per
+        // package instead of once per comparison.
+        merged.sort_by_cached_key(|p| {
+            (
+                kind_rank(p.app_kind),
+                p.display_name.as_deref().unwrap_or(&p.name).to_lowercase(),
+            )
         });
         (merged, availability)
     })
@@ -207,10 +206,6 @@ fn kind_rank(k: AppKind) -> u8 {
         AppKind::Cli => 1,
         AppKind::Unknown => 2,
     }
-}
-
-fn display_name(p: &InstalledPackage) -> String {
-    p.display_name.clone().unwrap_or_else(|| p.name.clone())
 }
 
 /// Apply desktop-entry metadata to a package (display name, icon, categories...).

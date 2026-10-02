@@ -103,21 +103,20 @@ async fn list_scope(scope: InstallScope) -> Result<Vec<InstalledPackage>> {
 
     let mut packages = Vec::new();
     for line in output.lines() {
-        let parts: Vec<&str> = line.split('\t').collect();
-        if parts.len() < 3 {
+        let mut fields = line.split('\t');
+        let (Some(app_id), Some(display_name), Some(version)) =
+            (fields.next(), fields.next(), fields.next())
+        else {
             continue;
-        }
-        let app_id = parts[0].to_string();
-        let display_name = parts[1].to_string();
-        let version = parts.get(2).copied().unwrap_or("").to_string();
-        let origin = parts.get(3).copied().unwrap_or("");
-        let size_str = parts.get(4).copied().unwrap_or("0");
-        let description = parts.get(5).copied().unwrap_or("");
+        };
+        let origin = fields.next().unwrap_or("");
+        let size_str = fields.next().unwrap_or("0");
+        let description = fields.next().unwrap_or("");
 
         let mut pkg = InstalledPackage::new_scoped(PackageSource::Flatpak, app_id, scope);
-        pkg.name = display_name.clone();
-        pkg.display_name = Some(display_name);
-        pkg.version = version;
+        pkg.name = display_name.to_string();
+        pkg.display_name = Some(pkg.name.clone());
+        pkg.version = version.to_string();
         pkg.size_bytes = parse_size(size_str);
         if !description.is_empty() {
             pkg.description = Some(description.to_string());
@@ -126,7 +125,8 @@ async fn list_scope(scope: InstallScope) -> Result<Vec<InstalledPackage>> {
             // Tuck origin into description tail for the detail view; the dedicated
             // origin field would need a model change we leave for the detail phase.
             if let Some(d) = &mut pkg.description {
-                d.push_str(&format!("  (remote: {origin})"));
+                use std::fmt::Write as _;
+                let _ = write!(d, "  (remote: {origin})");
             }
         }
         pkg.app_kind = AppKind::Gui;
@@ -190,12 +190,12 @@ fn mark_updates(
 
 /// Parse human sizes like "384.1 MB", "1.2 GB" into bytes.
 fn parse_size(size_str: &str) -> u64 {
-    let parts: Vec<&str> = size_str.split_whitespace().collect();
-    if parts.is_empty() {
+    let mut parts = size_str.split_whitespace();
+    let Some(number) = parts.next() else {
         return 0;
-    }
-    let number: f64 = parts[0].replace(',', ".").parse().unwrap_or(0.0);
-    let unit = parts.get(1).copied().unwrap_or("B").to_uppercase();
+    };
+    let number: f64 = number.replace(',', ".").parse().unwrap_or(0.0);
+    let unit = parts.next().unwrap_or("B").to_uppercase();
     let multiplier: u64 = match unit.as_str() {
         "B" => 1,
         "KB" | "K" => 1024,

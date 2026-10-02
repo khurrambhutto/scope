@@ -156,9 +156,10 @@ async fn build_package(path: &Path) -> Option<InstalledPackage> {
 fn extract_name(filename: &str) -> String {
     let stem = trim_appimage_suffix(filename);
     // Remove trailing version-ish / arch / "x86_64" / "linux" from the end.
-    let cleaned = regex::Regex::new(r"(?i)[-_]?(v?\d[\d.]*|x86_64|amd64|aarch64|arm64|linux).*$")
-        .map(|re| re.replace(stem, "").to_string())
-        .unwrap_or_else(|_| stem.to_string());
+    let cleaned = match name_tag_regex() {
+        Some(re) => re.replace(stem, "").to_string(),
+        None => stem.to_string(),
+    };
     let cleaned = cleaned.trim_end_matches(['-', '_', '.']).to_string();
     if cleaned.is_empty() {
         stem.to_string()
@@ -167,17 +168,32 @@ fn extract_name(filename: &str) -> String {
     }
 }
 
+/// Compiled once for the process; `None` if the pattern is somehow invalid.
+fn name_tag_regex() -> Option<&'static regex::Regex> {
+    static RE: std::sync::OnceLock<Option<regex::Regex>> = std::sync::OnceLock::new();
+    RE.get_or_init(|| {
+        regex::Regex::new(r"(?i)[-_]?(v?\d[\d.]*|x86_64|amd64|aarch64|arm64|linux).*$").ok()
+    })
+    .as_ref()
+}
+
 /// Pull a leading version-looking token out of the filename.
 fn extract_version(filename: &str) -> String {
     let stem = trim_appimage_suffix(filename);
-    let re = match regex::Regex::new(r"[_-]v?(\d+(?:\.\d+){1,3})") {
-        Ok(re) => re,
-        Err(_) => return "unknown".to_string(),
+    let Some(re) = version_regex() else {
+        return "unknown".to_string();
     };
     match re.captures(stem).and_then(|c| c.get(1)) {
         Some(m) => m.as_str().to_string(),
         None => "unknown".to_string(),
     }
+}
+
+/// Compiled once for the process; `None` if the pattern is somehow invalid.
+fn version_regex() -> Option<&'static regex::Regex> {
+    static RE: std::sync::OnceLock<Option<regex::Regex>> = std::sync::OnceLock::new();
+    RE.get_or_init(|| regex::Regex::new(r"[_-]v?(\d+(?:\.\d+){1,3})").ok())
+        .as_ref()
 }
 
 fn trim_appimage_suffix(filename: &str) -> &str {

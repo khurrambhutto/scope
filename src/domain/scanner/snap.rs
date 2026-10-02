@@ -69,30 +69,34 @@ async fn scan() -> Result<Vec<InstalledPackage>> {
 
     let mut rows = Vec::new();
     for line in output.lines().skip(1) {
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() < 4 {
+        let mut fields = line.split_whitespace();
+        let (Some(name), Some(version), Some(revision), Some(_)) = (
+            fields.next(),
+            fields.next(),
+            fields.next(),
+            fields.next(),
+        ) else {
             continue;
-        }
-        let name = parts[0].to_string();
-        if is_runtime(&name) {
+        };
+        if is_runtime(name) {
             continue;
         }
         rows.push(SnapRow {
-            name,
-            version: parts[1].to_string(),
-            revision: parts[2].to_string(),
+            name: name.to_string(),
+            version: version.to_string(),
+            revision: revision.to_string(),
         });
     }
 
     let sizes = snap_sizes(&rows).await;
 
     let mut packages = Vec::with_capacity(rows.len());
-    for row in &rows {
-        let mut pkg = InstalledPackage::new(PackageSource::Snap, row.name.clone());
-        pkg.name = row.name.clone();
-        pkg.version = row.version.clone();
-        pkg.size_bytes = sizes.get(&row.name).copied().unwrap_or(0);
-        pkg.app_kind = if has_snap_command(&row.name) {
+    for row in rows {
+        let mut pkg = InstalledPackage::new(PackageSource::Snap, row.name);
+        pkg.name = pkg.package_id.clone();
+        pkg.version = row.version;
+        pkg.size_bytes = sizes.get(&pkg.package_id).copied().unwrap_or(0);
+        pkg.app_kind = if has_snap_command(&pkg.package_id) {
             AppKind::Cli
         } else {
             AppKind::Unknown
@@ -161,13 +165,11 @@ fn read_snap_images() -> HashMap<String, u64> {
 /// (some snaps ship broken symlinks) while still printing totals for the paths it
 /// could read, so stdout is parsed regardless of exit status.
 async fn measure_mounted(names: &[String]) -> HashMap<String, u64> {
-    let mut targets = Vec::new();
-    for name in names {
-        let path = Path::new("/snap").join(name).join("current");
-        if path.exists() {
-            targets.push(path);
-        }
-    }
+    let targets: Vec<std::path::PathBuf> = names
+        .iter()
+        .map(|name| Path::new("/snap").join(name).join("current"))
+        .filter(|path| path.exists())
+        .collect();
     if targets.is_empty() {
         return HashMap::new();
     }
@@ -221,11 +223,15 @@ async fn check_updates(packages: &mut [InstalledPackage]) {
         if line.is_empty() {
             continue;
         }
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() < 4 {
+        let mut fields = line.split_whitespace();
+        let (Some(name), Some(_), Some(_), Some(_)) = (
+            fields.next(),
+            fields.next(),
+            fields.next(),
+            fields.next(),
+        ) else {
             continue;
-        }
-        let name = parts[0].to_string();
+        };
         if let Some(pkg) = packages.iter_mut().find(|p| p.package_id == name) {
             pkg.has_update = true;
             // The Version column in refresh --list is the current version, not
