@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use gpui::prelude::*;
 use gpui::{div, img, px, AnyElement, Context};
 
-use crate::package::{AppKind, PackageSource};
+use crate::domain::package::{AppKind, PackageSource};
 use crate::theme::{border, elev2};
 
 use super::app_view::{act, ScopeApp};

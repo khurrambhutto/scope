@@ -1,20 +1,19 @@
-//! Bridge between the GPUI shell and the shared backend modules.
+//! Bridge between the GPUI shell and the vendored domain modules.
 //!
-//! The Tauri build reaches the backend through `src-tauri/src/commands/*`; this
+//! The Tauri build reaches its backend through `src-tauri/src/commands/*`; this
 //! crate replaces that thin Tauri layer with an equivalent orchestration layer
-//! that reuses `scanner`, `operations`, and `safety` unchanged (they are pulled
-//! in with `#[path]` from `src/main.rs`).
+//! over `crate::domain::{scanner, operations, safety}`.
 
 use std::future::Future;
 use std::path::PathBuf;
 
 use futures::channel::{mpsc, oneshot};
 
-use crate::operations::{
+use crate::domain::operations::{
     uninstall, update, Operation, OperationPlan, OperationResult, OperationStage, PlanStore,
 };
-use crate::package::InstalledPackage;
-use crate::scanner::{scan_all, ScanAvailability};
+use crate::domain::package::InstalledPackage;
+use crate::domain::scanner::{scan_all, ScanAvailability};
 
 /// One full scan of every package source, matching the Tauri `CachedScan` DTO.
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
@@ -159,7 +158,7 @@ pub fn spawn_apply(plans: PlanStore, plan: OperationPlan, tx: mpsc::UnboundedSen
             };
 
             let _ = tx.unbounded_send(OpMsg::Stage(OperationStage::Verifying));
-            let probed = match crate::operations::probe::probe_package(
+            let probed = match crate::domain::operations::probe::probe_package(
                 plan.source,
                 &plan.package_id,
                 plan.install_scope,
@@ -240,7 +239,7 @@ fn hex(byte: u8) -> Option<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::package::PackageSource;
+    use crate::domain::package::PackageSource;
 
     #[test]
     fn percent_decode_expands_valid_sequences() {

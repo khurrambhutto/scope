@@ -18,8 +18,8 @@ use gpui::{
 };
 
 use crate::backend::{self, OpKind, OpMsg};
-use crate::operations::{OperationPlan, OperationStage, PlanStore};
-use crate::package::InstalledPackage;
+use crate::domain::operations::{OperationPlan, OperationStage, PlanStore};
+use crate::domain::package::InstalledPackage;
 use crate::theme::{self, text, text_faint};
 use crate::ui::text_input::TextInput;
 

@@ -27,6 +27,19 @@ Thumbs.db
 *.AppImage
 *.sig
 
+# Tauri shell — untracked locally, preserved on tag `tauri-final`
+# and branch `archive/tauri`. GPUI is the tracked shell.
+/src/
+/src-tauri/
+/public/
+/dist/
+/index.html
+/vite.config.ts
+/tsconfig.json
+/tsconfig.node.json
+/package.json
+/package-lock.json
+
 # Tauri generated
 /src-tauri/gen/
 

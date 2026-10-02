@@ -3,7 +3,7 @@
 use gpui::prelude::*;
 use gpui::{div, px, rgba, AnyElement, FontWeight};
 
-use crate::package::InstalledPackage;
+use crate::domain::package::InstalledPackage;
 use crate::theme::{self, display_title, text_dim};
 
 use super::row::package_icon;

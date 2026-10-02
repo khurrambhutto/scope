@@ -1,31 +1,14 @@
-//! Scope — GPUI rewrite of the Tauri desktop app.
+//! Scope — GPUI desktop app.
 //!
-//! The backend domain modules are reused verbatim from `src-tauri/src` through
-//! `#[path]`, so scanners, icon resolution, safety, and the preview/apply flows
-//! have a single source of truth. Only the Tauri command layer and the webview
-//! UI are replaced: `src/backend.rs` orchestrates the shared modules, and
-//! `src/ui/*` renders the same screen with GPUI.
+//! The backend domain (`src/domain/`) is vendored from `src-tauri/src` so this
+//! crate builds standalone: scanners, icon resolution, safety, and the
+//! preview/apply flows live here. `src/backend.rs` orchestrates the domain,
+//! and `src/ui/*` renders the screen with GPUI.
 
-// ---- Shared backend (unmodified from the Tauri crate) ----------------------
-
-#[path = "../../src-tauri/src/package.rs"]
-mod package;
-#[path = "../../src-tauri/src/scanner/mod.rs"]
-mod scanner;
-#[path = "../../src-tauri/src/desktop_entries/mod.rs"]
-mod desktop_entries;
-#[path = "../../src-tauri/src/icons/mod.rs"]
-#[allow(dead_code)]
-mod icons;
-#[path = "../../src-tauri/src/safety/mod.rs"]
-mod safety;
-#[path = "../../src-tauri/src/system/mod.rs"]
-mod system;
-#[path = "../../src-tauri/src/operations/mod.rs"]
-#[allow(dead_code)]
-mod operations;
+// ---- Backend domain (vendored copy, see `src/domain/mod.rs`) ----------------
 
 mod backend;
+mod domain;
 mod theme;
 mod ui;
 

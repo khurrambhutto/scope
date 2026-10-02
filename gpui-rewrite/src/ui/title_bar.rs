@@ -4,11 +4,16 @@
 use std::path::PathBuf;
 
 use gpui::prelude::*;
-use gpui::{div, img, px, rgb, FontWeight, MouseButton, Window, WindowControlArea};
+use gpui::{div, img, px, rgb, svg, FontWeight, MouseButton, Window, WindowControlArea};
 
-use crate::theme::{danger, text_dim};
+use crate::theme::{danger, elev2, text_dim};
 
-const LOGO: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../public/scope-logo.svg");
+// Title-bar-sized copy of the brand mark: GPUI rasters SVGs at 2x their
+// intrinsic size, so a 512px source would be crushed into the 28px slot.
+const LOGO: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/scope-logo.svg");
+const ICON_MIN: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/win-min.svg");
+const ICON_MAX: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/win-max.svg");
+const ICON_CLOSE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/win-close.svg");
 
 pub(super) fn title_bar() -> impl IntoElement {
     div()
@@ -50,20 +55,23 @@ pub(super) fn title_bar() -> impl IntoElement {
                 .pr(px(8.))
                 .child(window_control_button(
                     "win-min",
-                    "–",
+                    ICON_MIN,
                     WindowControlArea::Min,
+                    elev2(),
                     |window| window.minimize_window(),
                 ))
                 .child(window_control_button(
                     "win-max",
-                    "▢",
+                    ICON_MAX,
                     WindowControlArea::Max,
+                    elev2(),
                     |window| window.zoom_window(),
                 ))
                 .child(window_control_button(
                     "win-close",
-                    "✕",
+                    ICON_CLOSE,
                     WindowControlArea::Close,
+                    danger(),
                     |window| window.remove_window(),
                 )),
         )
@@ -71,13 +79,14 @@ pub(super) fn title_bar() -> impl IntoElement {
 
 pub(super) fn window_control_button(
     id: &'static str,
-    glyph: &'static str,
+    icon: &'static str,
     area: WindowControlArea,
+    hover_bg: gpui::Hsla,
     action: impl Fn(&mut Window) + 'static,
 ) -> impl IntoElement {
-    let hover_bg = danger();
     div()
         .id(id)
+        .group(id)
         .window_control_area(area)
         // Keep the press from bubbling to the title bar's window-move handler.
         .on_mouse_down(MouseButton::Left, |_event, _window, cx| {
@@ -89,9 +98,17 @@ pub(super) fn window_control_button(
         .flex()
         .items_center()
         .justify_center()
-        .text_size(px(14.))
-        .text_color(text_dim())
         .cursor_pointer()
-        .hover(move |this| this.bg(hover_bg).text_color(rgb(0xffffff)))
-        .child(glyph)
+        .hover(move |this| this.bg(hover_bg))
+        .child(
+            // `Svg` reads the colour from its own computed style, not the
+            // cascaded text style, so it is set here and brightened through the
+            // button's hover group.
+            svg()
+                .path(icon)
+                .size(px(13.))
+                .flex_none()
+                .text_color(text_dim())
+                .group_hover(id, |this| this.text_color(rgb(0xffffff))),
+        )
 }

@@ -4,7 +4,7 @@ use gpui::prelude::*;
 use gpui::{div, img, px, rgba, rgb, AnyElement, FontWeight, Hsla, WeakEntity};
 
 use crate::backend::{self, OpKind};
-use crate::package::InstalledPackage;
+use crate::domain::package::InstalledPackage;
 use crate::theme::{self, danger, display_title, text_dim, update_green};
 
 use super::app_view::{act, ScopeApp};
