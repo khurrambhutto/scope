@@ -24,7 +24,7 @@ use crate::theme::{self, text, text_faint};
 use crate::ui::text_input::TextInput;
 
 use super::detail::detail_element;
-use super::dialog::{OpDialog, Phase};
+use super::dialog::Dialog;
 use super::filters::{KindFilter, OpenSelect, SourceFilter, ViewMode};
 use super::row::row_element;
 use super::title_bar::title_bar;
@@ -69,7 +69,7 @@ pub struct ScopeApp {
     pub(super) view_mode: ViewMode,
     pub(super) selected_key: Option<String>,
     pub(super) open_select: Option<OpenSelect>,
-    pub(super) dialog: Option<OpDialog>,
+    pub(super) dialog: Option<Dialog>,
     pub(super) plans: PlanStore,
     /// Virtualized list state; scroll position lives here, not in the element.
     pub(super) list_state: ListState,
@@ -123,13 +123,15 @@ impl ScopeApp {
         self.error = None;
         let (tx, rx) = oneshot::channel::<backend::Scan>();
         std::thread::spawn(move || {
-            let _ = tx.send(backend::scan_blocking());
+            let scan = backend::scan_blocking();
+            // Cache write happens on this worker thread, not the UI thread.
+            backend::write_cache(&scan);
+            let _ = tx.send(scan);
         });
         cx.spawn(async move |this, cx| {
             let scan = rx.await;
             this.update(cx, |this, cx| {
                 if let Ok(scan) = scan {
-                    backend::write_cache(&scan);
                     this.scan = Some(scan);
                 }
                 this.loading = false;
@@ -177,39 +179,26 @@ impl ScopeApp {
     pub(super) fn open_op(&mut self, kind: OpKind, pkg: InstalledPackage, cx: &mut Context<Self>) {
         let (tx, rx) = oneshot::channel::<Result<OperationPlan, String>>();
         backend::spawn_preview(self.plans.clone(), kind, pkg.clone(), tx);
-        self.dialog = Some(OpDialog {
+        self.dialog = Some(Dialog::Loading {
             kind,
-            pkg,
-            phase: Phase::Loading,
-            plan: None,
-            error: None,
-            stage: OperationStage::Verifying,
-            lines: Vec::new(),
-            elapsed: 0,
-            show_logs: false,
-            result: None,
+            pkg: pkg.clone(),
         });
         let entity = cx.entity().downgrade();
         cx.spawn(async move |_this, cx| {
             let result = rx.await;
             entity
                 .update(cx, |this, cx| {
-                    if let Some(dialog) = &mut this.dialog {
-                        match result {
-                            Ok(Ok(plan)) => {
-                                dialog.plan = Some(plan);
-                                dialog.phase = Phase::Confirm;
-                            }
-                            Ok(Err(error)) => {
-                                dialog.error = Some(error);
-                                dialog.phase = Phase::Error;
-                            }
-                            Err(_) => {
-                                dialog.error =
-                                    Some("Could not prepare the operation plan.".to_string());
-                                dialog.phase = Phase::Error;
-                            }
-                        }
+                    // Never resurrect a dialog the user already dismissed.
+                    if this.dialog.is_some() {
+                        this.dialog = Some(match result {
+                            Ok(Ok(plan)) => Dialog::Confirm { kind, pkg, plan },
+                            Ok(Err(message)) => Dialog::Failed { kind, pkg, message },
+                            Err(_) => Dialog::Failed {
+                                kind,
+                                pkg,
+                                message: "Could not prepare the operation plan.".to_string(),
+                            },
+                        });
                     }
                     cx.notify();
                 })
@@ -219,17 +208,20 @@ impl ScopeApp {
     }
 
     pub(super) fn confirm_op(&mut self, cx: &mut Context<Self>) {
-        let Some(plan) = self.dialog.as_ref().and_then(|d| d.plan.clone()) else {
+        let Some(Dialog::Confirm { kind, pkg, plan }) = self.dialog.as_ref() else {
             return;
         };
-        if let Some(dialog) = &mut self.dialog {
-            dialog.phase = Phase::Running;
-            dialog.stage = OperationStage::Verifying;
-            dialog.lines.clear();
-            dialog.elapsed = 0;
-            dialog.show_logs = false;
-            dialog.result = None;
-        }
+        let kind = *kind;
+        let pkg = pkg.clone();
+        let plan = plan.clone();
+        self.dialog = Some(Dialog::Running {
+            kind,
+            pkg: pkg.clone(),
+            plan: plan.clone(),
+            stage: OperationStage::Verifying,
+            lines: Vec::new(),
+            elapsed: 0,
+        });
 
         let (tx, mut rx) = mpsc::unbounded::<OpMsg>();
         backend::spawn_apply(self.plans.clone(), plan, tx);
@@ -237,24 +229,37 @@ impl ScopeApp {
         let entity = cx.entity().downgrade();
         cx.spawn(async move |_this, cx| {
             while let Some(message) = rx.next().await {
-                let mut refresh = false;
                 entity
-                    .update(cx, |this, cx| {
-                        if let Some(dialog) = &mut this.dialog {
-                            match message {
-                                OpMsg::Stage(stage) => dialog.stage = stage,
-                                OpMsg::Log(line) => dialog.lines.push(line),
-                                OpMsg::Done(result) => {
-                                    refresh = result.success;
-                                    dialog.result = Some(result);
-                                    dialog.phase = Phase::Done;
-                                }
+                    .update(cx, |this, cx| match message {
+                        OpMsg::Stage(stage) => {
+                            if let Some(Dialog::Running { stage: current, .. }) = &mut this.dialog {
+                                *current = stage;
                             }
+                            cx.notify();
                         }
-                        cx.notify();
-                        if refresh {
-                            this.selected_key = None;
-                            this.start_scan(cx);
+                        OpMsg::Log(line) => {
+                            if let Some(Dialog::Running { lines, .. }) = &mut this.dialog {
+                                lines.push(line);
+                            }
+                            cx.notify();
+                        }
+                        OpMsg::Done(result) => {
+                            // Refresh even when the dialog was dismissed
+                            // mid-run, so a successful operation is never lost.
+                            let refresh = result.success;
+                            if matches!(this.dialog, Some(Dialog::Running { .. })) {
+                                this.dialog = Some(Dialog::Done {
+                                    kind,
+                                    pkg: pkg.clone(),
+                                    result,
+                                    show_logs: false,
+                                });
+                            }
+                            cx.notify();
+                            if refresh {
+                                this.selected_key = None;
+                                this.start_scan(cx);
+                            }
                         }
                     })
                     .ok();
@@ -267,14 +272,10 @@ impl ScopeApp {
             cx.background_executor().timer(Duration::from_secs(1)).await;
             let running = entity
                 .update(cx, |this, cx| {
-                    if let Some(dialog) = &mut this.dialog {
-                        if dialog.phase == Phase::Running {
-                            dialog.elapsed += 1;
-                            cx.notify();
-                            true
-                        } else {
-                            false
-                        }
+                    if let Some(Dialog::Running { elapsed, .. }) = &mut this.dialog {
+                        *elapsed += 1;
+                        cx.notify();
+                        true
                     } else {
                         false
                     }

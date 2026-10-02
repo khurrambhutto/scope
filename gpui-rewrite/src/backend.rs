@@ -24,17 +24,27 @@ pub struct Scan {
     pub scanned_at_ms: u64,
 }
 
-/// Build a single-threaded Tokio runtime and drive one future to completion.
+/// One current-thread Tokio runtime shared by every scan/preview/apply.
 ///
-/// The shared backend uses `tokio::process`, which needs a Tokio reactor. We
-/// run each scan/operation on a dedicated OS thread so the GPUI event loop is
-/// never blocked.
+/// The shared backend uses `tokio::process`, which needs a Tokio reactor.
+/// Jobs still run on dedicated OS threads so the GPUI event loop is never
+/// blocked; tokio supports calling `block_on` on a current-thread runtime
+/// concurrently from several threads (the first caller owns the IO/timer
+/// drivers, later callers hook in and steal the driver when it finishes),
+/// so a per-call runtime would only add construction cost.
+fn runtime() -> &'static tokio::runtime::Runtime {
+    static RUNTIME: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
+    RUNTIME.get_or_init(|| {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("failed to build Tokio runtime")
+    })
+}
+
+/// Drive one future to completion on the shared runtime.
 fn block_on<F: Future>(future: F) -> F::Output {
-    tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .expect("failed to build Tokio runtime")
-        .block_on(future)
+    runtime().block_on(future)
 }
 
 /// Run a full scan on a background thread.

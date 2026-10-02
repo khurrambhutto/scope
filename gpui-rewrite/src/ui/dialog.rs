@@ -17,26 +17,62 @@ use super::widgets::{banner, button, dialog_actions, plan_rows, BannerKind, Butt
 
 // ---- Operation dialog ------------------------------------------------------
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum Phase {
-    Loading,
-    Confirm,
-    Running,
-    Done,
-    Error,
+/// The dialog's state machine. Each variant carries exactly the data that
+/// phase needs: a plan exists from `Confirm` on, a stage/lines/elapsed only
+/// while `Running`, a result only once `Done` — so invalid combinations
+/// cannot be constructed.
+#[derive(Clone)]
+pub(super) enum Dialog {
+    Loading {
+        kind: OpKind,
+        pkg: InstalledPackage,
+    },
+    Failed {
+        kind: OpKind,
+        pkg: InstalledPackage,
+        message: String,
+    },
+    Confirm {
+        kind: OpKind,
+        pkg: InstalledPackage,
+        plan: OperationPlan,
+    },
+    Running {
+        kind: OpKind,
+        pkg: InstalledPackage,
+        plan: OperationPlan,
+        stage: OperationStage,
+        lines: Vec<String>,
+        elapsed: u64,
+    },
+    Done {
+        kind: OpKind,
+        pkg: InstalledPackage,
+        result: OperationResult,
+        show_logs: bool,
+    },
 }
 
-pub(super) struct OpDialog {
-    pub(super) kind: OpKind,
-    pub(super) pkg: InstalledPackage,
-    pub(super) phase: Phase,
-    pub(super) plan: Option<OperationPlan>,
-    pub(super) error: Option<String>,
-    pub(super) stage: OperationStage,
-    pub(super) lines: Vec<String>,
-    pub(super) elapsed: u64,
-    pub(super) show_logs: bool,
-    pub(super) result: Option<OperationResult>,
+impl Dialog {
+    pub(super) fn kind(&self) -> OpKind {
+        match self {
+            Dialog::Loading { kind, .. }
+            | Dialog::Failed { kind, .. }
+            | Dialog::Confirm { kind, .. }
+            | Dialog::Running { kind, .. }
+            | Dialog::Done { kind, .. } => *kind,
+        }
+    }
+
+    pub(super) fn pkg(&self) -> &InstalledPackage {
+        match self {
+            Dialog::Loading { pkg, .. }
+            | Dialog::Failed { pkg, .. }
+            | Dialog::Confirm { pkg, .. }
+            | Dialog::Running { pkg, .. }
+            | Dialog::Done { pkg, .. } => pkg,
+        }
+    }
 }
 
 impl ScopeApp {
@@ -44,34 +80,28 @@ impl ScopeApp {
         let Some(dialog) = &self.dialog else {
             return div().into_any_element();
         };
-        let title = display_title(&dialog.pkg);
-        let heading = match dialog.kind {
+        let title = display_title(dialog.pkg());
+        let heading = match dialog.kind() {
             OpKind::Uninstall => format!("Uninstall {title}"),
             OpKind::Update => format!("Update {title}"),
         };
 
-        let body: AnyElement = match dialog.phase {
-            Phase::Loading => div()
+        let body: AnyElement = match dialog {
+            Dialog::Loading { kind, .. } => div()
                 .p(px(20.))
                 .text_color(text_dim())
                 .text_size(px(14.))
-                .child(match dialog.kind {
+                .child(match kind {
                     OpKind::Uninstall => "Preparing uninstall preview…",
                     OpKind::Update => "Preparing update preview…",
                 })
                 .into_any_element(),
-            Phase::Error => div()
+            Dialog::Failed { message, .. } => div()
                 .p(px(20.))
                 .flex()
                 .flex_col()
                 .gap(px(16.))
-                .child(banner(
-                    dialog
-                        .error
-                        .as_deref()
-                        .unwrap_or("Could not prepare the operation plan."),
-                    BannerKind::Error,
-                ))
+                .child(banner(message, BannerKind::Error))
                 .child(
                     div()
                         .flex()
@@ -84,9 +114,20 @@ impl ScopeApp {
                         )),
                 )
                 .into_any_element(),
-            Phase::Confirm => confirm_body(entity, dialog),
-            Phase::Running => running_body(dialog),
-            Phase::Done => done_body(entity, dialog),
+            Dialog::Confirm { kind, pkg, plan } => confirm_body(entity, *kind, pkg, plan),
+            Dialog::Running {
+                kind,
+                pkg,
+                plan,
+                stage,
+                lines,
+                elapsed,
+            } => running_body(*kind, pkg, plan, *stage, lines, *elapsed),
+            Dialog::Done {
+                result,
+                show_logs,
+                ..
+            } => done_body(entity, result, *show_logs),
         };
 
         div()
@@ -150,12 +191,12 @@ impl ScopeApp {
     }
 }
 
-fn confirm_body(entity: &WeakEntity<ScopeApp>, dialog: &OpDialog) -> AnyElement {
-    let Some(plan) = &dialog.plan else {
-        return div().into_any_element();
-    };
-    let pkg = &dialog.pkg;
-
+fn confirm_body(
+    entity: &WeakEntity<ScopeApp>,
+    kind: OpKind,
+    pkg: &InstalledPackage,
+    plan: &OperationPlan,
+) -> AnyElement {
     // Protected covers AppImages too: `safety::check_package` denies every
     // AppImage path, so their preview plans always arrive protected.
     if plan.protected {
@@ -182,7 +223,7 @@ fn confirm_body(entity: &WeakEntity<ScopeApp>, dialog: &OpDialog) -> AnyElement 
     if let Some(scope) = plan.install_scope {
         rows.push(("Scope", scope.id().to_string()));
     }
-    match dialog.kind {
+    match kind {
         OpKind::Uninstall => {
             rows.push((
                 "Version",
@@ -214,7 +255,7 @@ fn confirm_body(entity: &WeakEntity<ScopeApp>, dialog: &OpDialog) -> AnyElement 
     }
     rows.push(("Size", theme::format_size(pkg.size_bytes)));
 
-    let confirm_style = match dialog.kind {
+    let confirm_style = match kind {
         OpKind::Uninstall => ButtonStyle::Danger,
         OpKind::Update => ButtonStyle::Update,
     };
@@ -241,19 +282,26 @@ fn confirm_body(entity: &WeakEntity<ScopeApp>, dialog: &OpDialog) -> AnyElement 
         .into_any_element()
 }
 
-fn running_body(dialog: &OpDialog) -> AnyElement {
-    let title = display_title(&dialog.pkg);
-    let requires_auth = dialog.plan.as_ref().map(|p| p.requires_auth).unwrap_or(false);
-    let verb = match dialog.kind {
+fn running_body(
+    kind: OpKind,
+    pkg: &InstalledPackage,
+    plan: &OperationPlan,
+    stage: OperationStage,
+    lines: &[String],
+    elapsed: u64,
+) -> AnyElement {
+    let title = display_title(pkg);
+    let requires_auth = plan.requires_auth;
+    let verb = match kind {
         OpKind::Uninstall => "removed",
         OpKind::Update => "updated",
     };
-    let text = if dialog.stage == OperationStage::Verifying {
+    let text = if stage == OperationStage::Verifying {
         format!("Checking that {title} can be {verb}…")
     } else {
         format!(
             "{} {title}…",
-            match dialog.kind {
+            match kind {
                 OpKind::Uninstall => "Removing",
                 OpKind::Update => "Updating",
             }
@@ -264,10 +312,10 @@ fn running_body(dialog: &OpDialog) -> AnyElement {
     } else {
         ""
     };
-    let logs = if dialog.lines.is_empty() {
+    let logs = if lines.is_empty() {
         "Waiting for output…".to_string()
     } else {
-        dialog.lines.join("\n")
+        lines.join("\n")
     };
 
     div()
@@ -290,7 +338,7 @@ fn running_body(dialog: &OpDialog) -> AnyElement {
                     div()
                         .text_size(px(13.))
                         .text_color(text_faint())
-                        .child(theme::format_elapsed(dialog.elapsed)),
+                        .child(theme::format_elapsed(elapsed)),
                 ),
         )
         .child(
@@ -327,10 +375,7 @@ fn spinner() -> impl IntoElement {
         )
 }
 
-fn done_body(entity: &WeakEntity<ScopeApp>, dialog: &OpDialog) -> AnyElement {
-    let Some(result) = &dialog.result else {
-        return div().into_any_element();
-    };
+fn done_body(entity: &WeakEntity<ScopeApp>, result: &OperationResult, show_logs: bool) -> AnyElement {
     if is_cancelled(result) {
         return div()
             .p(px(20.))
@@ -366,17 +411,17 @@ fn done_body(entity: &WeakEntity<ScopeApp>, dialog: &OpDialog) -> AnyElement {
                 .text_color(accent())
                 .cursor_pointer()
                 .on_click(act(entity, |this, cx| {
-                    if let Some(dialog) = &mut this.dialog {
-                        dialog.show_logs = !dialog.show_logs;
+                    if let Some(Dialog::Done { show_logs, .. }) = &mut this.dialog {
+                        *show_logs = !*show_logs;
                     }
                     cx.notify();
                 }))
                 .child(format!(
                     "{} command output",
-                    if dialog.show_logs { "Hide" } else { "Show" }
+                    if show_logs { "Hide" } else { "Show" }
                 )),
         )
-        .when(dialog.show_logs, |this| {
+        .when(show_logs, |this| {
             this.child(
                 div()
                     .id("dlg-logs")
