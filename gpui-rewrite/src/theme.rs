@@ -5,7 +5,7 @@
 
 use gpui::{rgb, Hsla};
 
-use crate::package::{AppKind, InstalledPackage, PackageSource};
+use crate::domain::package::{AppKind, InstalledPackage, PackageSource};
 
 pub fn source_color(source: PackageSource) -> Hsla {
     match source {
@@ -154,7 +154,7 @@ pub fn elev2() -> Hsla {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::package::{InstallScope, InstalledPackage, PackageSource};
+    use crate::domain::package::{InstallScope, InstalledPackage, PackageSource};
 
     fn pkg() -> InstalledPackage {
         InstalledPackage::new(PackageSource::Apt, "htop")

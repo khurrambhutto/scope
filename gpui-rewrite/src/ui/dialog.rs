@@ -6,8 +6,8 @@ use gpui::prelude::*;
 use gpui::{div, px, rgba, rgb, AnyElement, App, ClickEvent, FontWeight, WeakEntity, Window};
 
 use crate::backend::OpKind;
-use crate::operations::{OperationPlan, OperationResult, OperationStage};
-use crate::package::InstalledPackage;
+use crate::domain::operations::{OperationPlan, OperationResult, OperationStage};
+use crate::domain::package::InstalledPackage;
 use crate::theme::{
     self, accent, border, display_title, elev, elev2, text, text_dim, text_faint,
 };

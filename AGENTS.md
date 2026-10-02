@@ -56,7 +56,7 @@ gpui-rewrite/             second shell: same product on GPUI (see below)
 
 `gpui-rewrite/` is a second shell for the same product, built on Zed's GPUI instead of Tauri + React. It targets the same screen, palette, and flows.
 
-- The backend domain modules are reused verbatim: `gpui-rewrite/src/main.rs` pulls in `src-tauri/src/{package,scanner,desktop_entries,icons,safety,system,operations}` with `#[path]`. Those files stay the single source of truth for both shells — change a scanner, DTO, or safety rule once and both pick it up.
+- The backend domain is vendored: `gpui-rewrite/src/domain/{package,scanner,desktop_entries,icons,safety,system,operations}` is a copy of `src-tauri/src/`. The GPUI crate builds standalone via `mod domain` — no `#[path]` imports. Sync intentionally when a scanner, DTO, or safety rule changes.
 - `src-tauri/src/commands/*` and `lib.rs` are Tauri-only and are not reused. `gpui-rewrite/src/backend.rs` is the thin, GPUI-side equivalent: scan + persistent cache, plan preview/apply with streamed logs, and `scope-icon://` URL decoding.
 - UI lives in `gpui-rewrite/src/ui/`: `app_view.rs` holds screen state and composition (header, filters, virtualized list, inline detail, uninstall/update dialogs), split into `filters.rs`, `row.rs`, `detail.rs`, `dialog.rs`, `title_bar.rs`, and `widgets.rs`; `text_input.rs` is the search field. `gpui-rewrite/src/theme.rs` holds the palette and formatting helpers.
 - Run `cd gpui-rewrite && cargo run`. Linux needs GPUI's system deps; notably `libxkbcommon-x11-dev`, because GPUI links `-lxkbcommon-x11` on Linux even in Wayland-only builds.
