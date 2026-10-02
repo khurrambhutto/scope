@@ -22,11 +22,38 @@ use gpui::{
 use ui::app_view::ScopeApp;
 
 /// Filesystem-backed assets so `svg()`/`img()` can load absolute paths (the
-/// resolved app icons and the bundled brand mark).
+/// resolved app icons).
+///
+/// The six bundled brand/control SVGs are embedded in the binary: the UI
+/// refers to them via `concat!(env!("CARGO_MANIFEST_DIR"), "/assets/...")`,
+/// which bakes the *build* machine's source dir into the path. That path does
+/// not exist on user machines (or matches a different checkout locally), so a
+/// pure `fs::read` leaves the logo, window controls, and filter/refresh icons
+/// invisible in the installed `.deb`. Matching on the `/assets/<name>` suffix
+/// serves the embedded bytes regardless of which prefix was baked in, while
+/// real app-icon paths (theme dirs, `~/.local`, etc.) still read from disk.
 struct Assets;
+
+fn embedded_asset(path: &str) -> Option<&'static [u8]> {
+    let suffix = path
+        .find("/assets/")
+        .map(|i| &path[i + "/assets/".len()..])?;
+    match suffix {
+        "scope-logo.svg" => Some(include_bytes!("../assets/scope-logo.svg")),
+        "win-min.svg" => Some(include_bytes!("../assets/win-min.svg")),
+        "win-max.svg" => Some(include_bytes!("../assets/win-max.svg")),
+        "win-close.svg" => Some(include_bytes!("../assets/win-close.svg")),
+        "filter.svg" => Some(include_bytes!("../assets/filter.svg")),
+        "refresh.svg" => Some(include_bytes!("../assets/refresh.svg")),
+        _ => None,
+    }
+}
 
 impl AssetSource for Assets {
     fn load(&self, path: &str) -> anyhow::Result<Option<Cow<'static, [u8]>>> {
+        if let Some(bytes) = embedded_asset(path) {
+            return Ok(Some(Cow::Borrowed(bytes)));
+        }
         std::fs::read(path)
             .map(Into::into)
             .map(Some)
@@ -84,4 +111,35 @@ fn main() {
                 .ok();
             cx.activate(true);
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bundled_svgs_resolve_regardless_of_baked_prefix() {
+        // `concat!(env!("CARGO_MANIFEST_DIR"), ...)` bakes the build machine's
+        // checkout path (e.g. CI's `/home/runner/...`) into the binary. The
+        // installed app must still find the icons.
+        for name in [
+            "scope-logo.svg",
+            "win-min.svg",
+            "win-max.svg",
+            "win-close.svg",
+            "filter.svg",
+            "refresh.svg",
+        ] {
+            let ci_path = format!("/home/runner/work/scope/scope/assets/{name}");
+            let bytes = embedded_asset(&ci_path);
+            assert!(bytes.is_some_and(|b| !b.is_empty()), "{name} missing");
+        }
+        // Real app-icon paths still fall through to the filesystem.
+        assert!(embedded_asset("/usr/share/icons/hicolor/48x48/apps/firefox.png").is_none());
+        assert!(embedded_asset(&format!(
+            "{}/assets/not-an-icon.svg",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .is_none());
+    }
 }
