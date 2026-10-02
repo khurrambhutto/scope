@@ -121,18 +121,15 @@ fn elevated_command(
 ) -> (Command, String, Vec<String>) {
     let program_abs = abs(program);
     let mut argv: Vec<String> = Vec::new();
-    let display_program: String;
-    match auth {
+    let display_program = match auth {
         AuthMethod::Pkexec => {
             argv.push("env".into());
             argv.push("DEBIAN_FRONTEND=noninteractive".into());
             argv.push(program_abs.clone());
-            display_program = format!("pkexec env DEBIAN_FRONTEND=noninteractive {program_abs}");
+            format!("pkexec env DEBIAN_FRONTEND=noninteractive {program_abs}")
         }
-        AuthMethod::None => {
-            display_program = program_abs.clone();
-        }
-    }
+        AuthMethod::None => program_abs.clone(),
+    };
     for a in args {
         argv.push((*a).to_string());
     }

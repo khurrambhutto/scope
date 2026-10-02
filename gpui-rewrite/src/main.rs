@@ -92,7 +92,7 @@ fn main() {
                         focus: true,
                         ..Default::default()
                     },
-                    |_window, cx| cx.new(|cx| ScopeApp::new(cx)),
+                    |_window, cx| cx.new(ScopeApp::new),
                 )
                 .expect("failed to open the Scope window");
 

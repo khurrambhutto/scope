@@ -54,7 +54,7 @@ async fn scan() -> Result<Vec<InstalledPackage>> {
         "${{Package}}{SEP}${{Version}}{SEP}${{Installed-Size}}{SEP}${{binary:Summary}}{SEP}\\n"
     );
     let mut args: Vec<String> = vec!["-W".into(), format!("-f={format}")];
-    args.extend(manual.into_iter());
+    args.extend(manual);
 
     let argv: Vec<&str> = args.iter().map(String::as_str).collect();
     let output = capture_stdout("dpkg-query", &argv, Duration::from_secs(20))
@@ -113,7 +113,7 @@ fn classify(name: &str) -> AppKind {
 }
 
 /// Run `apt list --upgradable` and mark packages that have available updates.
-async fn check_updates(packages: &mut Vec<InstalledPackage>) {
+async fn check_updates(packages: &mut [InstalledPackage]) {
     let output = match capture_stdout("apt", &["list", "--upgradable"], Duration::from_secs(30)).await
     {
         Ok(o) => o,

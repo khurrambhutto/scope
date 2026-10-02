@@ -100,7 +100,7 @@ fn check_apt(name: &str) -> Protection {
         "libgtk-4-1",
     ];
 
-    if CRITICAL.iter().any(|c| n == *c) {
+    if CRITICAL.contains(&n) {
         return Protection::denied(format!(
             "'{n}' is a system-critical package and cannot be removed through Scope."
         ));
