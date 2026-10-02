@@ -20,9 +20,11 @@ mod tests {
 
     /// Smoke test that runs the real scanners on the live system. Asserts that
     /// if a source is available it returns at least one package, and that the
-    /// merge step produces stable, unique keys. Gated behind `live-scanners` so
-    /// CI without flatpak/snap can opt out.
+    /// merge step produces stable, unique keys. Ignored by default so `cargo
+    /// test` stays hermetic on machines without apt/snap/flatpak; run it with
+    /// `cargo test -- --ignored`.
     #[tokio::test]
+    #[ignore = "runs the live package managers; run with `cargo test -- --ignored`"]
     async fn scan_all_runs_on_live_system() {
         let (pkgs, avail) = scan_all().await;
         assert!(

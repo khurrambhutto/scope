@@ -137,7 +137,7 @@ pub fn spawn_preview(
             }
         };
         if !plan.protected {
-            block_on(plans.issue(plan.clone()));
+            plans.issue(plan.clone());
         }
         let _ = tx.send(Ok(plan));
     });
@@ -150,7 +150,7 @@ pub fn spawn_preview(
 pub fn spawn_apply(plans: PlanStore, plan: OperationPlan, tx: mpsc::UnboundedSender<OpMsg>) {
     std::thread::spawn(move || {
         block_on(async move {
-            let Some(plan) = plans.take(&plan.plan_id).await else {
+            let Some(plan) = plans.take(&plan.plan_id) else {
                 let _ = tx.unbounded_send(OpMsg::Done(failed(
                     "Stale or unknown plan. Please preview again.",
                 )));

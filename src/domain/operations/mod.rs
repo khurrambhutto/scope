@@ -122,7 +122,7 @@ pub const OPERATION_LOG_EVENT: &str = "operation-log";
 /// no longer reflects the system.
 #[derive(Default, Clone)]
 pub struct PlanStore {
-    inner: Arc<tokio::sync::Mutex<HashMap<String, StoredPlan>>>,
+    inner: Arc<std::sync::Mutex<HashMap<String, StoredPlan>>>,
 }
 
 struct StoredPlan {
@@ -134,9 +134,11 @@ struct StoredPlan {
 pub const PLAN_TTL: Duration = Duration::from_secs(5 * 60);
 
 impl PlanStore {
-    pub async fn issue(&self, plan: OperationPlan) {
+    /// Register a freshly previewed plan. Expired entries are swept here so the
+    /// store cannot grow without bound.
+    pub fn issue(&self, plan: OperationPlan) {
         let id = plan.plan_id.clone();
-        let mut guard = self.inner.lock().await;
+        let mut guard = self.lock();
         guard.insert(
             id,
             StoredPlan {
@@ -150,19 +152,32 @@ impl PlanStore {
 
     /// Take (and remove) a non-expired plan. Returns `None` if missing/expired,
     /// which the apply command treats as a stale-plan rejection.
-    pub async fn take(&self, plan_id: &str) -> Option<OperationPlan> {
-        let mut guard = self.inner.lock().await;
-        let exists = guard
+    pub fn take(&self, plan_id: &str) -> Option<OperationPlan> {
+        self.take_at(plan_id, Instant::now())
+    }
+
+    /// Clock-injectable form of [`take`](Self::take) so expiry is testable
+    /// without sleeping for [`PLAN_TTL`].
+    fn take_at(&self, plan_id: &str, now: Instant) -> Option<OperationPlan> {
+        let mut guard = self.lock();
+        let valid = guard
             .get(plan_id)
-            .map(|v| v.created.elapsed() < PLAN_TTL)
-            .unwrap_or(false);
-        if exists {
+            .is_some_and(|v| now.duration_since(v.created) < PLAN_TTL);
+        if valid {
             guard.remove(plan_id).map(|v| v.plan)
         } else {
             // Drop any expired entry with this id too.
             guard.remove(plan_id);
             None
         }
+    }
+
+    /// Lock the store, recovering from poisoning rather than panicking. The
+    /// critical section is synchronous, so a plain `std` mutex is correct here.
+    fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, StoredPlan>> {
+        self.inner
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }
 
@@ -184,4 +199,81 @@ pub fn now_ms() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn plan(id: &str) -> OperationPlan {
+        OperationPlan {
+            plan_id: id.into(),
+            operation: Operation::Uninstall,
+            source: PackageSource::Apt,
+            package_id: "gimp".into(),
+            install_scope: None,
+            display_name: "GIMP".into(),
+            current_version: "2.10".into(),
+            target_version: String::new(),
+            requires_auth: true,
+            auth_method: AuthMethod::Pkexec,
+            protected: false,
+            protection_reason: None,
+            steps: vec![],
+            created_at_ms: 0,
+        }
+    }
+
+    #[test]
+    fn issue_then_take_returns_the_plan() {
+        let store = PlanStore::default();
+        store.issue(plan("plan-1"));
+        assert_eq!(store.take("plan-1").map(|p| p.package_id), Some("gimp".into()));
+    }
+
+    #[test]
+    fn take_is_single_use() {
+        let store = PlanStore::default();
+        store.issue(plan("plan-1"));
+        let _ = store.take("plan-1");
+        assert!(store.take("plan-1").is_none());
+    }
+
+    #[test]
+    fn take_returns_none_for_unknown_id() {
+        let store = PlanStore::default();
+        assert!(store.take("never-issued").is_none());
+    }
+
+    #[test]
+    fn take_rejects_a_plan_older_than_the_ttl() {
+        let store = PlanStore::default();
+        store.issue(plan("plan-1"));
+        let after_ttl = Instant::now() + PLAN_TTL + Duration::from_secs(1);
+        assert!(store.take_at("plan-1", after_ttl).is_none());
+    }
+
+    #[test]
+    fn expired_plan_is_removed_so_a_later_take_cannot_revive_it() {
+        let store = PlanStore::default();
+        store.issue(plan("plan-1"));
+        let after_ttl = Instant::now() + PLAN_TTL + Duration::from_secs(1);
+        let _ = store.take_at("plan-1", after_ttl);
+        assert!(store.take("plan-1").is_none());
+    }
+
+    #[test]
+    fn issuing_again_replaces_the_previous_plan() {
+        let store = PlanStore::default();
+        store.issue(plan("plan-1"));
+        let mut replacement = plan("plan-1");
+        replacement.package_id = "vlc".into();
+        store.issue(replacement);
+        assert_eq!(store.take("plan-1").map(|p| p.package_id), Some("vlc".into()));
+    }
+
+    #[test]
+    fn new_plan_ids_are_unique() {
+        assert_ne!(new_plan_id(), new_plan_id());
+    }
 }

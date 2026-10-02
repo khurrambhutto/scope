@@ -43,6 +43,15 @@ fn cache() -> &'static Mutex<HashMap<String, Option<PathBuf>>> {
     RESOLVED_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+/// Lock the icon cache, recovering from poisoning instead of panicking.
+///
+/// Icon resolution is best-effort enrichment: a panic elsewhere while the lock
+/// was held must not turn every later lookup into a panic and take down the
+/// whole scan.
+fn lock_cache() -> std::sync::MutexGuard<'static, HashMap<String, Option<PathBuf>>> {
+    cache().lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 fn theme_name() -> &'static Option<String> {
     THEME_NAME.get_or_init(detect_icon_theme)
 }
@@ -60,15 +69,12 @@ pub fn resolve(icon_value: &str) -> Option<PathBuf> {
         return None;
     }
 
-    if let Some(cached) = cache().lock().unwrap().get(icon_value) {
+    if let Some(cached) = lock_cache().get(icon_value) {
         return cached.clone();
     }
 
     let result = resolve_uncached(icon_value);
-    cache()
-        .lock()
-        .unwrap()
-        .insert(icon_value.to_string(), result.clone());
+    lock_cache().insert(icon_value.to_string(), result.clone());
     result
 }
 
