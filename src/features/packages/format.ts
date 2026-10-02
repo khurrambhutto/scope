@@ -21,3 +21,10 @@ export function formatAppCount(shown: number, total: number): string {
   }
   return `Showing ${shown} of ${total} apps`;
 }
+
+/** Elapsed seconds as `m:ss` for the running-operation timer. */
+export function formatElapsed(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${minutes}:${secs.toString().padStart(2, "0")}`;
+}

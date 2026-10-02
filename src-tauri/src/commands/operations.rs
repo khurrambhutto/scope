@@ -18,8 +18,8 @@ use crate::operations::update::{
     revalidate as revalidate_update_op,
 };
 use crate::operations::{
-    OperationPlan, OperationResult, OperationStage, OperationStatus, PlanStore,
-    OPERATION_STATUS_EVENT,
+    OperationLog, OperationPlan, OperationResult, OperationStage, OperationStatus, PlanStore,
+    OPERATION_LOG_EVENT, OPERATION_STATUS_EVENT,
 };
 
 /// Build (and store) a preview plan for uninstalling the package with the given
@@ -65,7 +65,7 @@ pub async fn apply_uninstall(
     revalidate_remove(&plan, &probed).map_err(|e| e.to_string())?;
     emit_stage(&app, &plan.plan_id, OperationStage::Executing);
 
-    let result = apply_remove(&plan).await;
+    let result = apply_remove(&plan, &log_sink(&app, &plan.plan_id)).await;
     Ok(result)
 }
 
@@ -118,8 +118,25 @@ pub async fn apply_update(
     revalidate_update_op(&plan, &probed).map_err(|e| e.to_string())?;
     emit_stage(&app, &plan.plan_id, OperationStage::Executing);
 
-    let result = apply_update_op(&plan).await;
+    let result = apply_update_op(&plan, &log_sink(&app, &plan.plan_id)).await;
     Ok(result)
+}
+
+/// Build a sink that forwards each output line of a running operation to the
+/// frontend as an [`OPERATION_LOG_EVENT`].
+fn log_sink<'a>(
+    app: &'a AppHandle,
+    plan_id: &'a str,
+) -> impl Fn(&str) + Send + Sync + 'a {
+    move |line: &str| {
+        let _ = app.emit(
+            OPERATION_LOG_EVENT,
+            OperationLog {
+                plan_id: plan_id.to_string(),
+                line: line.to_string(),
+            },
+        );
+    }
 }
 
 fn emit_stage(app: &AppHandle, plan_id: &str, stage: OperationStage) {

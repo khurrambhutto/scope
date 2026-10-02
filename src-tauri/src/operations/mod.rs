@@ -96,8 +96,19 @@ pub struct OperationStatus {
     pub stage: OperationStage,
 }
 
+/// One line of live command output, emitted while an apply command runs so the
+/// UI can show real progress instead of a bare spinner.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OperationLog {
+    pub plan_id: String,
+    pub line: String,
+}
+
 /// Event name used to stream [`OperationStatus`] to the frontend.
 pub const OPERATION_STATUS_EVENT: &str = "operation-status";
+
+/// Event name used to stream live command output ([`OperationLog`]).
+pub const OPERATION_LOG_EVENT: &str = "operation-log";
 
 /// In-memory store of issued plans, keyed by id. Plans expire after
 /// [`PLAN_TTL`] so a user who walks away cannot later apply a stale plan that

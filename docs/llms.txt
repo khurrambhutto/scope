@@ -18,7 +18,7 @@ Scope is a desktop app for Linux that unifies APT, Snap, Flatpak, and AppImage i
 
 ## Installation
 
-Download the `.deb`, `.rpm`, or `.AppImage` from [Releases](https://github.com/khurrambhutto/scope/releases). The AppImage self-updates; `.deb`/`.rpm` installs update by downloading the new package.
+Download the `.deb`, `.rpm`, or `.AppImage` from [Releases](https://github.com/khurrambhutto/scope/releases). All three self-update in place: `.deb` and `.rpm` installs escalate with Polkit (`pkexec dpkg -i` / `rpm -U`), and the AppImage is rewritten. Source builds, AUR, and Flatpak installs can't self-update and must download the new version from Releases.
 
 ```bash
 curl -LO https://github.com/khurrambhutto/scope/releases/latest/download/scope_0.2.0_amd64.deb

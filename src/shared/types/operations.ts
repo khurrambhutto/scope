@@ -41,3 +41,8 @@ export interface OperationStatus {
   plan_id: string;
   stage: OperationStage;
 }
+
+export interface OperationLog {
+  plan_id: string;
+  line: string;
+}

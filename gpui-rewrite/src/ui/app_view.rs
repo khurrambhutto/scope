@@ -496,7 +496,6 @@ impl Render for ScopeApp {
             ))
             .text_color(text())
             .child(title_bar())
-            .child(top_bar())
             .child(self.filters(cx))
             .children(banner_children)
             .child(
@@ -863,7 +862,7 @@ fn title_bar() -> impl IntoElement {
     div()
         .id("titlebar")
         .flex_none()
-        .h(px(36.))
+        .h(px(40.))
         .flex()
         .items_center()
         .window_control_area(WindowControlArea::Drag)
@@ -877,9 +876,17 @@ fn title_bar() -> impl IntoElement {
         .child(div().flex_1())
         .child(
             div()
-                .text_size(px(13.))
-                .text_color(text_dim())
-                .child("Scope"),
+                .flex()
+                .items_center()
+                .gap(px(8.))
+                .child(img(PathBuf::from(LOGO)).size(px(28.)).flex_none())
+                .child(
+                    div()
+                        .text_size(px(18.))
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(rgb(0xffffff))
+                        .child("Scope"),
+                ),
         )
         .child(
             div()
@@ -916,7 +923,7 @@ fn window_control_button(
     area: WindowControlArea,
     action: impl Fn(&mut Window) + 'static,
 ) -> impl IntoElement {
-    let close = matches!(area, WindowControlArea::Close);
+    let hover_bg = danger();
     div()
         .id(id)
         .window_control_area(area)
@@ -925,40 +932,16 @@ fn window_control_button(
             cx.stop_propagation();
         })
         .on_click(move |_event, window, _cx| action(window))
-        .size(px(24.))
-        .rounded_full()
+        .size(px(28.))
+        .rounded(px(4.))
         .flex()
         .items_center()
         .justify_center()
-        .text_size(px(12.))
+        .text_size(px(14.))
         .text_color(text_dim())
         .cursor_pointer()
-        .hover(move |this| {
-            if close {
-                this.bg(danger()).text_color(rgb(0xffffff))
-            } else {
-                this.bg(rgba(0xffffff1a)).text_color(text())
-            }
-        })
+        .hover(move |this| this.bg(hover_bg).text_color(rgb(0xffffff)))
         .child(glyph)
-}
-
-fn top_bar() -> impl IntoElement {
-    div()
-        .flex_none()
-        .flex()
-        .items_center()
-        .justify_center()
-        .gap(px(10.))
-        .py(px(14.))
-        .child(img(PathBuf::from(LOGO)).size(px(28.)).flex_none())
-        .child(
-            div()
-                .text_size(px(20.))
-                .font_weight(FontWeight::BOLD)
-                .text_color(rgb(0xffffff))
-                .child("Scope"),
-        )
 }
 
 fn view_toggle_button(
@@ -1164,6 +1147,7 @@ fn row_element(
                 .child(
                     div()
                         .text_size(px(15.))
+                        .line_height(px(18.))
                         .font_weight(FontWeight::SEMIBOLD)
                         .truncate()
                         .child(title),
@@ -1174,6 +1158,7 @@ fn row_element(
                         .items_center()
                         .gap(px(6.))
                         .text_size(px(13.))
+                        .line_height(px(16.))
                         .text_color(text_dim())
                         .truncate()
                         .child(version)
@@ -1220,7 +1205,7 @@ fn action_button(
         .px(px(18.))
         .flex()
         .items_center()
-        .rounded(px(11.))
+        .rounded_r(px(11.))
         .bg(color)
         .text_color(rgb(0xffffff))
         .text_size(px(13.))
