@@ -13,11 +13,35 @@ use tokio::process::Command;
 use crate::domain::operations::AuthMethod;
 use crate::domain::operations::OperationResult;
 
+/// Failure of a command Scope tried to run.
+///
+/// A typed error (rather than a formatted `anyhow` string) lets callers
+/// distinguish "the tool isn't installed" from "it timed out" from "it exited
+/// non-zero", which is what per-source availability reporting needs.
+#[derive(Debug, thiserror::Error)]
+pub enum SystemError {
+    #[error("failed to spawn {program}: {source}")]
+    Spawn {
+        program: String,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("{program} timed out after {timeout:?}")]
+    Timeout { program: String, timeout: Duration },
+    #[error("{program} failed (exit {exit_code:?}): {stderr}")]
+    NonZero {
+        program: String,
+        exit_code: Option<i32>,
+        stderr: String,
+    },
+}
+
 /// Captured result of a finished command, including non-zero exits.
 ///
 /// Probe callers need to see *how* a command failed (e.g. "package not
 /// installed" vs "package manager broken"), so unlike [`capture_stdout`] this
 /// returns the output instead of turning it into an error.
+#[derive(Debug)]
 pub struct ProcessOutput {
     pub success: bool,
     pub exit_code: Option<i32>,
@@ -33,7 +57,7 @@ pub async fn capture_output(
     program: &str,
     args: &[&str],
     timeout: Duration,
-) -> anyhow::Result<ProcessOutput> {
+) -> Result<ProcessOutput, SystemError> {
     let output = tokio::time::timeout(timeout, Command::new(program).args(args).output()).await;
     match output {
         Ok(Ok(out)) => Ok(ProcessOutput {
@@ -42,29 +66,35 @@ pub async fn capture_output(
             stdout: String::from_utf8_lossy(&out.stdout).to_string(),
             stderr: String::from_utf8_lossy(&out.stderr).to_string(),
         }),
-        Ok(Err(e)) => anyhow::bail!("failed to spawn {program}: {e}"),
-        Err(_) => anyhow::bail!("{program} timed out after {timeout:?}"),
+        Ok(Err(source)) => Err(SystemError::Spawn {
+            program: program.to_string(),
+            source,
+        }),
+        Err(_) => Err(SystemError::Timeout {
+            program: program.to_string(),
+            timeout,
+        }),
     }
 }
 
 /// Capture stdout of a command as a UTF-8 string, with a timeout.
 ///
 /// Returns the stdout on success. If the command is missing, exits
-/// non-zero, or exceeds the timeout, this returns `Err` with a readable cause.
+/// non-zero, or exceeds the timeout, this returns a typed [`SystemError`].
 pub async fn capture_stdout(
     program: &str,
     args: &[&str],
     timeout: Duration,
-) -> anyhow::Result<String> {
+) -> Result<String, SystemError> {
     let out = capture_output(program, args, timeout).await?;
     if out.success {
         Ok(out.stdout)
     } else {
-        anyhow::bail!(
-            "{program} failed (exit {:?}): {}",
-            out.exit_code,
-            out.stderr.trim()
-        )
+        Err(SystemError::NonZero {
+            program: program.to_string(),
+            exit_code: out.exit_code,
+            stderr: out.stderr.trim().to_string(),
+        })
     }
 }
 
@@ -391,5 +421,29 @@ mod tests {
 
         assert!(!out.success);
         assert!(out.message.contains("timed out"), "message: {}", out.message);
+    }
+
+    #[tokio::test]
+    async fn capture_stdout_reports_a_nonzero_exit() {
+        let err = capture_stdout("false", &[], Duration::from_secs(5))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, SystemError::NonZero { .. }), "got {err}");
+    }
+
+    #[tokio::test]
+    async fn capture_output_reports_a_spawn_failure() {
+        let err = capture_output("scope-no-such-binary", &[], Duration::from_secs(5))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, SystemError::Spawn { .. }), "got {err}");
+    }
+
+    #[tokio::test]
+    async fn capture_output_reports_a_timeout() {
+        let err = capture_output("sleep", &["5"], Duration::from_millis(100))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, SystemError::Timeout { .. }), "got {err}");
     }
 }

@@ -334,4 +334,38 @@ mod tests {
         pkg.icon = None;
         assert_eq!(icon_path(&pkg), None);
     }
+
+    fn apt_package(id: &str) -> InstalledPackage {
+        let mut pkg = InstalledPackage::new(PackageSource::Apt, id);
+        pkg.name = id.to_string();
+        pkg
+    }
+
+    #[test]
+    fn spawn_preview_rejects_an_update_without_an_update_available() {
+        let (tx, rx) = oneshot::channel();
+        let mut pkg = apt_package("gimp");
+        pkg.has_update = false;
+        spawn_preview(PlanStore::default(), OpKind::Update, pkg, tx);
+        assert!(block_on(rx).unwrap().is_err());
+    }
+
+    #[test]
+    fn spawn_preview_registers_a_non_protected_plan() {
+        let store = PlanStore::default();
+        let (tx, rx) = oneshot::channel();
+        spawn_preview(store.clone(), OpKind::Uninstall, apt_package("gimp"), tx);
+        let plan = block_on(rx).unwrap().unwrap();
+        assert!(store.take(&plan.plan_id).is_some());
+    }
+
+    #[test]
+    fn spawn_preview_does_not_register_a_protected_plan() {
+        let store = PlanStore::default();
+        let (tx, rx) = oneshot::channel();
+        spawn_preview(store.clone(), OpKind::Uninstall, apt_package("systemd"), tx);
+        let plan = block_on(rx).unwrap().unwrap();
+        assert!(plan.protected);
+        assert!(store.take(&plan.plan_id).is_none());
+    }
 }

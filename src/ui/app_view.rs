@@ -472,6 +472,41 @@ impl ScopeApp {
         banners
     }
 
+    /// The virtualized package list, or a loading/empty state.
+    fn list_element(&self, list_entity: &Entity<ScopeApp>) -> AnyElement {
+        if self.loading && self.entries.is_empty() {
+            loading_state().into_any_element()
+        } else if self.entries.is_empty() {
+            empty_state().into_any_element()
+        } else {
+            let state = self.list_state.clone();
+            let list_entity = list_entity.clone();
+            list(state, move |index, _window, cx| {
+                let this = list_entity.read(cx);
+                match this.entries.get(index) {
+                    Some(pkg) => {
+                        let selected = this.selected_key.as_deref() == Some(pkg.key.as_str());
+                        let mut column = div().flex().flex_col().w_full();
+                        column = column.child(row_element(
+                            &list_entity.downgrade(),
+                            pkg,
+                            selected,
+                            this.view_mode,
+                            index,
+                        ));
+                        if selected {
+                            column = column.child(detail_element(pkg));
+                        }
+                        column.into_any_element()
+                    }
+                    None => div().into_any_element(),
+                }
+            })
+            .size_full()
+            .into_any_element()
+        }
+    }
+
     fn source_warnings(&self) -> Vec<(String, String)> {
         let Some(scan) = &self.scan else {
             return Vec::new();
@@ -498,36 +533,7 @@ impl Render for ScopeApp {
         let total = self.scan.as_ref().map(|s| s.packages.len()).unwrap_or(0);
         let rows_len = self.entries.len();
 
-        let list_element: AnyElement = if self.loading && rows_len == 0 {
-            loading_state().into_any_element()
-        } else if rows_len == 0 {
-            empty_state().into_any_element()
-        } else {
-            let state = self.list_state.clone();
-            list(state, move |index, _window, cx| {
-                let this = list_entity.read(cx);
-                match this.entries.get(index) {
-                    Some(pkg) => {
-                        let selected = this.selected_key.as_deref() == Some(pkg.key.as_str());
-                        let mut column = div().flex().flex_col().w_full();
-                        column = column.child(row_element(
-                            &list_entity.downgrade(),
-                            pkg,
-                            selected,
-                            this.view_mode,
-                            index,
-                        ));
-                        if selected {
-                            column = column.child(detail_element(pkg));
-                        }
-                        column.into_any_element()
-                    }
-                    None => div().into_any_element(),
-                }
-            })
-            .size_full()
-            .into_any_element()
-        };
+        let list_element = self.list_element(&list_entity);
 
         let banner_children = self.banner_stack(&entity);
 

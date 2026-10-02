@@ -69,6 +69,46 @@ mod tests {
         );
         let _ = AppKind::Gui;
     }
+
+    fn desktop_app(id: &str, name: &str, exec: &str) -> crate::domain::desktop_entries::DesktopApp {
+        crate::domain::desktop_entries::DesktopApp {
+            id: id.into(),
+            name: name.into(),
+            comment: None,
+            exec: exec.into(),
+            icon: None,
+            categories: Vec::new(),
+            terminal: false,
+            no_display: false,
+        }
+    }
+
+    #[test]
+    fn enrich_gives_a_matching_package_its_desktop_display_name() {
+        let index = DesktopIndex::from_apps(vec![desktop_app("firefox", "Firefox", "firefox %U")]);
+        let mut pkg = InstalledPackage::new(PackageSource::Apt, "firefox");
+        pkg.name = "firefox".into();
+        enrich(&mut pkg, &index);
+        assert_eq!(pkg.display_name.as_deref(), Some("Firefox"));
+    }
+
+    #[test]
+    fn enrich_marks_a_matching_package_as_gui() {
+        let index = DesktopIndex::from_apps(vec![desktop_app("firefox", "Firefox", "firefox %U")]);
+        let mut pkg = InstalledPackage::new(PackageSource::Apt, "firefox");
+        pkg.name = "firefox".into();
+        enrich(&mut pkg, &index);
+        assert_eq!(pkg.app_kind, AppKind::Gui);
+    }
+
+    #[test]
+    fn enrich_leaves_an_unmatched_package_alone() {
+        let mut pkg = InstalledPackage::new(PackageSource::Apt, "htop");
+        pkg.name = "htop".into();
+        pkg.app_kind = AppKind::Cli;
+        enrich(&mut pkg, &DesktopIndex::empty());
+        assert_eq!(pkg.app_kind, AppKind::Cli);
+    }
 }
 use tokio::task::JoinSet;
 
@@ -156,7 +196,7 @@ pub async fn scan_all() -> (Vec<InstalledPackage>, ScanAvailability) {
                         source,
                         available: true,
                         packages: Vec::new(),
-                        error: Some(e.to_string()),
+                        error: Some(scan_error_message(&e)),
                     },
                 }
             } else {
@@ -225,6 +265,26 @@ fn kind_rank(k: AppKind) -> u8 {
         AppKind::Gui => 0,
         AppKind::Cli => 1,
         AppKind::Unknown => 2,
+    }
+}
+
+/// Turn a scanner failure into a short, source-specific availability message.
+///
+/// `capture_stdout` reports a typed [`SystemError`], so a timeout reads as a
+/// timeout instead of an opaque command string. Any other error keeps its full
+/// `anyhow` context.
+fn scan_error_message(error: &anyhow::Error) -> String {
+    match error.downcast_ref::<crate::domain::system::SystemError>() {
+        Some(crate::domain::system::SystemError::Timeout { program, timeout }) => {
+            format!("{program} timed out after {timeout:?}")
+        }
+        Some(crate::domain::system::SystemError::Spawn { program, .. }) => {
+            format!("could not run {program}")
+        }
+        Some(crate::domain::system::SystemError::NonZero { program, exit_code, .. }) => {
+            format!("{program} exited with {exit_code:?}")
+        }
+        None => error.to_string(),
     }
 }
 
