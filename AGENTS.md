@@ -57,7 +57,7 @@ docs/                     GitHub Pages site
 ## GPUI notes
 
 - Run `cargo run`. Linux needs GPUI's system deps; notably `libxkbcommon-x11-dev`, because GPUI links `-lxkbcommon-x11` on Linux even in Wayland-only builds.
-- Depend on `gpui-kit` alone (it brings the pinned `gpui-pre` snapshot); never list `gpui` separately. Import UI types via `use gpui_kit::*` / `gpui_kit::prelude::*`. Windows open through `gpui_kit::open_window` after `gpui_kit::init`, so the view sits under Base `Root`.
+- Depend on `gpui-kit` alone (it brings the pinned `gpui-pre` snapshot); never list `gpui` separately. Import UI types via `use gpui_kit::*` / `gpui_kit::prelude::*`. Call `gpui_kit::init` once at startup for the theme; open the window with plain `cx.open_window` (no Base `Root`) to stay borderless — kit's `Root` draws a 1px `WindowBorder` frame on Linux. Overlay components (dropdowns, popovers, toasts) need `Root` and are out until the frame question is revisited.
 - The crate pins `[lints]` in its `Cargo.toml` (`unsafe_code = "forbid"`, deny `dbg_macro`/`todo`/`unimplemented`).
 - Not yet ported: the self-updater banner.
 

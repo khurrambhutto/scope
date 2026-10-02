@@ -92,29 +92,32 @@ fn main() {
             .detach();
 
             let bounds = Bounds::centered(None, size(px(1120.), px(740.)), cx);
-            let (window, view) = gpui_kit::open_window(
-                WindowOptions {
-                    window_bounds: Some(WindowBounds::Windowed(bounds)),
-                    titlebar: Some(TitlebarOptions {
-                        title: Some("Scope".into()),
+            // Opened directly (not via gpui_kit::open_window) so no Base
+            // Root wraps the view: kit's Root draws a 1px WindowBorder frame
+            // on Linux that we don't want. Plain kit components only need
+            // the init above (theme is global); overlay components
+            // (dropdowns, popovers, toasts) need Root and stay out for now.
+            let window = cx
+                .open_window(
+                    WindowOptions {
+                        window_bounds: Some(WindowBounds::Windowed(bounds)),
+                        titlebar: Some(TitlebarOptions {
+                            title: Some("Scope".into()),
+                            ..Default::default()
+                        }),
+                        app_id: Some("scope".into()),
+                        // GNOME on Wayland has no server-side decorations, so the
+                        // app draws its own title bar (see `ui::app_view::title_bar`).
+                        window_decorations: Some(WindowDecorations::Client),
+                        focus: true,
                         ..Default::default()
-                    }),
-                    app_id: Some("scope".into()),
-                    // GNOME on Wayland has no server-side decorations, so the
-                    // app draws its own title bar (see `ui::app_view::title_bar`).
-                    window_decorations: Some(WindowDecorations::Client),
-                    focus: true,
-                    ..Default::default()
-                },
-                cx,
-                |_window, cx| cx.new(ScopeApp::new),
-            )
-            .expect("failed to open the Scope window");
+                    },
+                    |_window, cx| cx.new(ScopeApp::new),
+                )
+                .expect("failed to open the Scope window");
 
             window
-                .update(cx, |_, window, cx| {
-                    view.update(cx, |app, cx| app.focus_search(window, cx));
-                })
+                .update(cx, |app, window, cx| app.focus_search(window, cx))
                 .ok();
             cx.activate(true);
         });
