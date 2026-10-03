@@ -90,7 +90,9 @@ pub(super) fn menu_popup(items: Vec<AnyElement>) -> AnyElement {
     div()
         .absolute()
         .top(px(38.))
-        .left_0()
+        // Right-align to the trigger: the source select sits at the window's
+        // right edge, so left-alignment pushes the menu out of the window.
+        .right_0()
         .min_w(px(160.))
         .p(px(6.))
         .rounded(px(14.))
@@ -98,6 +100,9 @@ pub(super) fn menu_popup(items: Vec<AnyElement>) -> AnyElement {
         .border_color(border())
         .bg(elev())
         .shadow_lg()
+        // Block clicks on the menu from falling through to the package list
+        // rows rendered underneath the deferred overlay.
+        .occlude()
         .flex()
         .flex_col()
         .children(items)

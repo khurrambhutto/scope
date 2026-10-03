@@ -560,6 +560,25 @@ impl Render for ScopeApp {
             None
         };
 
+        // Full-window layer behind the deferred source dropdown menu: it sits
+        // above the package list (so rows get no hover/click while the menu is
+        // open) but below the deferred menu overlay, and dismisses the menu.
+        let dropdown_backdrop: Option<AnyElement> = self.open_select.map(|_| {
+            div()
+                .id("dropdown-backdrop")
+                .absolute()
+                .top_0()
+                .right_0()
+                .bottom_0()
+                .left_0()
+                .occlude()
+                .on_click(act(&entity, |this, cx| {
+                    this.open_select = None;
+                    cx.notify();
+                }))
+                .into_any_element()
+        });
+
         div()
             .relative()
             .flex()
@@ -578,6 +597,9 @@ impl Render for ScopeApp {
             .on_action(cx.listener(|this, _: &CloseDialog, window, cx| {
                 if this.dialog.is_some() {
                     this.close_dialog(cx);
+                } else if this.open_select.is_some() {
+                    this.open_select = None;
+                    cx.notify();
                 } else {
                     // Escape clears the query; programmatic set_value emits
                     // no Change event, so notify the view explicitly.
@@ -617,6 +639,7 @@ impl Render for ScopeApp {
                     .text_color(text_faint())
                     .child(footer),
             )
+            .when_some(dropdown_backdrop, |this, backdrop| this.child(backdrop))
             .when_some(dialog_el, |this, dialog| this.child(dialog))
     }
 }

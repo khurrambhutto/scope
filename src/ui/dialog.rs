@@ -143,6 +143,10 @@ fn modal_shell(heading: String, body: AnyElement, entity: &WeakEntity<ScopeApp>)
         .right_0()
         .bottom_0()
         .left_0()
+        // Block mouse events from reaching the package list behind the modal.
+        // Without this the overlay paints on top but clicks/hover fall through
+        // to the rows underneath.
+        .occlude()
         .flex()
         .items_center()
         .justify_center()
