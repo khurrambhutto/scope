@@ -85,6 +85,15 @@ fn main() {
             // Kit layers (theme, dialogs, notifications). Required once,
             // before opening windows or using any gpui-kit component.
             gpui_kit::init(cx);
+            // Scope paints its own dark background (see `ScopeApp::render`),
+            // while kit boots in Light mode (dark text, light input chrome).
+            // Flip to Dark so the search input's text, placeholder, caret,
+            // and selection stay visible on our background.
+            gpui_kit::component::Theme::change(
+                gpui_kit::component::ThemeMode::Dark,
+                None,
+                cx,
+            );
             // Kit input handles its own keymap via init above.
             cx.bind_keys(ui::app_view::key_bindings());
 

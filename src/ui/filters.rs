@@ -4,6 +4,7 @@ use gpui_kit::prelude::*;
 use gpui_kit::{div, img, px, rems, rgba, AnyElement, Context, ImageSource, Resource};
 use gpui_kit::assets::IconName;
 use gpui_kit::component::{
+    FocusableExt as _,
     Icon,
     input::{
         InputGroup, InputGroupAddon, InputGroupAddonAlignment, InputGroupInput, InputGroupText,
@@ -11,7 +12,7 @@ use gpui_kit::component::{
 };
 
 use crate::domain::package::PackageSource;
-use crate::theme::{accent, border};
+use crate::theme::{accent, border, elev, text, text_dim, text_faint};
 
 use super::app_view::{act, ScopeApp};
 use super::widgets::{menu_item, select_widget, view_toggle_button};
@@ -70,20 +71,31 @@ impl ScopeApp {
         let shown = self.entries.len();
         let count = format!("{shown} result{}", if shown == 1 { "" } else { "s" });
         InputGroup::new("scope-search")
-            .max_w(rems(24.))
+            .focus_ring(false)
+            .max_w(rems(20.))
+            // Left edge lines up with the list icons below: filter bar
+            // padding (32) + row padding (12).
+            .ml(px(12.))
+            .h(px(32.))
+            .rounded_full()
+            .bg(elev())
+            .border_color(border())
+            .text_color(text())
             .input(
                 InputGroupInput::new(&self.search_input)
                     .aria_label("Search apps")
-                    .cleanable(true),
+                    .cleanable(true)
+                    .text_size(px(13.))
+                    .text_color(text()),
             )
             .addon(
                 InputGroupAddon::new("scope-search-icon")
-                    .child(Icon::new(IconName::Search).size_4()),
+                    .child(Icon::new(IconName::Search).size_4().text_color(text_dim())),
             )
             .addon(
                 InputGroupAddon::new("scope-search-count")
                     .align(InputGroupAddonAlignment::InlineEnd)
-                    .child(InputGroupText::new().child(count)),
+                    .child(InputGroupText::new().text_color(text_faint()).child(count)),
             )
     }
 
