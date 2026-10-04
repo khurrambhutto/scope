@@ -9,6 +9,7 @@ pub mod icons;
 pub mod listing;
 pub mod operations;
 pub mod package;
+pub mod package_files;
 pub mod safety;
 pub mod scanner;
 pub mod system;

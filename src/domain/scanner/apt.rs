@@ -104,7 +104,7 @@ fn classify(name: &str, section: &str) -> AppKind {
     if !is_user_cli_section(section) {
         return AppKind::Unknown;
     }
-    let files = package_paths(name);
+    let files = crate::domain::package_files::list(name);
     let has_service = files.iter().any(|file| is_system_service_path(file));
     let has_command = files.iter().any(|file| {
         is_public_command_path(file)
@@ -145,27 +145,7 @@ fn is_user_cli_section(section: &str) -> bool {
     )
 }
 
-fn package_file_list(package: &str) -> Option<String> {
-    let info_dir = Path::new("/var/lib/dpkg/info");
-    let mut names = vec![package.to_string()];
-    if let Some(unqualified) = package
-        .strip_suffix(":amd64")
-        .or_else(|| package.strip_suffix(":i386"))
-    {
-        names.push(unqualified.to_string());
-    }
-    names
-        .into_iter()
-        .find_map(|name| fs::read_to_string(info_dir.join(format!("{name}.list"))).ok())
-}
-
-fn package_paths(package: &str) -> Vec<String> {
-    package_file_list(package)
-        .map(|files| files.lines().map(str::to_string).collect())
-        .unwrap_or_default()
-}
-
-fn is_public_command_path(file: &str) -> bool {
+fn is_public_command_path(file: &Path) -> bool {
     // Deliberately omit sbin: those paths are primarily system-administration
     // commands and daemons, not apps or everyday user CLI tools.
     let Some(parent) = Path::new(file).parent().and_then(Path::to_str) else {
@@ -177,10 +157,10 @@ fn is_public_command_path(file: &str) -> bool {
     )
 }
 
-fn is_system_service_path(file: &str) -> bool {
-    file.starts_with("/etc/init.d/")
-        || file.starts_with("/lib/systemd/system/")
-        || file.starts_with("/usr/lib/systemd/system/")
+fn is_system_service_path(file: &Path) -> bool {
+    file.starts_with("/etc/init.d")
+        || file.starts_with("/lib/systemd/system")
+        || file.starts_with("/usr/lib/systemd/system")
 }
 
 /// Run `apt list --upgradable` and mark packages that have available updates.
@@ -248,15 +228,15 @@ mod tests {
 
     #[test]
     fn public_commands_are_distinguished_from_services_and_libraries() {
-        assert!(is_public_command_path("/usr/bin/wl-copy"));
-        assert!(is_public_command_path("/usr/games/steam"));
-        assert!(!is_public_command_path("/usr/sbin/wpa_supplicant"));
-        assert!(!is_public_command_path("/usr/lib/libexample.so"));
+        assert!(is_public_command_path(Path::new("/usr/bin/wl-copy")));
+        assert!(is_public_command_path(Path::new("/usr/games/steam")));
+        assert!(!is_public_command_path(Path::new("/usr/sbin/wpa_supplicant")));
+        assert!(!is_public_command_path(Path::new("/usr/lib/libexample.so")));
         assert!(is_system_service_path(
-            "/lib/systemd/system/example.service"
+            Path::new("/lib/systemd/system/example.service")
         ));
-        assert!(is_system_service_path("/etc/init.d/example"));
-        assert!(!is_system_service_path("/usr/bin/example"));
+        assert!(is_system_service_path(Path::new("/etc/init.d/example")));
+        assert!(!is_system_service_path(Path::new("/usr/bin/example")));
     }
 
     #[test]

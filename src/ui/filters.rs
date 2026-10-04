@@ -34,6 +34,7 @@ pub(super) enum SourceFilter {
     Snap,
     Flatpak,
     AppImage,
+    Desktop,
 }
 
 impl SourceFilter {
@@ -44,6 +45,7 @@ impl SourceFilter {
             SourceFilter::Snap => "Snap",
             SourceFilter::Flatpak => "Flatpak",
             SourceFilter::AppImage => "AppImage",
+            SourceFilter::Desktop => "Desktop",
         }
     }
 
@@ -54,6 +56,7 @@ impl SourceFilter {
             SourceFilter::Snap => source == PackageSource::Snap,
             SourceFilter::Flatpak => source == PackageSource::Flatpak,
             SourceFilter::AppImage => source == PackageSource::AppImage,
+            SourceFilter::Desktop => source == PackageSource::Desktop,
         }
     }
 }
@@ -83,7 +86,7 @@ impl ScopeApp {
             .text_color(text())
             .input(
                 InputGroupInput::new(&self.search_input)
-                    .aria_label("Search apps")
+                    .aria_label("Search installed items")
                     .cleanable(true)
                     .text_size(px(13.))
                     .text_color(text()),
@@ -156,6 +159,7 @@ impl ScopeApp {
                         (SourceFilter::Snap, "Snap"),
                         (SourceFilter::Flatpak, "Flatpak"),
                         (SourceFilter::AppImage, "AppImage"),
+                        (SourceFilter::Desktop, "Desktop"),
                     ];
                     options
                         .into_iter()
@@ -228,6 +232,7 @@ mod tests {
     fn source_filter_matches_only_the_selected_source() {
         assert!(SourceFilter::All.matches(PackageSource::Apt));
         assert!(SourceFilter::All.matches(PackageSource::AppImage));
+        assert!(SourceFilter::All.matches(PackageSource::Desktop));
         assert!(SourceFilter::Apt.matches(PackageSource::Apt));
         assert!(!SourceFilter::Apt.matches(PackageSource::Snap));
         assert!(SourceFilter::Snap.matches(PackageSource::Snap));
@@ -236,5 +241,7 @@ mod tests {
         assert!(!SourceFilter::Flatpak.matches(PackageSource::Apt));
         assert!(SourceFilter::AppImage.matches(PackageSource::AppImage));
         assert!(!SourceFilter::AppImage.matches(PackageSource::Snap));
+        assert!(SourceFilter::Desktop.matches(PackageSource::Desktop));
+        assert!(!SourceFilter::Desktop.matches(PackageSource::Apt));
     }
 }

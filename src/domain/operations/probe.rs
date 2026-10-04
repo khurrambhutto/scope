@@ -65,6 +65,9 @@ pub async fn probe_package(
         PackageSource::Snap => probe_snap(package_id).await,
         PackageSource::Flatpak => probe_flatpak(package_id, install_scope).await,
         PackageSource::AppImage => probe_appimage(package_id).await,
+        PackageSource::Desktop => {
+            anyhow::bail!("Desktop-launched apps are not managed by a supported package manager.")
+        }
     }
 }
 

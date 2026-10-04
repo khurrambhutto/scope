@@ -32,7 +32,7 @@ cargo run
 
 ## How it works
 
-The main window lists recognizable GUI apps and command-line tools, with their source, version, size, and update state. Libraries and system components are left out. AppImages are visible but marked unsupported until uninstall is implemented. Search or filter by source, then select a row for full details.
+The main window defaults to recognizable GUI apps and command-line tools, with their source, version, size, and update state. AppImages and user-local desktop apps appear with uninstall disabled. Use **Show all** in the footer to include every package row Scope scanned, including libraries and system components; protected packages remain visible there with uninstall disabled. Search or filter by source, then select a row for full details.
 
 Update and uninstall follow the same flow. Scope builds a plan showing exactly what will run and waits for your confirmation. The backend then revalidates the package against the live system and executes. Commands that need root trigger the standard system password dialog. System-critical packages are deny-listed in the backend and cannot be removed through Scope.
 
@@ -40,7 +40,7 @@ Update and uninstall follow the same flow. Scope builds a plan showing exactly w
 
 Works today:
 
-- App/tool list across APT (manual app/tool installs), Snap (runtimes hidden), Flatpak (user and system scoped), and detected AppImages (uninstall disabled)
+- App/tool list across APT (manual app/tool installs), Snap (runtimes hidden), Flatpak (user and system scoped), detected AppImages, and unmanaged user desktop launchers (uninstall disabled)
 - Desktop-entry enrichment and freedesktop icon theme resolution
 - Uninstall with preview, Polkit auth, and a protected-package deny-list
 - Update with preview for APT, Snap, and Flatpak

@@ -61,7 +61,7 @@ pub(super) fn act(
 
 /// Query + filters + scan identity: everything [`ScopeApp::sync_entries`]
 /// needs to know the visible set is already up to date.
-type FilterInputs = (String, SourceFilter, ViewMode, u64);
+type FilterInputs = (String, SourceFilter, ViewMode, bool, u64);
 
 /// The Scope window: header, filters, a virtualized package list with inline
 /// detail, and the uninstall/update dialog flow.
@@ -76,6 +76,7 @@ pub struct ScopeApp {
     pub(super) error: Option<String>,
     pub(super) source_filter: SourceFilter,
     pub(super) view_mode: ViewMode,
+    pub(super) show_all: bool,
     pub(super) selected_key: Option<String>,
     pub(super) open_select: Option<OpenSelect>,
     pub(super) dialog: Option<Dialog>,
@@ -106,7 +107,7 @@ impl ScopeApp {
     /// Create the app state and kick off the first scan and updater check.
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let search_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Search apps"));
+            cx.new(|cx| InputState::new(window, cx).placeholder("Search apps or packages"));
         let search_change = cx.subscribe(
             &search_input,
             |_this, _input, event: &InputEvent, cx| {
@@ -128,6 +129,7 @@ impl ScopeApp {
             error: None,
             source_filter: SourceFilter::All,
             view_mode: ViewMode::Uninstall,
+            show_all: false,
             selected_key: None,
             open_select: None,
             dialog: None,
@@ -209,12 +211,16 @@ impl ScopeApp {
     /// the user's scroll position.
     fn sync_entries(&mut self, cx: &App) {
         let query = self.search_input.read(cx).value().trim().to_lowercase();
-        let unchanged = self.filter_inputs.as_ref().is_some_and(|(q, s, v, g)| {
-            *q == query
-                && *s == self.source_filter
-                && *v == self.view_mode
-                && *g == self.scan_gen
-        });
+        let unchanged = self
+            .filter_inputs
+            .as_ref()
+            .is_some_and(|(q, s, v, all, g)| {
+                *q == query
+                    && *s == self.source_filter
+                    && *v == self.view_mode
+                    && *all == self.show_all
+                    && *g == self.scan_gen
+            });
         if unchanged {
             return;
         }
@@ -222,6 +228,7 @@ impl ScopeApp {
             query.clone(),
             self.source_filter,
             self.view_mode,
+            self.show_all,
             self.scan_gen,
         ));
 
@@ -442,7 +449,7 @@ impl ScopeApp {
             if !self.source_filter.matches(pkg.source) {
                 continue;
             }
-            if !crate::domain::listing::is_listable(pkg) {
+            if !crate::domain::listing::is_visible(pkg, self.show_all) {
                 continue;
             }
             if self.view_mode == ViewMode::Updates && !pkg.has_update {
@@ -550,7 +557,7 @@ impl Render for ScopeApp {
             .map(|scan| {
                 scan.packages
                     .iter()
-                    .filter(|pkg| crate::domain::listing::is_listable(pkg))
+                    .filter(|pkg| crate::domain::listing::is_visible(pkg, self.show_all))
                     .count()
             })
             .unwrap_or(0);
@@ -562,9 +569,20 @@ impl Render for ScopeApp {
 
         let footer = if self.loading {
             String::new()
+        } else if self.show_all {
+            theme::format_all_count(rows_len, total)
         } else {
             theme::format_app_count(rows_len, total)
         };
+        let show_all_button = super::widgets::view_toggle_button(
+            "show-all",
+            if self.show_all { "Show apps" } else { "Show all" },
+            self.show_all,
+            act(&entity, |this, cx| {
+                this.show_all = !this.show_all;
+                cx.notify();
+            }),
+        );
 
         let dialog_el: Option<AnyElement> = if self.dialog.is_some() {
             Some(self.dialog_element(&entity))
@@ -647,9 +665,13 @@ impl Render for ScopeApp {
                     .flex_none()
                     .px(px(32.))
                     .py(px(10.))
+                    .flex()
+                    .items_center()
+                    .justify_between()
                     .text_size(px(12.))
                     .text_color(text_faint())
-                    .child(footer),
+                    .child(footer)
+                    .child(show_all_button),
             )
             .when_some(dropdown_backdrop, |this, backdrop| this.child(backdrop))
             .when_some(dialog_el, |this, dialog| this.child(dialog))

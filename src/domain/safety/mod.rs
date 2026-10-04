@@ -41,6 +41,7 @@ pub fn check_package(source: PackageSource, package_id: &str) -> Protection {
         PackageSource::Snap => check_snap(package_id),
         PackageSource::Flatpak => check_flatpak(package_id),
         PackageSource::AppImage => check_appimage(package_id),
+        PackageSource::Desktop => check_desktop(package_id),
     }
 }
 
@@ -164,6 +165,10 @@ fn check_appimage(_path: &str) -> Protection {
     Protection::denied("AppImage uninstall and update are not supported yet.")
 }
 
+fn check_desktop(_desktop_file: &str) -> Protection {
+    Protection::denied("This app is not managed by a supported package manager.")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -236,5 +241,10 @@ mod tests {
     fn check_package_explains_appimage_protection() {
         let protection = check_package(PackageSource::AppImage, "/opt/Firefox-130.0.AppImage");
         assert!(protection.reason.unwrap().contains("yet"));
+    }
+
+    #[test]
+    fn desktop_launcher_apps_are_not_removable_through_scope() {
+        assert!(check_package(PackageSource::Desktop, "/home/user/.local/share/applications/zed.desktop").protected);
     }
 }

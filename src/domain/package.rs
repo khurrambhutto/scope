@@ -6,7 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 
-/// The package manager that installed an item.
+/// The package manager or user-local source that owns an item.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum PackageSource {
@@ -14,6 +14,8 @@ pub enum PackageSource {
     Snap,
     Flatpak,
     AppImage,
+    /// A user-visible desktop launcher not owned by a supported package manager.
+    Desktop,
 }
 
 impl PackageSource {
@@ -24,6 +26,7 @@ impl PackageSource {
             PackageSource::Snap => "snap",
             PackageSource::Flatpak => "flatpak",
             PackageSource::AppImage => "appimage",
+            PackageSource::Desktop => "desktop",
         }
     }
 
@@ -66,10 +69,10 @@ impl InstallScope {
 pub struct InstalledPackage {
     /// Backend-side stable key: `<source>:<package id>`.
     pub key: String,
-    /// Source package manager.
+    /// Package manager or local desktop-launcher source.
     pub source: PackageSource,
     /// Package id as the package manager knows it (dpkg name, snap name,
-    /// flatpak application id, or AppImage absolute path).
+    /// flatpak application id, AppImage absolute path, or desktop-entry path.
     pub package_id: String,
     /// Install scope for package managers that can install the same id in more
     /// than one place, such as Flatpak user/system installations.

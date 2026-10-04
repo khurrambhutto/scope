@@ -92,6 +92,13 @@ fn build_steps(pkg: &InstalledPackage, protected: bool) -> (AuthMethod, Vec<Plan
                 command_summary: "(no command — not supported yet)".into(),
             }],
         ),
+        PackageSource::Desktop => (
+            AuthMethod::None,
+            vec![PlanStep {
+                description: "Blocked: this app is not managed by a supported package manager.".into(),
+                command_summary: "(no command — unmanaged desktop app)".into(),
+            }],
+        ),
     }
 }
 
@@ -147,6 +154,12 @@ pub async fn apply(
         PackageSource::AppImage => OperationResult {
             success: false,
             message: "AppImage auto-update is not yet implemented. Download the latest version from the project website.".into(),
+            logs: String::new(),
+            exit_code: None,
+        },
+        PackageSource::Desktop => OperationResult {
+            success: false,
+            message: "This desktop app is not managed by a supported package manager.".into(),
             logs: String::new(),
             exit_code: None,
         },

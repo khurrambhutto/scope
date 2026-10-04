@@ -78,6 +78,45 @@ pub fn resolve(icon_value: &str) -> Option<PathBuf> {
     result
 }
 
+/// Resolve an app icon using the global theme first, then the executable's
+/// private installation prefix (common for user-local tarball installs).
+pub fn resolve_for_app(icon_value: &str, executable: Option<&Path>) -> Option<PathBuf> {
+    if let Some(icon) = resolve(icon_value) {
+        return Some(icon);
+    }
+    let executable = executable?;
+    let executable = fs::canonicalize(executable).unwrap_or_else(|_| executable.to_path_buf());
+
+    for prefix in executable.ancestors().take(8) {
+        let icons_root = prefix.join("share/icons");
+        if icons_root.is_dir() {
+            let mut themes = Vec::new();
+            if let Some(theme) = theme_name() {
+                themes.push(theme.as_str());
+            }
+            themes.push("hicolor");
+            for theme in themes {
+                let theme_root = icons_root.join(theme);
+                if theme_root.is_dir() {
+                    if let Some(icon) = lookup_in_theme(
+                        &theme_root,
+                        icon_value,
+                        std::slice::from_ref(&icons_root),
+                        &mut HashMap::new(),
+                    ) {
+                        return Some(icon);
+                    }
+                }
+            }
+        }
+
+        if let Some(icon) = lookup_in_pixmaps_at(icon_value, &prefix.join("share/pixmaps")) {
+            return Some(icon);
+        }
+    }
+    None
+}
+
 fn resolve_uncached(icon_value: &str) -> Option<PathBuf> {
     let path = Path::new(icon_value);
     if path.is_absolute() {
@@ -286,7 +325,10 @@ fn parse_theme_parents(index_theme_path: &Path) -> Vec<String> {
 
 /// Last-resort fallback: legacy `/usr/share/pixmaps/<name>.<ext>` icons.
 fn lookup_in_pixmaps(icon_name: &str) -> Option<PathBuf> {
-    let pixmaps = PathBuf::from("/usr/share/pixmaps");
+    lookup_in_pixmaps_at(icon_name, Path::new("/usr/share/pixmaps"))
+}
+
+fn lookup_in_pixmaps_at(icon_name: &str, pixmaps: &Path) -> Option<PathBuf> {
 
     for ext in ICON_EXTENSIONS {
         let path = pixmaps.join(format!("{icon_name}.{ext}"));
@@ -370,6 +412,24 @@ mod tests {
     #[test]
     fn absolute_missing_path_is_none() {
         assert!(resolve("/this/does/not/exist/anywhere.png").is_none());
+    }
+
+    #[test]
+    fn app_icon_resolution_falls_back_to_the_executable_install_prefix() {
+        let name = format!("scope-private-icon-{}", std::process::id());
+        let prefix = std::env::temp_dir().join(format!("scope-icon-test-{}", std::process::id()));
+        let executable = prefix.join("usr/bin/editor");
+        let icon = prefix
+            .join("usr/share/icons/hicolor/scalable/apps")
+            .join(format!("{name}.svg"));
+        fs::create_dir_all(executable.parent().unwrap()).unwrap();
+        fs::create_dir_all(icon.parent().unwrap()).unwrap();
+        fs::write(&executable, "test executable").unwrap();
+        fs::write(&icon, "<svg/>").unwrap();
+
+        assert_eq!(resolve_for_app(&name, Some(&executable)), Some(icon.clone()));
+
+        let _ = fs::remove_dir_all(prefix);
     }
 
     #[test]

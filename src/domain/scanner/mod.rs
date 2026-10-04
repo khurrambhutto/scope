@@ -73,9 +73,11 @@ mod tests {
     fn desktop_app(id: &str, name: &str, exec: &str) -> crate::domain::desktop_entries::DesktopApp {
         crate::domain::desktop_entries::DesktopApp {
             id: id.into(),
+            file_path: std::path::PathBuf::from(format!("/usr/share/applications/{id}.desktop")),
             name: name.into(),
             comment: None,
             exec: exec.into(),
+            executable: None,
             icon: None,
             categories: Vec::new(),
             terminal: false,
@@ -167,7 +169,7 @@ struct ScanOutcome {
     error: Option<String>,
 }
 
-/// Scan every available source in parallel, then enrich with desktop metadata.
+/// Scan package sources in parallel, then enrich and append unmanaged desktop apps.
 ///
 /// Returns the merged, sorted unified list plus per-source availability. Source
 /// failures are never fatal: a broken/uninstalled source simply contributes zero
@@ -231,6 +233,10 @@ pub async fn scan_all() -> (Vec<InstalledPackage>, ScanAvailability) {
                 availability.appimage = outcome.available;
                 availability.appimage_dirs = appimage::search_directories();
             }
+            PackageSource::Desktop => {
+                // Unmanaged desktop apps are synthesized from visible launchers
+                // below, not reported by a package-manager scanner.
+            }
         }
         merged.extend(outcome.packages);
     }
@@ -244,6 +250,8 @@ pub async fn scan_all() -> (Vec<InstalledPackage>, ScanAvailability) {
         for pkg in merged.iter_mut() {
             enrich(pkg, &desktop);
         }
+        let unmanaged_apps = desktop.unmanaged_user_apps(&merged);
+        merged.extend(unmanaged_apps);
         // `sort_by_cached_key` computes the lowercase display name once per
         // package instead of once per comparison.
         merged.sort_by_cached_key(|p| {
@@ -301,7 +309,9 @@ fn enrich(pkg: &mut InstalledPackage, desktop: &DesktopIndex) {
             // load directly. Unresolved names stay `None` and the frontend
             // falls back to initials.
             if let Some(name) = app.icon.as_deref() {
-                if let Some(path) = crate::domain::icons::resolve(name) {
+                if let Some(path) =
+                    crate::domain::icons::resolve_for_app(name, app.executable.as_deref())
+                {
                     pkg.icon = Some(crate::domain::icons::icon_url(&path));
                 }
             }

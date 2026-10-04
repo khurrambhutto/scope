@@ -13,6 +13,7 @@ pub fn source_color(source: PackageSource) -> Hsla {
         PackageSource::Snap => rgb(0x2196f3),
         PackageSource::Flatpak => rgb(0x4a154b),
         PackageSource::AppImage => rgb(0x0b8a4f),
+        PackageSource::Desktop => rgb(0x7569d2),
     }
     .into()
 }
@@ -32,6 +33,7 @@ pub fn source_label(source: PackageSource) -> &'static str {
         PackageSource::Snap => "Snap",
         PackageSource::Flatpak => "Flatpak",
         PackageSource::AppImage => "AppImage",
+        PackageSource::Desktop => "Desktop",
     }
 }
 
@@ -67,10 +69,19 @@ pub fn format_size(bytes: u64) -> String {
 
 /// Footer status line, matching the TypeScript `formatAppCount`.
 pub fn format_app_count(shown: usize, total: usize) -> String {
+    format_item_count(shown, total, "app", "apps")
+}
+
+/// Footer status for the unfiltered inventory view.
+pub fn format_all_count(shown: usize, total: usize) -> String {
+    format_item_count(shown, total, "item", "items")
+}
+
+fn format_item_count(shown: usize, total: usize, singular: &str, plural: &str) -> String {
     if shown == total {
-        format!("Showing {total} {}", if total == 1 { "app" } else { "apps" })
+        format!("Showing {total} {}", if total == 1 { singular } else { plural })
     } else {
-        format!("Showing {shown} of {total} apps")
+        format!("Showing {shown} of {total} {plural}")
     }
 }
 
@@ -181,6 +192,13 @@ mod tests {
     }
 
     #[test]
+    fn format_all_count_names_inventory_items() {
+        assert_eq!(format_all_count(12, 12), "Showing 12 items");
+        assert_eq!(format_all_count(1, 1), "Showing 1 item");
+        assert_eq!(format_all_count(5, 20), "Showing 5 of 20 items");
+    }
+
+    #[test]
     fn format_elapsed_is_minutes_and_seconds() {
         assert_eq!(format_elapsed(0), "0:00");
         assert_eq!(format_elapsed(9), "0:09");
@@ -227,6 +245,7 @@ mod tests {
         assert_eq!(source_label(PackageSource::Snap), "Snap");
         assert_eq!(source_label(PackageSource::Flatpak), "Flatpak");
         assert_eq!(source_label(PackageSource::AppImage), "AppImage");
+        assert_eq!(source_label(PackageSource::Desktop), "Desktop");
     }
 
     #[test]

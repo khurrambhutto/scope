@@ -3,15 +3,17 @@
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-/// A parsed, visible GUI app entry.
+/// A parsed launcher visible in the current desktop's app list.
 #[derive(Debug, Clone, Serialize)]
 pub struct DesktopApp {
     pub id: String,
+    pub file_path: std::path::PathBuf,
     pub name: String,
     pub comment: Option<String>,
     pub exec: String,
+    pub executable: Option<PathBuf>,
     pub icon: Option<String>,
     pub categories: Vec<String>,
     pub terminal: bool,
@@ -75,6 +77,7 @@ pub fn parse(id: &str, path: &Path) -> Option<DesktopApp> {
     if exec_raw.is_empty() {
         return None;
     }
+    let executable = exec_program_path(&exec_raw);
 
     let desktops = std::env::var("XDG_CURRENT_DESKTOP")
         .unwrap_or_default()
@@ -93,13 +96,16 @@ pub fn parse(id: &str, path: &Path) -> Option<DesktopApp> {
         && match field(entry, "TryExec") {
             Some(command) => try_exec_exists(command),
             None => true,
-        };
+        }
+        && executable.is_some();
 
     Some(DesktopApp {
         id: id.to_string(),
+        file_path: path.to_path_buf(),
         name: field(entry, "Name").unwrap_or(id).to_string(),
         comment: field(entry, "Comment").map(str::to_string),
         exec: exec_raw,
+        executable,
         icon: field(entry, "Icon").map(str::to_string),
         categories: field(entry, "Categories")
             .unwrap_or("")
@@ -146,6 +152,37 @@ fn try_exec_exists(command: &str) -> bool {
     }
     std::env::var_os("PATH")
         .is_some_and(|paths| std::env::split_paths(&paths).any(|dir| dir.join(command).is_file()))
+}
+
+fn exec_program(exec: &str) -> Option<&str> {
+    let mut rest = exec.trim();
+    if let Some(without_env) = rest.strip_prefix("env ") {
+        rest = without_env;
+        loop {
+            let token = rest.split_whitespace().next()?;
+            if !token.contains('=') {
+                break;
+            }
+            rest = rest[token.len()..].trim_start();
+        }
+    }
+    if let Some(quoted) = rest.strip_prefix('"') {
+        return quoted.split_once('"').map(|(program, _)| program);
+    }
+    rest.split_whitespace().next()
+}
+
+fn exec_program_path(exec: &str) -> Option<PathBuf> {
+    let program = exec_program(exec)?;
+    let path = Path::new(program);
+    if path.is_absolute() {
+        return try_exec_exists(program).then(|| path.to_path_buf());
+    }
+    std::env::var_os("PATH").and_then(|paths| {
+        std::env::split_paths(&paths)
+            .map(|dir| dir.join(program))
+            .find(|candidate| candidate.is_file())
+    })
 }
 
 #[cfg(test)]
@@ -199,6 +236,18 @@ mod tests {
         assert!(!desktop_visibility_matches("", "GNOME;", &desktops));
         assert!(desktop_visibility_matches("", "KDE;", &desktops));
         assert!(desktop_visibility_matches("GNOME;", "", &[]));
+    }
+
+    #[test]
+    fn executable_parser_handles_environment_wrappers_and_quoted_paths() {
+        assert_eq!(
+            exec_program("env DESKTOPINTEGRATION=1 /home/user/.local/zed.app/bin/zed %U"),
+            Some("/home/user/.local/zed.app/bin/zed")
+        );
+        assert_eq!(
+            exec_program("\"/home/user/My App/bin/editor\" %F"),
+            Some("/home/user/My App/bin/editor")
+        );
     }
 
     #[test]
