@@ -6,6 +6,7 @@
 
 pub mod desktop_entries;
 pub mod icons;
+pub mod listing;
 pub mod operations;
 pub mod package;
 pub mod safety;

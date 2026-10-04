@@ -1,12 +1,15 @@
 //! APT/dpkg scanner.
 //!
-//! Strategy: list *manually* installed packages via `apt-mark showmanual`, then
-//! fetch rich metadata for exactly those names with one `dpkg-query` call.
-//! Reporting only manual installs keeps the unified list focused on apps the
-//! user actually chose, instead of thousands of pulled-in dependencies.
+//! Strategy: use `apt-mark showmanual` as the candidate set, then fetch metadata
+//! for those names with one `dpkg-query` call. The main-list policy later keeps
+//! only recognizable apps and public CLI tools, not every manually marked
+//! package or the dependencies pulled in automatically.
 
 use std::collections::HashSet;
+use std::fs;
 use std::future::Future;
+use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
 use std::pin::Pin;
 use std::time::Duration;
 
@@ -52,8 +55,9 @@ async fn scan() -> Result<Vec<InstalledPackage>> {
 
     // One dpkg-query over all manual names. Installed-Size is in KiB.
     // ${binary:Summary} truncates the description to one line; perfect for the UI.
+    // Section lets us reject library and metapackage rows before command detection.
     let format = format!(
-        "${{Package}}{SEP}${{Version}}{SEP}${{Installed-Size}}{SEP}${{binary:Summary}}{SEP}\\n"
+        "${{Package}}{SEP}${{Version}}{SEP}${{Installed-Size}}{SEP}${{binary:Summary}}{SEP}${{Section}}{SEP}\\n"
     );
     let mut args: Vec<String> = vec!["-W".into(), format!("-f={format}")];
     args.extend(manual);
@@ -70,8 +74,7 @@ async fn scan() -> Result<Vec<InstalledPackage>> {
     let mut seen: HashSet<String> = HashSet::new();
     for line in output.lines() {
         let mut fields = line.split(SEP);
-        let (Some(name), Some(version), Some(kib)) =
-            (fields.next(), fields.next(), fields.next())
+        let (Some(name), Some(version), Some(kib)) = (fields.next(), fields.next(), fields.next())
         else {
             continue;
         };
@@ -79,6 +82,7 @@ async fn scan() -> Result<Vec<InstalledPackage>> {
             continue;
         }
         let summary = fields.next().unwrap_or("");
+        let section = fields.next().unwrap_or("");
 
         let mut pkg = InstalledPackage::new(PackageSource::Apt, name);
         pkg.name = pkg.package_id.clone();
@@ -87,39 +91,105 @@ async fn scan() -> Result<Vec<InstalledPackage>> {
         if !summary.is_empty() {
             pkg.description = Some(summary.to_string());
         }
-        pkg.app_kind = classify(&pkg.name);
+        pkg.app_kind = classify(&pkg.name, section);
         packages.push(pkg);
     }
     check_updates(&mut packages).await;
     Ok(packages)
 }
 
-/// Best-effort GUI/CLI classification using filesystem presence, without
-/// spawning a per-package subprocess (the old impl ran dpkg-query per package
-/// and was slow).
-fn classify(name: &str) -> AppKind {
-    for dir in ["/usr/share/applications", "/usr/local/share/applications"] {
-        for variant in [name.to_lowercase(), name.replace('-', "_")] {
-            let path = format!("{dir}/{variant}.desktop");
-            if std::path::Path::new(&path).exists() {
-                return AppKind::Gui;
-            }
-        }
+/// Best-effort CLI classification from files owned by a manually installed
+/// package. Desktop launchers are classified later by desktop-entry enrichment.
+fn classify(name: &str, section: &str) -> AppKind {
+    if !is_user_cli_section(section) {
+        return AppKind::Unknown;
     }
-    if has_binary(name) {
+    let files = package_paths(name);
+    let has_service = files.iter().any(|file| is_system_service_path(file));
+    let has_command = files.iter().any(|file| {
+        is_public_command_path(file)
+            && fs::metadata(file).is_ok_and(|metadata| metadata.permissions().mode() & 0o111 != 0)
+    });
+    classify_from_signals(has_command, has_service)
+}
+
+fn classify_from_signals(has_public_command: bool, has_system_service: bool) -> AppKind {
+    if has_system_service {
+        AppKind::Unknown
+    } else if has_public_command {
         AppKind::Cli
     } else {
         AppKind::Unknown
     }
 }
 
+fn is_user_cli_section(section: &str) -> bool {
+    matches!(
+        section.rsplit('/').next().unwrap_or(section),
+        "devel"
+            | "editors"
+            | "education"
+            | "games"
+            | "graphics"
+            | "net"
+            | "python"
+            | "science"
+            | "shells"
+            | "sound"
+            | "text"
+            | "utils"
+            | "vcs"
+            | "video"
+            | "web"
+            | "x11"
+    )
+}
+
+fn package_file_list(package: &str) -> Option<String> {
+    let info_dir = Path::new("/var/lib/dpkg/info");
+    let mut names = vec![package.to_string()];
+    if let Some(unqualified) = package
+        .strip_suffix(":amd64")
+        .or_else(|| package.strip_suffix(":i386"))
+    {
+        names.push(unqualified.to_string());
+    }
+    names
+        .into_iter()
+        .find_map(|name| fs::read_to_string(info_dir.join(format!("{name}.list"))).ok())
+}
+
+fn package_paths(package: &str) -> Vec<String> {
+    package_file_list(package)
+        .map(|files| files.lines().map(str::to_string).collect())
+        .unwrap_or_default()
+}
+
+fn is_public_command_path(file: &str) -> bool {
+    // Deliberately omit sbin: those paths are primarily system-administration
+    // commands and daemons, not apps or everyday user CLI tools.
+    let Some(parent) = Path::new(file).parent().and_then(Path::to_str) else {
+        return false;
+    };
+    matches!(
+        parent,
+        "/usr/bin" | "/bin" | "/usr/local/bin" | "/usr/games"
+    )
+}
+
+fn is_system_service_path(file: &str) -> bool {
+    file.starts_with("/etc/init.d/")
+        || file.starts_with("/lib/systemd/system/")
+        || file.starts_with("/usr/lib/systemd/system/")
+}
+
 /// Run `apt list --upgradable` and mark packages that have available updates.
 async fn check_updates(packages: &mut [InstalledPackage]) {
-    let output = match capture_stdout("apt", &["list", "--upgradable"], Duration::from_secs(30)).await
-    {
-        Ok(o) => o,
-        Err(_) => return,
-    };
+    let output =
+        match capture_stdout("apt", &["list", "--upgradable"], Duration::from_secs(30)).await {
+            Ok(o) => o,
+            Err(_) => return,
+        };
 
     // Line format: "package/suite candidate_version arch [upgradable from: old_version]"
     // Or:          "package/arch candidate_version arch [held]"
@@ -152,13 +222,47 @@ fn upgrade_regex() -> Option<&'static regex::Regex> {
     .as_ref()
 }
 
-fn has_binary(name: &str) -> bool {
-    for variant in [name.to_string(), name.replace('-', "_")] {
-        for bin_dir in ["/usr/bin", "/bin", "/usr/sbin", "/sbin", "/usr/local/bin"] {
-            if std::path::Path::new(&format!("{bin_dir}/{variant}")).is_file() {
-                return true;
-            }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cli_sections_are_user_facing_not_system_infrastructure() {
+        for section in ["utils", "x11", "web", "vcs", "universe/net"] {
+            assert!(is_user_cli_section(section), "{section} should be included");
+        }
+        for section in [
+            "libs",
+            "libdevel",
+            "metapackages",
+            "oldlibs",
+            "database",
+            "admin",
+        ] {
+            assert!(
+                !is_user_cli_section(section),
+                "{section} should be excluded"
+            );
         }
     }
-    false
+
+    #[test]
+    fn public_commands_are_distinguished_from_services_and_libraries() {
+        assert!(is_public_command_path("/usr/bin/wl-copy"));
+        assert!(is_public_command_path("/usr/games/steam"));
+        assert!(!is_public_command_path("/usr/sbin/wpa_supplicant"));
+        assert!(!is_public_command_path("/usr/lib/libexample.so"));
+        assert!(is_system_service_path(
+            "/lib/systemd/system/example.service"
+        ));
+        assert!(is_system_service_path("/etc/init.d/example"));
+        assert!(!is_system_service_path("/usr/bin/example"));
+    }
+
+    #[test]
+    fn cli_classification_requires_a_candidate_section_and_no_system_service() {
+        assert_eq!(classify_from_signals(true, false), AppKind::Cli);
+        assert_eq!(classify_from_signals(false, false), AppKind::Unknown);
+        assert_eq!(classify_from_signals(true, true), AppKind::Unknown);
+    }
 }

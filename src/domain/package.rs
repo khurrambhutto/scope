@@ -59,8 +59,9 @@ impl InstallScope {
 /// A unified view of one installed package/app regardless of its source.
 ///
 /// GUI metadata (`display_name`, `icon`, `categories`, `terminal`) is an
-/// enrichment layer filled in by the desktop-entry merge step. Non-GUI packages
-/// keep `AppKind::Cli`/`Unknown` and still appear in the unified list.
+/// enrichment layer filled in by the desktop-entry merge step. Packages with
+/// no reliable GUI or CLI classification remain `Unknown` and are omitted from
+/// the app-facing main list.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstalledPackage {
     /// Backend-side stable key: `<source>:<package id>`.

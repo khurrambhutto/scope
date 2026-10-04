@@ -442,6 +442,9 @@ impl ScopeApp {
             if !self.source_filter.matches(pkg.source) {
                 continue;
             }
+            if !crate::domain::listing::is_listable(pkg) {
+                continue;
+            }
             if self.view_mode == ViewMode::Updates && !pkg.has_update {
                 continue;
             }
@@ -541,7 +544,16 @@ impl Render for ScopeApp {
         self.sync_entries(cx);
         let entity = cx.entity().downgrade();
         let list_entity = cx.entity();
-        let total = self.scan.as_ref().map(|s| s.packages.len()).unwrap_or(0);
+        let total = self
+            .scan
+            .as_ref()
+            .map(|scan| {
+                scan.packages
+                    .iter()
+                    .filter(|pkg| crate::domain::listing::is_listable(pkg))
+                    .count()
+            })
+            .unwrap_or(0);
         let rows_len = self.entries.len();
 
         let list_element = self.list_element(&list_entity);

@@ -79,7 +79,7 @@ mod tests {
             icon: None,
             categories: Vec::new(),
             terminal: false,
-            no_display: false,
+            menu_visible: true,
         }
     }
 
@@ -313,11 +313,13 @@ fn enrich(pkg: &mut InstalledPackage, desktop: &DesktopIndex) {
             pkg.categories = Some(app.categories.join(", "));
         }
         pkg.terminal = app.terminal;
-        if !app.terminal {
-            // A .desktop (Type=Application) entry implies a GUI app unless it
-            // explicitly launches in a terminal.
-            pkg.app_kind = AppKind::Gui;
-        }
+        // Classify visible desktop launchers by how they start: regular entries
+        // are GUI apps; Terminal=true entries are CLI tools.
+        pkg.app_kind = if app.terminal {
+            AppKind::Cli
+        } else {
+            AppKind::Gui
+        };
     }
 }
 

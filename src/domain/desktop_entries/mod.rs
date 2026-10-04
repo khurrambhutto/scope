@@ -104,9 +104,9 @@ fn collect(root: &Path, dir: &Path, seen: &mut HashSet<String>, out: &mut Vec<De
             continue;
         }
         if let Some(app) = parser::parse(&id, &path) {
-            if app.no_display {
-                // Hidden / not-for-menus entries are skipped (but still consumed
-                // so a later visible variant does not shadow its display name).
+            if !app.menu_visible {
+                // Hidden / not-for-this-desktop entries are consumed so a lower
+                // precedence duplicate cannot shadow the desktop's decision.
                 continue;
             }
             out.push(app);
@@ -281,7 +281,7 @@ mod tests {
             icon: Some(id.to_string()),
             categories: Vec::new(),
             terminal: false,
-            no_display: false,
+            menu_visible: true,
         }
     }
 

@@ -15,9 +15,8 @@ pub struct DesktopApp {
     pub icon: Option<String>,
     pub categories: Vec<String>,
     pub terminal: bool,
-    /// `NoDisplay=true` entries are skipped by the discoverer but kept here for
-    /// internal lookups (we filter them out before sorting).
-    pub no_display: bool,
+    /// Whether this launcher belongs in the current desktop's app list.
+    pub menu_visible: bool,
 }
 
 /// Parse one `.desktop` file into a [`DesktopApp`], or `None` when it cannot be
@@ -77,6 +76,25 @@ pub fn parse(id: &str, path: &Path) -> Option<DesktopApp> {
         return None;
     }
 
+    let desktops = std::env::var("XDG_CURRENT_DESKTOP")
+        .unwrap_or_default()
+        .split(':')
+        .filter(|desktop| !desktop.is_empty())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    let menu_visible = !field(entry, "NoDisplay")
+        .is_some_and(|value| value.eq_ignore_ascii_case("true"))
+        && !field(entry, "Hidden").is_some_and(|value| value.eq_ignore_ascii_case("true"))
+        && desktop_visibility_matches(
+            field(entry, "OnlyShowIn").unwrap_or(""),
+            field(entry, "NotShowIn").unwrap_or(""),
+            &desktops,
+        )
+        && match field(entry, "TryExec") {
+            Some(command) => try_exec_exists(command),
+            None => true,
+        };
+
     Some(DesktopApp {
         id: id.to_string(),
         name: field(entry, "Name").unwrap_or(id).to_string(),
@@ -92,10 +110,42 @@ pub fn parse(id: &str, path: &Path) -> Option<DesktopApp> {
         terminal: field(entry, "Terminal")
             .map(|v| v.eq_ignore_ascii_case("true"))
             .unwrap_or(false),
-        no_display: field(entry, "NoDisplay")
-            .map(|v| v.eq_ignore_ascii_case("true"))
-            .unwrap_or(false),
+        menu_visible,
     })
+}
+
+fn desktop_visibility_matches(only_show_in: &str, not_show_in: &str, desktops: &[String]) -> bool {
+    // If launched outside a desktop session there is no reliable environment
+    // to match against; don't hide otherwise valid launchers on that basis.
+    if desktops.is_empty() {
+        return true;
+    }
+    let only_show_in = desktop_list(only_show_in);
+    let not_show_in = desktop_list(not_show_in);
+    (only_show_in.is_empty()
+        || only_show_in
+            .iter()
+            .any(|entry| desktops.iter().any(|desktop| desktop == entry)))
+        && !not_show_in
+            .iter()
+            .any(|entry| desktops.iter().any(|desktop| desktop == entry))
+}
+
+fn desktop_list(value: &str) -> Vec<&str> {
+    value
+        .split(';')
+        .map(str::trim)
+        .filter(|entry| !entry.is_empty())
+        .collect()
+}
+
+fn try_exec_exists(command: &str) -> bool {
+    let path = Path::new(command);
+    if path.is_absolute() {
+        return path.is_file();
+    }
+    std::env::var_os("PATH")
+        .is_some_and(|paths| std::env::split_paths(&paths).any(|dir| dir.join(command).is_file()))
 }
 
 #[cfg(test)]
@@ -113,7 +163,8 @@ mod tests {
             std::process::id()
         ));
         let mut file = fs::File::create(&path).expect("create temp desktop file");
-        file.write_all(body.as_bytes()).expect("write temp desktop file");
+        file.write_all(body.as_bytes())
+            .expect("write temp desktop file");
         path
     }
 
@@ -132,18 +183,38 @@ mod tests {
     }
 
     #[test]
-    fn parse_marks_a_no_display_entry() {
+    fn parse_marks_a_no_display_entry_hidden_from_the_app_menu() {
         let path = write_desktop(
             "[Desktop Entry]\nType=Application\nName=Hidden\nExec=hidden\nNoDisplay=true\n",
         );
-        assert!(parse("hidden", &path).unwrap().no_display);
+        assert!(!parse("hidden", &path).unwrap().menu_visible);
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn desktop_visibility_obeys_only_show_in_and_not_show_in() {
+        let desktops = vec!["ubuntu".to_string(), "GNOME".to_string()];
+        assert!(desktop_visibility_matches("GNOME;", "", &desktops));
+        assert!(!desktop_visibility_matches("KDE;", "", &desktops));
+        assert!(!desktop_visibility_matches("", "GNOME;", &desktops));
+        assert!(desktop_visibility_matches("", "KDE;", &desktops));
+        assert!(desktop_visibility_matches("GNOME;", "", &[]));
+    }
+
+    #[test]
+    fn hidden_entries_are_not_menu_visible() {
+        let path = write_desktop(
+            "[Desktop Entry]\nType=Application\nName=Hidden\nExec=hidden\nHidden=true\n",
+        );
+        assert!(!parse("hidden", &path).unwrap().menu_visible);
         let _ = fs::remove_file(path);
     }
 
     #[test]
     fn parse_reads_the_terminal_flag() {
-        let path =
-            write_desktop("[Desktop Entry]\nType=Application\nName=Tool\nExec=tool\nTerminal=true\n");
+        let path = write_desktop(
+            "[Desktop Entry]\nType=Application\nName=Tool\nExec=tool\nTerminal=true\n",
+        );
         assert!(parse("tool", &path).unwrap().terminal);
         let _ = fs::remove_file(path);
     }

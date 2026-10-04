@@ -156,10 +156,10 @@ fn check_flatpak(_app_id: &str) -> Protection {
     Protection::allowed()
 }
 
-/// AppImages are listed for discovery, but uninstall/update support is a
-/// documented stub (see `operations/update.rs` and AGENTS.md). Blocking here
-/// means preview returns a protected plan, the confirm button renders
-/// disabled, and apply-time revalidation fails closed — all from one place.
+/// AppImages are detected by the scanner, but the main list hides them until
+/// uninstall/update support exists (see `operations/update.rs` and AGENTS.md).
+/// Blocking here keeps direct previews protected and apply-time revalidation
+/// fails closed — all from one place.
 fn check_appimage(path: &str) -> Protection {
     Protection::denied(format!(
         "Scope lists AppImages ({path}) but can't remove or update them yet."
