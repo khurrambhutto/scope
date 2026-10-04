@@ -144,8 +144,7 @@ async fn build_package(path: &Path) -> Option<InstalledPackage> {
 
     let mut pkg =
         InstalledPackage::new(PackageSource::AppImage, path.to_string_lossy().to_string());
-    pkg.name = name.clone();
-    pkg.display_name = Some(name);
+    pkg.name = name;
     pkg.version = version;
     pkg.size_bytes = size_bytes;
     pkg.app_kind = AppKind::Gui; // AppImages are GUI bundles by definition

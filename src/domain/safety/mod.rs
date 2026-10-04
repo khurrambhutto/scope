@@ -160,10 +160,8 @@ fn check_flatpak(_app_id: &str) -> Protection {
 /// uninstall/update support exists (see `operations/update.rs` and AGENTS.md).
 /// Blocking here keeps direct previews protected and apply-time revalidation
 /// fails closed — all from one place.
-fn check_appimage(path: &str) -> Protection {
-    Protection::denied(format!(
-        "Scope lists AppImages ({path}) but can't remove or update them yet."
-    ))
+fn check_appimage(_path: &str) -> Protection {
+    Protection::denied("AppImage uninstall and update are not supported yet.")
 }
 
 #[cfg(test)]

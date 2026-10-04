@@ -202,11 +202,22 @@ impl DesktopIndex {
                 .or_else(|| self.by_id.get(package_id))
                 .or_else(|| self.by_exec.get(&package_id.to_lowercase()))
                 .map(Arc::as_ref),
-            crate::domain::package::PackageSource::Apt | crate::domain::package::PackageSource::AppImage => {
+            crate::domain::package::PackageSource::Apt
+            | crate::domain::package::PackageSource::AppImage => {
                 let lc = package_id.to_lowercase();
+                let appimage_executable = (source
+                    == crate::domain::package::PackageSource::AppImage)
+                    .then(|| Path::new(package_id).file_name())
+                    .flatten()
+                    .map(|name| name.to_string_lossy().to_lowercase());
                 self.by_id
                     .get(&lc)
                     .or_else(|| self.by_exec.get(&lc))
+                    .or_else(|| {
+                        appimage_executable
+                            .as_ref()
+                            .and_then(|name| self.by_exec.get(name))
+                    })
                     .or_else(|| self.by_name_lower.get(&name.to_lowercase()))
                     .map(Arc::as_ref)
                     .or_else(|| self.lookup_stripped(package_id))
@@ -290,6 +301,21 @@ mod tests {
         let index = DesktopIndex::from_apps(vec![app("firefox", "Firefox", "firefox %u")]);
         let found = index.lookup(PackageSource::Apt, "firefox", "firefox");
         assert_eq!(found.map(|a| a.id.as_str()), Some("firefox"));
+    }
+
+    #[test]
+    fn appimage_matches_desktop_launcher_by_executable_basename() {
+        let index = DesktopIndex::from_apps(vec![app(
+            "t3_code_nightly",
+            "T3 Code (Nightly)",
+            "env DESKTOPINTEGRATION=1 /home/user/AppImages/t3_code_nightly.appimage --no-sandbox %U",
+        )]);
+        let found = index.lookup(
+            PackageSource::AppImage,
+            "/home/user/AppImages/t3_code_nightly.appimage",
+            "t3_code_nightly",
+        );
+        assert_eq!(found.map(|a| a.name.as_str()), Some("T3 Code (Nightly)"));
     }
 
     #[test]

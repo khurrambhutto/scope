@@ -4,6 +4,7 @@ use gpui_kit::prelude::*;
 use gpui_kit::{div, px, rgba, AnyElement, FontWeight};
 
 use crate::domain::package::InstalledPackage;
+use crate::domain::listing;
 use crate::theme::{self, display_title, text_dim};
 
 use super::row::package_icon;
@@ -36,6 +37,9 @@ pub(super) fn detail_element(pkg: &InstalledPackage) -> AnyElement {
             },
         ),
     ];
+    if let Some(reason) = listing::uninstall_block_reason(pkg) {
+        rows.push(("Uninstall".to_string(), reason));
+    }
     rows.retain(|(_, value)| !value.is_empty() && value != "—");
 
     div()

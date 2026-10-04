@@ -1,9 +1,10 @@
 //! One row in the package list: icon, title/meta line, hover action button.
 
 use gpui_kit::prelude::*;
-use gpui_kit::{div, img, px, rgba, rgb, AnyElement, FontWeight, Hsla, WeakEntity};
+use gpui_kit::{div, img, px, rgb, rgba, AnyElement, FontWeight, Hsla, WeakEntity};
 
 use crate::backend::{self, OpKind};
+use crate::domain::listing;
 use crate::domain::package::InstalledPackage;
 use crate::theme::{self, danger, display_title, text_dim, update_green};
 
@@ -34,13 +35,17 @@ pub(super) fn row_element(
             update_green(),
         ))
     } else if view_mode == ViewMode::Uninstall {
-        Some(action_button(
-            entity,
-            pkg.key.clone(),
-            OpKind::Uninstall,
-            "Uninstall",
-            danger(),
-        ))
+        Some(if listing::can_uninstall(pkg) {
+            action_button(
+                entity,
+                pkg.key.clone(),
+                OpKind::Uninstall,
+                "Uninstall",
+                danger(),
+            )
+        } else {
+            unavailable_action_button()
+        })
     } else {
         None
     };
@@ -155,6 +160,21 @@ fn action_button(
                 .ok();
         })
         .child(label)
+        .into_any_element()
+}
+
+fn unavailable_action_button() -> AnyElement {
+    div()
+        .id("action-unavailable")
+        .h_full()
+        .px(px(12.))
+        .flex()
+        .items_center()
+        .rounded_r(px(11.))
+        .bg(rgba(0xffffff0a))
+        .text_color(text_dim())
+        .text_size(px(12.))
+        .child("Not supported")
         .into_any_element()
 }
 
