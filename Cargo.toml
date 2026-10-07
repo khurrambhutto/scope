@@ -1,8 +1,8 @@
 [package]
 name = "scope-gpui"
-version = "0.3.2"
+version = "0.3.3"
 edition = "2021"
-description = "Scope — a GPUI rewrite of the Tauri desktop app"
+description = "See, update, and uninstall Linux apps in one place"
 
 [[bin]]
 name = "scope-gpui"

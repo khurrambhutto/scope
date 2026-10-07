@@ -18,6 +18,7 @@ jobs:
           sudo apt-get install -y \
             build-essential \
             pkg-config \
+            libfontconfig1-dev \
             libx11-dev \
             libx11-xcb-dev \
             libxcb1-dev \

@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    name: Build & Release (GPUI .deb)
+    name: Build & Release (.deb)
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -21,6 +21,7 @@ jobs:
           sudo apt-get install -y \
             build-essential \
             pkg-config \
+            libfontconfig1-dev \
             libx11-dev \
             libx11-xcb-dev \
             libxcb1-dev \
@@ -53,7 +54,7 @@ jobs:
             echo "SCOPE_UPDATE_PUBLIC_KEY is not configured" >&2
             exit 1
           }
-          cargo build --release
+          cargo build --release --locked
 
       - name: Package .deb (.deb first per product scope)
         run: |
@@ -88,7 +89,7 @@ jobs:
           Description: See, update, and uninstall every app on your Linux system in one place.
            Unifies APT, Snap, Flatpak, and AppImage with preview-first operations.
           EOF
-          echo "Scope ${VERSION} (GPUI shell)" > "$PKGDIR/usr/share/doc/scope/changelog"
+          echo "Scope ${VERSION}" > "$PKGDIR/usr/share/doc/scope/changelog"
           dpkg-deb --build "$PKGDIR"
           ls -la ./*.deb pkg/*.deb 2>/dev/null || true
           mv "$PKGDIR.deb" "scope_${VERSION}_amd64.deb"
@@ -97,19 +98,24 @@ jobs:
       - name: Sign release checksums
         env:
           SCOPE_UPDATE_SECRET_KEY: ${{ secrets.SCOPE_UPDATE_SECRET_KEY }}
+          SCOPE_UPDATE_PUBLIC_KEY: ${{ vars.SCOPE_UPDATE_PUBLIC_KEY }}
         run: |
           test -n "$SCOPE_UPDATE_SECRET_KEY" || {
             echo "SCOPE_UPDATE_SECRET_KEY is not configured" >&2
             exit 1
           }
+          umask 077
           printf '%s\n' "$SCOPE_UPDATE_SECRET_KEY" > "$RUNNER_TEMP/scope-minisign.key"
           sha256sum scope_*_amd64.deb > SHA256SUMS
           minisign -S -s "$RUNNER_TEMP/scope-minisign.key" -m SHA256SUMS -x SHA256SUMS.minisig
+          printf '%s\n' "$SCOPE_UPDATE_PUBLIC_KEY" > "$RUNNER_TEMP/scope-minisign.pub"
+          minisign -V -p "$RUNNER_TEMP/scope-minisign.pub" -m SHA256SUMS -x SHA256SUMS.minisig
+          sha256sum --check SHA256SUMS
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "Scope ${{ github.ref_name }} (GPUI)"
+          name: "Scope ${{ github.ref_name }}"
           tag_name: ${{ github.ref_name }}
           draft: false
           prerelease: false

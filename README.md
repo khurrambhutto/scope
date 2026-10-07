@@ -16,17 +16,20 @@ Built with Zed's GPUI (Rust binary in `src/`, no webview). Architecture and modu
 
 ## Install
 
+Current release: [v0.3.3](https://github.com/khurrambhutto/scope/releases/tag/v0.3.3).
+
 Download the `.deb` from [GitHub Releases](https://github.com/khurrambhutto/scope/releases). The app checks the Releases API on startup. Packaged builds offer one-click updates only when the release contains the exact architecture-specific artifact plus a minisign-signed `SHA256SUMS` manifest. Other installs open the Releases page.
 
 ```bash
 # Ubuntu / Debian
-sudo apt install ./scope_<version>_amd64.deb
+sudo apt install ./scope_0.3.3_amd64.deb
 ```
 
 Build from source (Rust stable; Linux needs GPUI system deps, notably `libxkbcommon-x11-dev`):
 
 ```bash
-sudo apt install libxkbcommon-x11-dev
+sudo apt install build-essential pkg-config libfontconfig1-dev libx11-dev libx11-xcb-dev \
+  libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev wayland-protocols
 cargo run
 ```
 

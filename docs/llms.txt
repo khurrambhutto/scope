@@ -12,17 +12,18 @@ Scope is a desktop app for Linux that unifies APT, Snap, Flatpak, and AppImage i
 
 - **License**: MIT
 - **Platform**: Linux (Ubuntu / Debian first)
+- **Current release**: v0.3.3
 - **Stack**: Rust, Zed's GPUI
 - **Author**: Khurram Bhutto (https://khurrambhutto.tech/)
 - **Features**: Unified package list across APT, Snap, Flatpak, and AppImage; desktop-entry and icon enrichment; preview-first uninstall and update with Polkit privilege escalation
 
 ## Installation
 
-Download the `.deb` from [Releases](https://github.com/khurrambhutto/scope/releases). The app checks the Releases API on startup and self-updates (`.deb` via `pkexec dpkg -i`); installs it can't self-update fall back to the Releases page. To build from source, install `libxkbcommon-x11-dev` and run `cargo run`.
+Download the `.deb` from [Releases](https://github.com/khurrambhutto/scope/releases). The app checks the Releases API on startup and self-updates (`.deb` via `pkexec dpkg -i`); installs it can't self-update fall back to the Releases page. To build from source, install the Linux build dependencies listed in README, including `libfontconfig1-dev` and `libxkbcommon-x11-dev`, then run `cargo run`.
 
 ```bash
-curl -LO https://github.com/khurrambhutto/scope/releases/latest/download/scope_0.3.1_amd64.deb
-sudo apt install ./scope_0.3.1_amd64.deb
+curl -LO https://github.com/khurrambhutto/scope/releases/latest/download/scope_0.3.3_amd64.deb
+sudo apt install ./scope_0.3.3_amd64.deb
 ```
 
 ## FAQ

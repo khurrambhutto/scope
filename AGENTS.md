@@ -59,7 +59,7 @@ docs/                     GitHub Pages site
 
 ## GPUI notes
 
-- Run `cargo run`. Linux needs GPUI's system deps; notably `libxkbcommon-x11-dev`, because GPUI links `-lxkbcommon-x11` on Linux even in Wayland-only builds.
+- Run `cargo run`. Linux needs GPUI's system deps; notably `libfontconfig1-dev` for font discovery and `libxkbcommon-x11-dev`, because GPUI links `-lxkbcommon-x11` on Linux even in Wayland-only builds.
 - Depend on `gpui-kit` alone (it brings the pinned `gpui-pre` snapshot); never list `gpui` separately. Import UI types via `use gpui_kit::*` / `gpui_kit::prelude::*`. Call `gpui_kit::init` once at startup for the theme; open the window with plain `cx.open_window` (no Base `Root`) to stay borderless — kit's `Root` draws a 1px `WindowBorder` frame on Linux. Overlay components (dropdowns, popovers, toasts) need `Root` and are out until the frame question is revisited.
 - The crate pins `[lints]` in its `Cargo.toml` (`unsafe_code = "forbid"`, deny `dbg_macro`/`todo`/`unimplemented`).
 
@@ -130,5 +130,6 @@ cargo clippy
 - All of the above pass and the diff contains only the requested change.
 - Safety-sensitive backend changes (probe, revalidate, deny-list, PlanStore) ship with targeted Rust tests in the same change.
 - `Cargo.lock` stays committed.
+- Releases use plain `v<version>` tags and `Scope v<version>` titles. Update Cargo metadata, the lockfile, README, and website version references together.
 - Commit style is conventional: `feat:`, `fix:`, `chore:`, `docs:`, `style:`.
 - Update this file in the same change as any convention it describes.
