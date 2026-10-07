@@ -6,10 +6,10 @@
 
 <p align="center"><strong>See, update, and uninstall every app on your Linux system in one place.</strong></p>
 
-Linux spreads software across APT, Snap, Flatpak, and AppImage. Scope scans all four into a single list, adds desktop names and icons where a GUI app exists, and lets you update or uninstall without typing a package-manager command. Every destructive action shows a preview first. Privileged actions go through Polkit, so Scope never handles your password.
+Scope brings APT, Snap, Flatpak, AppImages, and user-local desktop apps into one searchable list. Update or uninstall supported apps after reviewing a preview of the operation. Privileged actions use the standard Polkit dialog, so Scope never handles your password.
 
 <p align="center">
-  <img src="docs/image.png" alt="Scope showing installed apps from APT, Snap, Flatpak, and AppImage in one list, with an inline detail panel and hover actions" width="720" />
+  <img src="docs/image.png" alt="Scope v0.3.3 showing the Apps and Updates toggle, installed apps, search, source filter, and Show all control in its dark red interface" width="960" />
 </p>
 
 Built with Zed's GPUI (Rust binary in `src/`, no webview). Architecture and module rules live in [AGENTS.md](AGENTS.md).
@@ -18,24 +18,29 @@ Built with Zed's GPUI (Rust binary in `src/`, no webview). Architecture and modu
 
 Current release: [v0.3.3](https://github.com/khurrambhutto/scope/releases/tag/v0.3.3).
 
-Download the `.deb` from [GitHub Releases](https://github.com/khurrambhutto/scope/releases). The app checks the Releases API on startup. Packaged builds offer one-click updates only when the release contains the exact architecture-specific artifact plus a minisign-signed `SHA256SUMS` manifest. Other installs open the Releases page.
+Download [scope_0.3.3_amd64.deb](https://github.com/khurrambhutto/scope/releases/download/v0.3.3/scope_0.3.3_amd64.deb) for Ubuntu on x86-64, then run this command from the download directory:
 
 ```bash
-# Ubuntu / Debian
 sudo apt install ./scope_0.3.3_amd64.deb
 ```
 
-Build from source (Rust stable; Linux needs GPUI system deps, notably `libxkbcommon-x11-dev`):
+Scope checks GitHub Releases on startup. Official `.deb` builds from v0.3.3 can install updates after verifying the signed checksum manifest. Install v0.3.3 manually when upgrading from an earlier version without an embedded verification key. Other install types open the Releases page when a compatible verified package is unavailable.
+
+To build from source, install Rust stable and the Linux dependencies, then clone the repository:
 
 ```bash
 sudo apt install build-essential pkg-config libfontconfig1-dev libx11-dev libx11-xcb-dev \
   libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev wayland-protocols
+git clone https://github.com/khurrambhutto/scope.git
+cd scope
 cargo run
 ```
 
 ## How it works
 
-The main window defaults to recognizable GUI apps and command-line tools, with their source, version, size, and update state. AppImages and user-local desktop apps appear with uninstall disabled. Use **Show all** in the footer to include every package row Scope scanned, including libraries and system components; protected packages remain visible there with uninstall disabled. Search or filter by source, then select a row for full details.
+Use the centered **Apps / Updates** toggle to switch between installed apps and available updates. Search by app or package name, filter by source, or refresh to rescan. Select a row for details and supported actions.
+
+The default list shows recognizable GUI apps and command-line tools. AppImages and user-local desktop apps appear for discovery, with update and uninstall disabled. **Show all** in the footer reveals every row returned by the scanners, including libraries and system components. APT scans manual installs only, and Snap and Flatpak runtimes remain excluded. Protected packages cannot be uninstalled, even with Show all enabled.
 
 Update and uninstall follow the same flow. Scope builds a plan showing exactly what will run and waits for your confirmation. The backend then revalidates the package against the live system and executes. Commands that need root trigger the standard system password dialog. System-critical packages are deny-listed in the backend and cannot be removed through Scope.
 
@@ -47,8 +52,9 @@ Works today:
 - Desktop-entry enrichment and freedesktop icon theme resolution
 - Uninstall with preview, Polkit auth, and a protected-package deny-list
 - Update with preview for APT, Snap, and Flatpak
-- Self-updater banner (checks GitHub Releases, one-click install for self-updatable installs)
-- Release pipeline producing `.deb` (Ubuntu first)
+- Rounded window with a centered Apps / Updates toggle and consistent dark red controls
+- Self-updater with signed checksum verification for official `.deb` builds
+- `.deb` releases with a signed SHA-256 manifest, targeting Ubuntu first
 
 Not yet:
 
