@@ -2,6 +2,7 @@
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::{
+    button::{Button, ButtonCustomVariant, ButtonVariants},
     input::{
         InputGroup, InputGroupAddon, InputGroupAddonAlignment, InputGroupInput, InputGroupText,
     },
@@ -11,10 +12,10 @@ use gpui_kit::prelude::*;
 use gpui_kit::{div, img, px, rems, rgba, AnyElement, Context, ImageSource, Resource};
 
 use crate::domain::package::PackageSource;
-use crate::theme::{accent, border, elev, text, text_dim, text_faint};
+use crate::theme::{accent, border, elev, elev2, text, text_dim, text_faint};
 
 use super::app_view::{act, ScopeApp};
-use super::widgets::{menu_item, select_widget, view_toggle_button};
+use super::widgets::{menu_item, select_widget};
 
 const ICON_REFRESH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/refresh.svg");
 
@@ -66,6 +67,59 @@ pub(super) enum OpenSelect {
 }
 
 impl ScopeApp {
+    pub(super) fn view_navigation(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let entity = cx.entity().downgrade();
+        div()
+            .flex()
+            .items_center()
+            .gap(px(2.))
+            .p(px(3.))
+            .rounded_full()
+            .border_1()
+            .border_color(border())
+            .bg(elev2())
+            .children(
+                [
+                    (
+                        "view-apps",
+                        "Apps",
+                        IconName::LayoutDashboard,
+                        ViewMode::Uninstall,
+                    ),
+                    (
+                        "view-updates",
+                        "Updates",
+                        IconName::RefreshCw,
+                        ViewMode::Updates,
+                    ),
+                ]
+                .into_iter()
+                .map(|(id, label, icon, mode)| {
+                    let active = self.view_mode == mode;
+                    Button::new(id)
+                        .label(label)
+                        .icon(icon)
+                        .rounded(px(18.))
+                        .h(px(30.))
+                        .px(px(16.))
+                        .text_size(px(13.))
+                        .custom(
+                            ButtonCustomVariant::new(cx)
+                                .color(if active { elev() } else { elev2() })
+                                .foreground(if active { accent() } else { text_dim() })
+                                .hover(elev())
+                                .active(elev()),
+                        )
+                        .toggled(active)
+                        .on_click(act(&entity, move |this, cx| {
+                            this.view_mode = mode;
+                            this.open_select = None;
+                            cx.notify();
+                        }))
+                }),
+            )
+    }
+
     /// Kit search field: magnifier prefix, cleanable input, live result
     /// count suffix. The query state lives in [`ScopeApp::search_input`];
     /// typing emits `InputEvent::Change`, which re-renders the list.
@@ -104,35 +158,6 @@ impl ScopeApp {
     pub(super) fn filters(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let entity = cx.entity().downgrade();
         let open = self.open_select;
-
-        let view_toggle = div()
-            .flex_none()
-            .flex()
-            .items_center()
-            .gap(px(2.))
-            .p(px(2.))
-            .rounded_full()
-            .border_1()
-            .border_color(border())
-            .hover(|this| this.border_color(accent()))
-            .child(view_toggle_button(
-                "view-uninstall",
-                "Uninstall",
-                self.view_mode == ViewMode::Uninstall,
-                act(&entity, |this, cx| {
-                    this.view_mode = ViewMode::Uninstall;
-                    cx.notify();
-                }),
-            ))
-            .child(view_toggle_button(
-                "view-updates",
-                "Updates",
-                self.view_mode == ViewMode::Updates,
-                act(&entity, |this, cx| {
-                    this.view_mode = ViewMode::Updates;
-                    cx.notify();
-                }),
-            ));
 
         let source_select = select_widget(
             "source-select",
@@ -214,7 +239,6 @@ impl ScopeApp {
             .pr(px(16.))
             .py(px(12.))
             .child(self.search_box(cx))
-            .child(view_toggle)
             .child(div().flex_1())
             .child(source_select)
             .child(rescan)

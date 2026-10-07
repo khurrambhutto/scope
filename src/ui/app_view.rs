@@ -680,7 +680,7 @@ impl Render for ScopeApp {
                     this.start_scan(cx);
                 }
             }))
-            .child(title_bar())
+            .child(title_bar(self.view_navigation(cx)))
             .child(self.filters(cx))
             .children(banner_children)
             .child(

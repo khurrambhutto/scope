@@ -7,7 +7,7 @@ use gpui_kit::{
     WindowControlArea,
 };
 
-use crate::theme::{danger, elev2, text_dim};
+use crate::theme::{danger, elev2, text, text_dim};
 
 // Title-bar-sized copy of the brand mark: GPUI rasters SVGs at 2x their
 // intrinsic size, so a 512px source would be crushed into the 28px slot.
@@ -16,11 +16,14 @@ const ICON_MIN: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/win-min.svg"
 const ICON_MAX: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/win-max.svg");
 const ICON_CLOSE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/win-close.svg");
 
-pub(super) fn title_bar() -> impl IntoElement {
+pub(super) fn title_bar(navigation: impl IntoElement) -> impl IntoElement {
     div()
         .id("titlebar")
+        .relative()
         .flex_none()
-        .h(px(40.))
+        .h(px(64.))
+        .px(px(16.))
+        .gap(px(16.))
         .flex()
         .items_center()
         .window_control_area(WindowControlArea::Drag)
@@ -31,9 +34,10 @@ pub(super) fn title_bar() -> impl IntoElement {
                 window.start_window_move();
             }
         })
-        .child(div().flex_1())
         .child(
             div()
+                .flex_1()
+                .min_w(px(120.))
                 .flex()
                 .items_center()
                 .gap(px(8.))
@@ -50,20 +54,34 @@ pub(super) fn title_bar() -> impl IntoElement {
                 )
                 .child(
                     div()
-                        .text_size(px(18.))
+                        .text_size(px(16.))
                         .font_weight(FontWeight::BOLD)
-                        .text_color(rgb(0xffffff))
+                        .text_color(text())
                         .child("Scope"),
                 ),
         )
         .child(
             div()
-                .flex_1()
+                .id("titlebar-navigation")
+                .flex_none()
+                // Tabs are controls, so presses must not start a window drag.
+                .on_mouse_down(MouseButton::Left, |_event, _window, cx| {
+                    cx.stop_propagation();
+                })
+                .child(navigation),
+        )
+        .child(
+            // Balance the brand column so navigation stays centered while
+            // window controls are anchored independently to the corner.
+            div().flex_1().min_w(px(120.)),
+        )
+        .child(
+            div()
+                .absolute()
+                .top_0()
+                .right_0()
                 .flex()
                 .items_center()
-                .justify_end()
-                .gap(px(6.))
-                .pr(px(8.))
                 .child(window_control_button(
                     "win-min",
                     ICON_MIN,
@@ -104,8 +122,8 @@ pub(super) fn window_control_button(
             cx.stop_propagation();
         })
         .on_click(move |_event, window, _cx| action(window))
-        .size(px(28.))
-        .rounded(px(4.))
+        .w(px(40.))
+        .h(px(36.))
         .flex()
         .items_center()
         .justify_center()
