@@ -2,15 +2,17 @@
 
 use std::time::Duration;
 
+use gpui_kit::assets::IconName;
+use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    div, px, rgb, rgba, AnyElement, App, ClickEvent, FontWeight, Pixels, WeakEntity, Window,
+    div, px, rgba, AnyElement, App, ClickEvent, FontWeight, Pixels, WeakEntity, Window,
 };
 
 use crate::backend::OpKind;
 use crate::domain::operations::{OperationPlan, OperationResult, OperationStage};
 use crate::domain::package::InstalledPackage;
-use crate::theme::{self, accent, border, display_title, elev, elev2, text, text_dim, text_faint};
+use crate::theme::{self, accent, border, display_title, elev, text_dim, text_faint};
 
 use super::app_view::{act, ScopeApp};
 use super::widgets::{banner, button, dialog_actions, plan_rows, BannerKind, ButtonStyle};
@@ -185,15 +187,13 @@ fn modal_shell(
                                 .child(heading),
                         )
                         .child(
-                            div()
-                                .id("modal-close")
-                                .cursor_pointer()
-                                .px(px(6.))
-                                .rounded(px(6.))
-                                .text_color(text_dim())
-                                .hover(|this| this.text_color(text()).bg(elev2()))
-                                .on_click(act(entity, |this, cx| this.close_dialog(cx)))
-                                .child("✕"),
+                            Button::new("modal-close")
+                                .ghost()
+                                .icon(IconName::Close)
+                                .accessibility_label("Close dialog")
+                                .size(px(30.))
+                                .rounded(px(16.))
+                                .on_click(act(entity, |this, cx| this.close_dialog(cx))),
                         ),
                 )
                 .child(body),
@@ -360,7 +360,7 @@ fn running_body(
                 .rounded(px(10.))
                 .border_1()
                 .border_color(border())
-                .bg(rgb(0x0b0c0f))
+                .bg(theme::background_bottom())
                 .text_size(px(12.))
                 .line_height(px(18.))
                 .text_color(text_dim())
@@ -417,24 +417,21 @@ fn done_body(
     div()
         .p(px(20.))
         .child(banner(&result.message, kind))
-        .child(
-            div()
-                .id("dlg-logtoggle")
-                .mt(px(10.))
-                .text_size(px(13.))
-                .text_color(accent())
-                .cursor_pointer()
-                .on_click(act(entity, |this, cx| {
-                    if let Some(Dialog::Done { show_logs, .. }) = &mut this.dialog {
-                        *show_logs = !*show_logs;
-                    }
-                    cx.notify();
-                }))
-                .child(format!(
-                    "{} command output",
-                    if show_logs { "Hide" } else { "Show" }
-                )),
-        )
+        .child(div().mt(px(10.)).child(button(
+            "dlg-logtoggle",
+            if show_logs {
+                "Hide command output"
+            } else {
+                "Show command output"
+            },
+            ButtonStyle::Neutral,
+            act(entity, |this, cx| {
+                if let Some(Dialog::Done { show_logs, .. }) = &mut this.dialog {
+                    *show_logs = !*show_logs;
+                }
+                cx.notify();
+            }),
+        )))
         .when(show_logs, |this| {
             this.child(
                 div()
@@ -446,7 +443,7 @@ fn done_body(
                     .rounded(px(10.))
                     .border_1()
                     .border_color(border())
-                    .bg(rgb(0x0b0c0f))
+                    .bg(theme::background_bottom())
                     .text_size(px(12.))
                     .text_color(text_dim())
                     .child(result.logs.clone()),

@@ -1,12 +1,17 @@
 //! Small reusable building blocks shared by the list, filters, and dialog.
 
+use gpui_kit::assets::IconName;
+use gpui_kit::component::{
+    button::{Button, ButtonVariants},
+    Icon, Selectable,
+};
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    deferred, div, img, linear_color_stop, linear_gradient, px, rgb, rgba, AnyElement, App,
-    ClickEvent, FontWeight, Hsla, ImageSource, IntoElement, Resource, SharedString, Window,
+    deferred, div, px, AnyElement, App, ClickEvent, FontWeight, Hsla, IntoElement, SharedString,
+    Window,
 };
 
-use crate::theme::{accent, border, danger, elev, elev2, text, text_dim, text_faint, update_green};
+use crate::theme::{self, border, elev, elev2, text, text_dim, text_faint};
 
 pub(super) fn view_toggle_button(
     id: &'static str,
@@ -14,71 +19,35 @@ pub(super) fn view_toggle_button(
     active: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
-    div()
-        .id(id)
-        .px(px(18.))
-        .py(px(5.))
-        .rounded_full()
+    Button::new(id)
+        .label(label)
+        .ghost()
+        .rounded(px(18.))
+        .h(px(34.))
+        .px(px(16.))
         .text_size(px(13.))
-        .font_weight(FontWeight::MEDIUM)
-        .cursor_pointer()
-        .when(active, |this| {
-            this.bg(linear_gradient(
-                135.,
-                linear_color_stop(rgb(0xd4504a), 0.),
-                linear_color_stop(rgb(0xe0605a), 1.),
-            ))
-            .text_color(rgb(0xffffff))
-        })
-        .when(!active, |this| {
-            this.text_color(text_dim())
-                .hover(|this| this.text_color(text()).bg(rgba(0xffffff08)))
-        })
+        .selected(active)
+        .toggled(active)
         .on_click(on_click)
-        .child(label)
 }
 
-/// A pill select trigger plus its deferred dropdown menu. The trigger shows
-/// either a text label or an icon.
+/// A pill select trigger plus its deferred dropdown menu.
 pub(super) fn select_widget(
     trigger_id: &'static str,
-    value_label: Option<&'static str>,
-    icon: Option<&'static str>,
+    label: &'static str,
     open: bool,
     on_trigger: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     menu: impl Fn() -> Vec<AnyElement> + 'static,
 ) -> impl IntoElement {
-    let trigger = div()
-        .id(trigger_id)
-        .flex()
-        .items_center()
-        .gap(px(6.))
-        .rounded_full()
-        .border_1()
-        .border_color(if open { accent() } else { border() })
-        .cursor_pointer()
-        .hover(|this| this.bg(rgba(0xffffff08)).border_color(accent()))
-        .on_click(on_trigger)
-        .when_some(value_label, |this, label| {
-            this.px(px(18.))
-                .py(px(7.))
-                .text_size(px(13.))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(text_dim())
-                .child(label)
-        })
-        .when_some(icon, |this, icon| {
-            this.px(px(12.)).py(px(8.)).child(
-                img(ImageSource::Resource(Resource::Embedded(icon.into())))
-                    .size(px(16.))
-                    .flex_none(),
-            )
-        })
-        .child(
-            div()
-                .text_color(text_dim())
-                .child(if open { "▴" } else { "▾" }),
-        );
+    let trigger = Button::new(trigger_id)
+        .label(label)
+        .dropdown_caret(true)
+        .rounded(px(18.))
+        .h(px(34.))
+        .px(px(16.))
+        .text_size(px(13.))
+        .selected(open)
+        .on_click(on_trigger);
 
     div()
         .relative()
@@ -99,7 +68,7 @@ pub(super) fn menu_popup(items: Vec<AnyElement>) -> AnyElement {
         .rounded(px(14.))
         .border_1()
         .border_color(border())
-        .bg(elev())
+        .bg(elev2())
         .shadow_lg()
         // Block clicks on the menu from falling through to the package list
         // rows rendered underneath the deferred overlay.
@@ -121,13 +90,25 @@ pub(super) fn menu_item(
         .px(px(12.))
         .py(px(8.))
         .rounded(px(8.))
-        .text_size(px(14.))
+        .flex()
+        .items_center()
+        .justify_between()
+        .gap(px(12.))
+        .text_size(px(13.))
         .cursor_pointer()
-        .when(selected, |this| this.text_color(accent()))
-        .when(!selected, |this| this.text_color(text()))
-        .hover(|this| this.bg(elev2()))
+        .when(selected, |this| {
+            this.bg(theme::selected_surface())
+                .text_color(theme::accent_text())
+        })
+        .when(!selected, |this| this.text_color(text_dim()))
+        .hover(|this| this.bg(theme::hover_surface()).text_color(text()))
         .on_click(on_click)
         .child(label)
+        .child(
+            Icon::new(IconName::Check)
+                .size(px(14.))
+                .opacity(if selected { 1. } else { 0. }),
+        )
 }
 
 pub(super) fn tag(label: &'static str, color: Hsla) -> impl IntoElement {
@@ -136,8 +117,13 @@ pub(super) fn tag(label: &'static str, color: Hsla) -> impl IntoElement {
         .py(px(2.))
         .rounded(px(6.))
         .border_1()
-        .border_color(color)
-        .text_color(color)
+        .border_color(border())
+        .bg(elev2())
+        .text_color(text_dim())
+        .flex()
+        .items_center()
+        .gap(px(6.))
+        .child(div().size(px(5.)).rounded_full().bg(color))
         .text_size(px(12.))
         .font_weight(FontWeight::SEMIBOLD)
         .child(label)
@@ -174,14 +160,16 @@ pub(super) enum BannerKind {
 
 pub(super) fn banner(message: &str, kind: BannerKind) -> impl IntoElement {
     let (bg, border_c, fg) = match kind {
-        BannerKind::Error => (rgba(0xd4504a1a), rgba(0xd4504a40), rgb(0xf0c4be)),
-        BannerKind::Warn => (rgba(0xd9a4411a), rgba(0xd9a44140), rgb(0xecd9a8)),
-        BannerKind::Ok => (rgba(0x0b8a4f1f), rgba(0x0b8a4f4d), rgb(0xbfe9c8)),
-        BannerKind::Muted => (rgba(0xefe6e40a), rgb(0x2d2325), rgb(0xa69692)),
+        BannerKind::Error => (
+            theme::selected_surface(),
+            theme::border_hover(),
+            theme::accent_text(),
+        ),
+        BannerKind::Warn => (elev2(), theme::border_hover(), text()),
+        BannerKind::Ok => (elev2(), border(), text()),
+        BannerKind::Muted => (elev(), border(), text_dim()),
     };
     div()
-        .mx(px(18.))
-        .mt(px(10.))
         .px(px(14.))
         .py(px(10.))
         .rounded(px(12.))
@@ -205,28 +193,20 @@ pub(super) fn button(
     label: &'static str,
     style: ButtonStyle,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let (bg, fg) = match style {
-        ButtonStyle::Neutral => (elev2(), text()),
-        ButtonStyle::Danger => (danger(), rgb(0xffffff).into()),
-        ButtonStyle::Update => (update_green(), rgb(0xffffff).into()),
-    };
-    let solid = !matches!(style, ButtonStyle::Neutral);
-    div()
-        .id(id)
+) -> Button {
+    let button = Button::new(id)
+        .label(label)
+        .rounded(px(18.))
+        .h(px(34.))
         .px(px(16.))
-        .py(px(8.))
-        .rounded(px(12.))
-        .border_1()
-        .border_color(if solid { bg } else { border() })
-        .bg(bg)
-        .text_color(fg)
-        .text_size(px(14.))
-        .font_weight(FontWeight::SEMIBOLD)
-        .cursor_pointer()
-        .hover(|this| this.opacity(0.9))
-        .on_click(on_click)
-        .child(label)
+        .text_size(px(13.))
+        .font_weight(FontWeight::MEDIUM)
+        .on_click(on_click);
+    match style {
+        ButtonStyle::Neutral => button,
+        ButtonStyle::Danger => button.danger(),
+        ButtonStyle::Update => button.primary(),
+    }
 }
 
 /// One label/value line in the inline detail panel or a plan summary.

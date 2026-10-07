@@ -1,7 +1,7 @@
 //! Inline detail panel shown beneath the selected row.
 
 use gpui_kit::prelude::*;
-use gpui_kit::{div, px, rgba, AnyElement, FontWeight};
+use gpui_kit::{div, px, AnyElement, FontWeight};
 
 use crate::domain::listing;
 use crate::domain::package::InstalledPackage;
@@ -52,8 +52,8 @@ pub(super) fn detail_element(pkg: &InstalledPackage) -> AnyElement {
         .p(px(16.))
         .rounded(px(12.))
         .border_1()
-        .border_color(rgba(0xffffff0f))
-        .bg(rgba(0xffffff08))
+        .border_color(theme::border())
+        .bg(theme::elev())
         .flex()
         .flex_col()
         .gap(px(14.))

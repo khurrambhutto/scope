@@ -8,7 +8,7 @@ use gpui_kit::{div, px, AnyElement, IntoElement, SharedString};
 
 use crate::domain::operations::OperationResult;
 use crate::domain::updater::UpdateCheck;
-use crate::ui::widgets::{banner, BannerKind};
+use crate::ui::widgets::{banner, button, BannerKind, ButtonStyle};
 
 /// The updater lifecycle. Each phase carries exactly the data it needs, so an
 /// "available" banner cannot render without a check and a finished banner cannot
@@ -160,43 +160,29 @@ pub fn updater_banner(
         UpdaterStatus::Installing { .. } => "Working…",
         _ => "Dismiss",
     };
-    // Build manually: message banner + action row (widgets::banner is
-    // text-only, so compose here instead of extending it).
     div()
-        .mx(px(18.))
+        .mx(px(32.))
         .mt(px(10.))
-        .px(px(14.))
-        .py(px(10.))
-        .rounded(px(12.))
-        .border_1()
-        .child(banner(&text, kind).into_any_element())
+        .child(banner(&text, kind))
         .child(
             div()
                 .flex()
                 .justify_end()
                 .gap(px(10.))
                 .mt(px(8.))
-                .child(
-                    div()
-                        .id("updater-dismiss")
-                        .px(px(16.))
-                        .py(px(6.))
-                        .rounded(px(10.))
-                        .cursor_pointer()
-                        .on_click(on_dismiss)
-                        .child("Later"),
-                )
+                .child(button(
+                    "updater-dismiss",
+                    "Later",
+                    ButtonStyle::Neutral,
+                    on_dismiss,
+                ))
                 .when(show_update, |this| {
-                    this.child(
-                        div()
-                            .id("updater-apply")
-                            .px(px(16.))
-                            .py(px(6.))
-                            .rounded(px(10.))
-                            .cursor_pointer()
-                            .on_click(on_update)
-                            .child(action_label),
-                    )
+                    this.child(button(
+                        "updater-apply",
+                        action_label,
+                        ButtonStyle::Update,
+                        on_update,
+                    ))
                 }),
         )
         .into_any_element()

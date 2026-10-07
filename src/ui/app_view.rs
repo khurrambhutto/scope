@@ -13,7 +13,7 @@ use futures::StreamExt;
 use gpui_kit::component::input::{InputEvent, InputState};
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    actions, div, linear_color_stop, linear_gradient, list, px, rgb, AnyElement, App, ClickEvent,
+    actions, div, linear_color_stop, linear_gradient, list, px, AnyElement, App, ClickEvent,
     Context, Entity, IntoElement, KeyBinding, ListAlignment, ListState, Render, Subscription,
     WeakEntity, Window,
 };
@@ -512,11 +512,21 @@ impl ScopeApp {
             ));
         }
         if let Some(error) = &self.error {
-            banners.push(banner(error, BannerKind::Error).into_any_element());
+            banners.push(
+                div()
+                    .mx(px(32.))
+                    .mt(px(10.))
+                    .child(banner(error, BannerKind::Error))
+                    .into_any_element(),
+            );
         } else {
             for (label, message) in self.source_warnings() {
                 banners.push(
-                    banner(&format!("{label}: {message}"), BannerKind::Warn).into_any_element(),
+                    div()
+                        .mx(px(32.))
+                        .mt(px(10.))
+                        .child(banner(&format!("{label}: {message}"), BannerKind::Warn))
+                        .into_any_element(),
                 );
             }
         }
@@ -663,8 +673,8 @@ impl Render for ScopeApp {
             .overflow_hidden()
             .bg(linear_gradient(
                 180.,
-                linear_color_stop(rgb(0x2d1414), 0.),
-                linear_color_stop(rgb(0x0b0c0f), 1.),
+                linear_color_stop(theme::background_top(), 0.),
+                linear_color_stop(theme::background_bottom(), 1.),
             ))
             .text_color(text())
             // Keyboard shortcuts bubble up from the focused search box to the

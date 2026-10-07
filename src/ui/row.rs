@@ -1,15 +1,17 @@
 //! One row in the package list: icon, title/meta line, hover action button.
 
+use gpui_kit::component::{button::Button, Disableable};
 use gpui_kit::prelude::*;
-use gpui_kit::{div, img, px, rgb, rgba, AnyElement, FontWeight, Hsla, WeakEntity};
+use gpui_kit::{div, img, px, rgb, rgba, AnyElement, FontWeight, WeakEntity};
 
 use crate::backend::{self, OpKind};
 use crate::domain::listing;
 use crate::domain::package::InstalledPackage;
-use crate::theme::{self, danger, display_title, text_dim, update_green};
+use crate::theme::{self, display_title, text_dim};
 
 use super::app_view::{act, ScopeApp};
 use super::filters::ViewMode;
+use super::widgets::{button, ButtonStyle};
 
 pub(super) fn row_element(
     entity: &WeakEntity<ScopeApp>,
@@ -32,7 +34,7 @@ pub(super) fn row_element(
             pkg.key.clone(),
             OpKind::Update,
             "Update",
-            update_green(),
+            selected,
         ))
     } else if view_mode == ViewMode::Uninstall {
         Some(if listing::can_uninstall(pkg) {
@@ -41,7 +43,7 @@ pub(super) fn row_element(
                 pkg.key.clone(),
                 OpKind::Uninstall,
                 "Uninstall",
-                danger(),
+                selected,
             )
         } else {
             unavailable_action_button()
@@ -50,6 +52,7 @@ pub(super) fn row_element(
         None
     };
 
+    let has_action = action.is_some();
     let row = div()
         .id(("row", index))
         .group("row")
@@ -59,22 +62,23 @@ pub(super) fn row_element(
         .gap(px(12.))
         .w_full()
         .px(px(12.))
+        .when(has_action, |this| this.pr(px(132.)))
         .py(px(10.))
         .my(px(2.))
         .rounded(px(12.))
         .border_1()
         .cursor_pointer()
         .border_color(if selected {
-            rgba(0xd4504a26)
+            theme::border_hover()
         } else {
-            rgba(0x00000000)
+            rgba(0x00000000).into()
         })
         .bg(if selected {
-            rgba(0xd4504a14)
+            theme::selected_surface()
         } else {
-            rgba(0x00000000)
+            rgba(0x00000000).into()
         })
-        .hover(|this| this.bg(rgba(0xffffff0a)))
+        .hover(|this| this.bg(theme::hover_surface()))
         .on_click(act(entity, move |this, cx| this.toggle_select(&key, cx)))
         .child(package_icon(pkg, 40.))
         .child(
@@ -114,7 +118,7 @@ pub(super) fn row_element(
                     .absolute()
                     .top_0()
                     .bottom_0()
-                    .right_0()
+                    .right(px(12.))
                     .flex()
                     .items_center()
                     .opacity(if selected { 1.0 } else { 0.0 })
@@ -131,50 +135,40 @@ fn action_button(
     key: String,
     kind: OpKind,
     label: &'static str,
-    color: Hsla,
+    selected: bool,
 ) -> AnyElement {
     let entity = entity.clone();
     let action_id = match kind {
         OpKind::Uninstall => "action-uninstall",
         OpKind::Update => "action-update",
     };
-    div()
-        .id(action_id)
-        .h_full()
-        .px(px(18.))
-        .flex()
-        .items_center()
-        .rounded_r(px(11.))
-        .bg(color)
-        .text_color(rgb(0xffffff))
-        .text_size(px(13.))
-        .font_weight(FontWeight::SEMIBOLD)
-        .cursor_pointer()
-        .hover(|this| this.opacity(0.9))
-        .on_click(move |_ev, _window, cx| {
+    button(
+        action_id,
+        label,
+        match kind {
+            OpKind::Uninstall => ButtonStyle::Danger,
+            OpKind::Update => ButtonStyle::Update,
+        },
+        move |_ev, _window, cx| {
             cx.stop_propagation();
-            // Resolve the package by key at click time instead of cloning the
-            // whole package into every visible row on every frame.
+            // Resolve by key at click time; rows never retain stale package data.
             entity
                 .update(cx, |this, cx| this.open_op_by_key(kind, &key, cx))
                 .ok();
-        })
-        .child(label)
-        .into_any_element()
+        },
+    )
+    .tab_stop(selected)
+    .into_any_element()
 }
 
 fn unavailable_action_button() -> AnyElement {
-    div()
-        .id("action-unavailable")
-        .h_full()
+    Button::new("action-unavailable")
+        .label("Not supported")
+        .rounded(px(18.))
+        .h(px(34.))
         .px(px(12.))
-        .flex()
-        .items_center()
-        .rounded_r(px(11.))
-        .bg(rgba(0xffffff0a))
-        .text_color(text_dim())
         .text_size(px(12.))
-        .child("Not supported")
+        .disabled(true)
         .into_any_element()
 }
 

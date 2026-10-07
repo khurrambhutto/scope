@@ -9,15 +9,13 @@ use gpui_kit::component::{
     FocusableExt as _, Icon,
 };
 use gpui_kit::prelude::*;
-use gpui_kit::{div, img, px, rems, rgba, AnyElement, Context, ImageSource, Resource};
+use gpui_kit::{div, px, rems, AnyElement, Context};
 
 use crate::domain::package::PackageSource;
-use crate::theme::{accent, border, elev, elev2, text, text_dim, text_faint};
+use crate::theme::{self, border, elev2, text, text_dim, text_faint};
 
 use super::app_view::{act, ScopeApp};
 use super::widgets::{menu_item, select_widget};
-
-const ICON_REFRESH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/refresh.svg");
 
 // ---- Filters ---------------------------------------------------------------
 
@@ -105,10 +103,18 @@ impl ScopeApp {
                         .text_size(px(13.))
                         .custom(
                             ButtonCustomVariant::new(cx)
-                                .color(if active { elev() } else { elev2() })
-                                .foreground(if active { accent() } else { text_dim() })
-                                .hover(elev())
-                                .active(elev()),
+                                .color(if active {
+                                    theme::selected_surface()
+                                } else {
+                                    elev2()
+                                })
+                                .foreground(if active {
+                                    theme::accent_text()
+                                } else {
+                                    text_dim()
+                                })
+                                .hover(theme::hover_surface())
+                                .active(theme::selected_surface()),
                         )
                         .toggled(active)
                         .on_click(act(&entity, move |this, cx| {
@@ -132,9 +138,9 @@ impl ScopeApp {
             // Left edge lines up with the list icons below: filter bar
             // padding (32) + row padding (12).
             .ml(px(12.))
-            .h(px(32.))
+            .h(px(34.))
             .rounded_full()
-            .bg(elev())
+            .bg(elev2())
             .border_color(border())
             .text_color(text())
             .input(
@@ -161,8 +167,7 @@ impl ScopeApp {
 
         let source_select = select_widget(
             "source-select",
-            Some(self.source_filter.label()),
-            None,
+            self.source_filter.label(),
             open == Some(OpenSelect::Source),
             act(&entity, |this, cx| {
                 this.open_select = match this.open_select {
@@ -204,31 +209,17 @@ impl ScopeApp {
             },
         );
 
-        let rescan = div()
-            .id("rescan")
-            .flex_none()
-            .flex()
-            .items_center()
-            .justify_center()
+        let rescan = Button::new("rescan")
+            .icon(IconName::RefreshCw)
+            .accessibility_label("Rescan installed apps")
+            .rounded(px(18.))
             .size(px(34.))
-            .rounded_full()
-            .border_1()
-            .border_color(border())
-            .cursor_pointer()
-            .opacity(if self.refreshing { 0.5 } else { 1.0 })
-            .hover(|this| this.bg(rgba(0xffffff08)).border_color(accent()))
+            .loading(self.refreshing)
             .on_click(act(&entity, |this, cx| {
                 if !this.refreshing {
                     this.start_scan(cx);
                 }
-            }))
-            .child(
-                img(ImageSource::Resource(Resource::Embedded(
-                    ICON_REFRESH.into(),
-                )))
-                .size(px(14.))
-                .flex_none(),
-            );
+            }));
 
         div()
             .flex_none()

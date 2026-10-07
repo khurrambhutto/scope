@@ -1,9 +1,8 @@
 //! Scope design tokens, formatting helpers, and source/kind presentation.
 //!
-//! Mirrors the palette and copy in the original `src/App.css` / `src/features/
-//! packages/format.ts` so the GPUI rewrite reads the same as the Tauri build.
+//! Dark red surfaces, burgundy borders, and coral emphasis shared by every control.
 
-use gpui_kit::{rgb, Hsla};
+use gpui_kit::{rgb, App, Hsla};
 
 use crate::domain::package::{AppKind, InstalledPackage, PackageSource};
 
@@ -135,16 +134,16 @@ pub fn display_title(pkg: &InstalledPackage) -> String {
 // ---- Palette ---------------------------------------------------------------
 
 pub fn border() -> Hsla {
-    rgb(0x2d2325).into()
+    rgb(0x4b3034).into()
 }
 pub fn text() -> Hsla {
     rgb(0xefe6e4).into()
 }
 pub fn text_dim() -> Hsla {
-    rgb(0xa69692).into()
+    rgb(0xbca5a1).into()
 }
 pub fn text_faint() -> Hsla {
-    rgb(0x786c68).into()
+    rgb(0x9e8581).into()
 }
 pub fn accent() -> Hsla {
     rgb(0xd4504a).into()
@@ -152,14 +151,93 @@ pub fn accent() -> Hsla {
 pub fn danger() -> Hsla {
     rgb(0xc9443e).into()
 }
-pub fn update_green() -> Hsla {
-    rgb(0x24795f).into()
-}
 pub fn elev() -> Hsla {
-    rgb(0x171315).into()
+    rgb(0x211719).into()
 }
 pub fn elev2() -> Hsla {
-    rgb(0x1e181a).into()
+    rgb(0x291c1f).into()
+}
+
+/// Emphasis text stays readable on the dark red control surfaces.
+pub fn accent_text() -> Hsla {
+    rgb(0xf08c82).into()
+}
+pub fn hover_surface() -> Hsla {
+    rgb(0x352327).into()
+}
+pub fn selected_surface() -> Hsla {
+    rgb(0x3d2529).into()
+}
+pub fn border_hover() -> Hsla {
+    rgb(0x9c625e).into()
+}
+pub fn primary() -> Hsla {
+    rgb(0xa83a36).into()
+}
+pub fn primary_hover() -> Hsla {
+    rgb(0xbc4540).into()
+}
+pub fn primary_pressed() -> Hsla {
+    rgb(0x94332f).into()
+}
+pub fn on_accent() -> Hsla {
+    rgb(0xfffaf8).into()
+}
+pub fn background_top() -> Hsla {
+    rgb(0x2d1414).into()
+}
+pub fn background_bottom() -> Hsla {
+    rgb(0x0b0c0f).into()
+}
+
+/// Keep kit-owned input, caret, focus, and button states in Scope's palette.
+pub fn init(cx: &mut App) {
+    use gpui_kit::component::{Theme, ThemeMode};
+    Theme::change(ThemeMode::Dark, None, cx);
+    let theme = Theme::global_mut(cx);
+    theme.radius = gpui_kit::px(16.);
+    theme.radius_lg = gpui_kit::px(16.);
+    let colors = &mut theme.colors;
+    colors.background = background_bottom();
+    colors.foreground = text();
+    colors.border = border();
+    colors.input = border();
+    colors.ring = border_hover();
+    colors.caret = accent_text();
+    colors.muted = elev();
+    colors.muted_foreground = text_faint();
+    colors.accent = selected_surface();
+    colors.accent_foreground = accent_text();
+    colors.secondary = elev2();
+    colors.secondary_foreground = text_dim();
+    colors.secondary_hover = hover_surface();
+    colors.secondary_active = selected_surface();
+    colors.link = accent_text();
+    colors.link_hover = text();
+    colors.link_active = accent_text();
+    colors.selection = selected_surface();
+    colors.primary = primary();
+    colors.primary_foreground = on_accent();
+    colors.primary_hover = primary_hover();
+    colors.primary_active = primary_pressed();
+    colors.button = elev2();
+    colors.button_foreground = text_dim();
+    colors.button_hover = hover_surface();
+    colors.button_active = selected_surface();
+    colors.button_primary = primary();
+    colors.button_primary_foreground = on_accent();
+    colors.button_primary_hover = primary_hover();
+    colors.button_primary_active = primary_pressed();
+    colors.danger = danger();
+    colors.danger_foreground = on_accent();
+    colors.danger_hover = primary_hover();
+    colors.danger_active = primary_pressed();
+    colors.button_danger = danger();
+    colors.button_danger_foreground = on_accent();
+    colors.button_danger_hover = primary_hover();
+    colors.button_danger_active = primary_pressed();
+    theme.tokens = (&theme.colors).into();
+    Theme::sync_base(cx);
 }
 
 #[cfg(test)]
