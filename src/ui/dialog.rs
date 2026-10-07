@@ -3,7 +3,9 @@
 use std::time::Duration;
 
 use gpui_kit::prelude::*;
-use gpui_kit::{div, px, rgb, rgba, AnyElement, App, ClickEvent, FontWeight, WeakEntity, Window};
+use gpui_kit::{
+    div, px, rgb, rgba, AnyElement, App, ClickEvent, FontWeight, Pixels, WeakEntity, Window,
+};
 
 use crate::backend::OpKind;
 use crate::domain::operations::{OperationPlan, OperationResult, OperationStage};
@@ -74,7 +76,11 @@ impl Dialog {
 }
 
 impl ScopeApp {
-    pub(super) fn dialog_element(&self, entity: &WeakEntity<ScopeApp>) -> AnyElement {
+    pub(super) fn dialog_element(
+        &self,
+        entity: &WeakEntity<ScopeApp>,
+        corner_radius: Pixels,
+    ) -> AnyElement {
         let Some(dialog) = &self.dialog else {
             return div().into_any_element();
         };
@@ -121,12 +127,17 @@ impl ScopeApp {
             } => done_body(entity, result, *show_logs),
         };
 
-        modal_shell(heading, body, entity)
+        modal_shell(heading, body, entity, corner_radius)
     }
 }
 
 /// The modal overlay and card chrome shared by every dialog phase.
-fn modal_shell(heading: String, body: AnyElement, entity: &WeakEntity<ScopeApp>) -> AnyElement {
+fn modal_shell(
+    heading: String,
+    body: AnyElement,
+    entity: &WeakEntity<ScopeApp>,
+    corner_radius: Pixels,
+) -> AnyElement {
     div()
         .id("modal-overlay")
         .absolute()
@@ -141,6 +152,7 @@ fn modal_shell(heading: String, body: AnyElement, entity: &WeakEntity<ScopeApp>)
         .flex()
         .items_center()
         .justify_center()
+        .rounded(corner_radius)
         .bg(rgba(0x00000099))
         .on_click(act(entity, |this, cx| this.close_dialog(cx)))
         .child(

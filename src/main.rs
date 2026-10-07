@@ -16,8 +16,8 @@ use std::borrow::Cow;
 
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    px, size, App, AssetSource, Bounds, SharedString, TitlebarOptions, WindowBounds,
-    WindowDecorations, WindowOptions,
+    px, size, App, AssetSource, Bounds, SharedString, TitlebarOptions, WindowBackgroundAppearance,
+    WindowBounds, WindowDecorations, WindowOptions,
 };
 
 use ui::app_view::ScopeApp;
@@ -119,6 +119,8 @@ fn main() {
                         // GNOME on Wayland has no server-side decorations, so the
                         // app draws its own title bar (see `ui::app_view::title_bar`).
                         window_decorations: Some(WindowDecorations::Client),
+                        // Leave pixels outside the rounded app background transparent.
+                        window_background: WindowBackgroundAppearance::Transparent,
                         focus: true,
                         ..Default::default()
                     },

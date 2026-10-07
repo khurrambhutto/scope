@@ -577,8 +577,19 @@ impl ScopeApp {
 // ---- Render ----------------------------------------------------------------
 
 impl Render for ScopeApp {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.sync_entries(cx);
+        let tiled = matches!(
+            window.window_decorations(),
+            gpui_kit::Decorations::Client { tiling } if tiling.is_tiled()
+        );
+        let corner_radius = px(
+            if window.is_maximized() || window.is_fullscreen() || tiled {
+                0.
+            } else {
+                12.
+            },
+        );
         let entity = cx.entity().downgrade();
         let list_entity = cx.entity();
         let total = self
@@ -619,7 +630,7 @@ impl Render for ScopeApp {
         );
 
         let dialog_el: Option<AnyElement> = if self.dialog.is_some() {
-            Some(self.dialog_element(&entity))
+            Some(self.dialog_element(&entity, corner_radius))
         } else {
             None
         };
@@ -648,6 +659,8 @@ impl Render for ScopeApp {
             .flex()
             .flex_col()
             .size_full()
+            .rounded(corner_radius)
+            .overflow_hidden()
             .bg(linear_gradient(
                 180.,
                 linear_color_stop(rgb(0x2d1414), 0.),
@@ -680,7 +693,7 @@ impl Render for ScopeApp {
                     this.start_scan(cx);
                 }
             }))
-            .child(title_bar(self.view_navigation(cx)))
+            .child(title_bar(self.view_navigation(cx), corner_radius))
             .child(self.filters(cx))
             .children(banner_children)
             .child(

@@ -3,7 +3,7 @@
 
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    div, img, px, rgb, svg, FontWeight, ImageSource, MouseButton, Resource, Window,
+    div, img, px, rgb, svg, FontWeight, ImageSource, MouseButton, Pixels, Resource, Window,
     WindowControlArea,
 };
 
@@ -16,7 +16,7 @@ const ICON_MIN: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/win-min.svg"
 const ICON_MAX: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/win-max.svg");
 const ICON_CLOSE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/win-close.svg");
 
-pub(super) fn title_bar(navigation: impl IntoElement) -> impl IntoElement {
+pub(super) fn title_bar(navigation: impl IntoElement, corner_radius: Pixels) -> impl IntoElement {
     div()
         .id("titlebar")
         .relative()
@@ -87,6 +87,7 @@ pub(super) fn title_bar(navigation: impl IntoElement) -> impl IntoElement {
                     ICON_MIN,
                     WindowControlArea::Min,
                     elev2(),
+                    px(0.),
                     |window| window.minimize_window(),
                 ))
                 .child(window_control_button(
@@ -94,6 +95,7 @@ pub(super) fn title_bar(navigation: impl IntoElement) -> impl IntoElement {
                     ICON_MAX,
                     WindowControlArea::Max,
                     elev2(),
+                    px(0.),
                     |window| window.zoom_window(),
                 ))
                 .child(window_control_button(
@@ -101,6 +103,7 @@ pub(super) fn title_bar(navigation: impl IntoElement) -> impl IntoElement {
                     ICON_CLOSE,
                     WindowControlArea::Close,
                     danger(),
+                    corner_radius,
                     |window| window.remove_window(),
                 )),
         )
@@ -111,6 +114,7 @@ pub(super) fn window_control_button(
     icon: &'static str,
     area: WindowControlArea,
     hover_bg: gpui_kit::Hsla,
+    corner_radius: Pixels,
     action: impl Fn(&mut Window) + 'static,
 ) -> impl IntoElement {
     div()
@@ -124,6 +128,7 @@ pub(super) fn window_control_button(
         .on_click(move |_event, window, _cx| action(window))
         .w(px(40.))
         .h(px(36.))
+        .rounded_tr(corner_radius)
         .flex()
         .items_center()
         .justify_center()
