@@ -5,7 +5,7 @@
 //! only recognizable apps and public CLI tools, not every manually marked
 //! package or the dependencies pulled in automatically.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::future::Future;
 use std::os::unix::fs::PermissionsExt;
@@ -177,6 +177,11 @@ async fn check_updates(packages: &mut [InstalledPackage]) {
         return;
     };
 
+    let indexes: HashMap<String, usize> = packages
+        .iter()
+        .enumerate()
+        .map(|(index, package)| (package.package_id.clone(), index))
+        .collect();
     for line in output.lines() {
         let line = line.trim();
         if line.is_empty() || line == "Listing..." || line.starts_with("WARNING:") {
@@ -185,7 +190,7 @@ async fn check_updates(packages: &mut [InstalledPackage]) {
         if let Some(caps) = re.captures(line) {
             let name = &caps[1];
             let candidate = &caps[3];
-            if let Some(pkg) = packages.iter_mut().find(|p| p.package_id == name) {
+            if let Some(pkg) = indexes.get(name).and_then(|index| packages.get_mut(*index)) {
                 pkg.has_update = true;
                 pkg.update_version = Some(candidate.to_string());
             }
@@ -230,11 +235,13 @@ mod tests {
     fn public_commands_are_distinguished_from_services_and_libraries() {
         assert!(is_public_command_path(Path::new("/usr/bin/wl-copy")));
         assert!(is_public_command_path(Path::new("/usr/games/steam")));
-        assert!(!is_public_command_path(Path::new("/usr/sbin/wpa_supplicant")));
+        assert!(!is_public_command_path(Path::new(
+            "/usr/sbin/wpa_supplicant"
+        )));
         assert!(!is_public_command_path(Path::new("/usr/lib/libexample.so")));
-        assert!(is_system_service_path(
-            Path::new("/lib/systemd/system/example.service")
-        ));
+        assert!(is_system_service_path(Path::new(
+            "/lib/systemd/system/example.service"
+        )));
         assert!(is_system_service_path(Path::new("/etc/init.d/example")));
         assert!(!is_system_service_path(Path::new("/usr/bin/example")));
     }

@@ -289,7 +289,9 @@ fn scan_error_message(error: &anyhow::Error) -> String {
         Some(crate::domain::system::SystemError::Spawn { program, .. }) => {
             format!("could not run {program}")
         }
-        Some(crate::domain::system::SystemError::NonZero { program, exit_code, .. }) => {
+        Some(crate::domain::system::SystemError::NonZero {
+            program, exit_code, ..
+        }) => {
             format!("{program} exited with {exit_code:?}")
         }
         None => error.to_string(),

@@ -7,6 +7,8 @@ pub mod app_view;
 pub mod detail;
 pub mod dialog;
 pub mod filters;
+mod operation_controller;
+mod package_list_model;
 pub mod row;
 pub mod title_bar;
 pub mod updater;

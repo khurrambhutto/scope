@@ -20,7 +20,7 @@
 //! Tauri shell's `scope-icon` protocol (GPUI decodes them via `backend::icon_path`)
 //! serves exactly those resolved paths.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -38,6 +38,7 @@ const ICON_EXTENSIONS: &[&str] = &["svg", "png", "xpm"];
 static RESOLVED_CACHE: OnceLock<Mutex<HashMap<String, Option<PathBuf>>>> = OnceLock::new();
 static THEME_NAME: OnceLock<Option<String>> = OnceLock::new();
 static BASE_DIRS: OnceLock<Vec<PathBuf>> = OnceLock::new();
+static THEME_PARENTS: OnceLock<Mutex<HashMap<PathBuf, Vec<String>>>> = OnceLock::new();
 
 fn cache() -> &'static Mutex<HashMap<String, Option<PathBuf>>> {
     RESOLVED_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
@@ -49,7 +50,9 @@ fn cache() -> &'static Mutex<HashMap<String, Option<PathBuf>>> {
 /// was held must not turn every later lookup into a panic and take down the
 /// whole scan.
 fn lock_cache() -> std::sync::MutexGuard<'static, HashMap<String, Option<PathBuf>>> {
-    cache().lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    cache()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 fn theme_name() -> &'static Option<String> {
@@ -58,6 +61,17 @@ fn theme_name() -> &'static Option<String> {
 
 fn base_dirs() -> &'static Vec<PathBuf> {
     BASE_DIRS.get_or_init(collect_base_dirs)
+}
+
+fn theme_parents(theme_root: &Path) -> Vec<String> {
+    let cache = THEME_PARENTS.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut cache = cache
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    cache
+        .entry(theme_root.to_path_buf())
+        .or_insert_with(|| parse_theme_parents(&theme_root.join("index.theme")))
+        .clone()
 }
 
 /// Resolve an `Icon=` value to an absolute file path, or `None` if not found.
@@ -102,7 +116,7 @@ pub fn resolve_for_app(icon_value: &str, executable: Option<&Path>) -> Option<Pa
                         &theme_root,
                         icon_value,
                         std::slice::from_ref(&icons_root),
-                        &mut HashMap::new(),
+                        &mut HashSet::new(),
                     ) {
                         return Some(icon);
                     }
@@ -140,7 +154,7 @@ fn resolve_uncached(icon_value: &str) -> Option<PathBuf> {
                 continue;
             }
             if let Some(found) =
-                lookup_in_theme(&theme_root, icon_value, basedirs, &mut HashMap::new())
+                lookup_in_theme(&theme_root, icon_value, basedirs, &mut HashSet::new())
             {
                 return Some(found);
             }
@@ -232,21 +246,17 @@ fn detect_icon_theme() -> Option<String> {
 }
 
 /// Search one theme directory for `icon_name`, then recurse into inherited
-/// parent themes. `parent_cache` avoids re-parsing `index.theme` for the same
-/// theme across sibling searches.
+/// parent themes. The visited set stops malformed inheritance cycles.
 fn lookup_in_theme(
     theme_root: &Path,
     icon_name: &str,
     basedirs: &[PathBuf],
-    parent_cache: &mut HashMap<PathBuf, Vec<String>>,
+    visited: &mut HashSet<PathBuf>,
 ) -> Option<PathBuf> {
-    let parents = if let Some(cached) = parent_cache.get(theme_root) {
-        cached.clone()
-    } else {
-        let parents = parse_theme_parents(&theme_root.join("index.theme"));
-        parent_cache.insert(theme_root.to_path_buf(), parents.clone());
-        parents
-    };
+    if !visited.insert(theme_root.to_path_buf()) {
+        return None;
+    }
+    let parents = theme_parents(theme_root);
 
     // Prefer the `apps` subdirectory (where application icons live), then a
     // bare size-directory match for themes that don't categorize by context.
@@ -273,9 +283,7 @@ fn lookup_in_theme(
         for basedir in basedirs {
             let parent_root = basedir.join(parent_name);
             if parent_root.is_dir() && parent_root != theme_root {
-                if let Some(found) =
-                    lookup_in_theme(&parent_root, icon_name, basedirs, parent_cache)
-                {
+                if let Some(found) = lookup_in_theme(&parent_root, icon_name, basedirs, visited) {
                     return Some(found);
                 }
             }
@@ -329,7 +337,6 @@ fn lookup_in_pixmaps(icon_name: &str) -> Option<PathBuf> {
 }
 
 fn lookup_in_pixmaps_at(icon_name: &str, pixmaps: &Path) -> Option<PathBuf> {
-
     for ext in ICON_EXTENSIONS {
         let path = pixmaps.join(format!("{icon_name}.{ext}"));
         if path.is_file() {
@@ -427,7 +434,7 @@ mod tests {
         fs::write(&executable, "test executable").unwrap();
         fs::write(&icon, "<svg/>").unwrap();
 
-        assert_eq!(resolve_for_app(&name, Some(&executable)), Some(icon.clone()));
+        assert_eq!(resolve_for_app(&name, Some(&executable)), Some(icon));
 
         let _ = fs::remove_dir_all(prefix);
     }
@@ -447,5 +454,23 @@ mod tests {
         assert_eq!(mime_for_path("icon.svg"), "image/svg+xml");
         assert_eq!(mime_for_path("icon.xpm"), "image/x-xpixmap");
         assert_eq!(mime_for_path("icon.unknown"), "application/octet-stream");
+    }
+
+    #[test]
+    fn cyclic_theme_inheritance_terminates() {
+        let root = tempfile::tempdir().unwrap();
+        let a = root.path().join("a");
+        let b = root.path().join("b");
+        fs::create_dir_all(&a).unwrap();
+        fs::create_dir_all(&b).unwrap();
+        fs::write(a.join("index.theme"), "[Icon Theme]\nInherits=b\n").unwrap();
+        fs::write(b.join("index.theme"), "[Icon Theme]\nInherits=a\n").unwrap();
+        assert!(lookup_in_theme(
+            &a,
+            "missing",
+            &[root.path().to_path_buf()],
+            &mut HashSet::new()
+        )
+        .is_none());
     }
 }

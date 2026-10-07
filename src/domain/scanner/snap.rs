@@ -26,7 +26,7 @@ use anyhow::{Context, Result};
 
 use crate::domain::package::{AppKind, InstalledPackage, PackageSource};
 use crate::domain::scanner::{ScanReport, Scanner};
-use crate::domain::system::{capture_stdout, which};
+use crate::domain::system::{capture_output, capture_stdout, which};
 
 pub struct SnapScanner;
 
@@ -70,12 +70,9 @@ async fn scan() -> Result<Vec<InstalledPackage>> {
     let mut rows = Vec::new();
     for line in output.lines().skip(1) {
         let mut fields = line.split_whitespace();
-        let (Some(name), Some(version), Some(revision), Some(_)) = (
-            fields.next(),
-            fields.next(),
-            fields.next(),
-            fields.next(),
-        ) else {
+        let (Some(name), Some(version), Some(revision), Some(_)) =
+            (fields.next(), fields.next(), fields.next(), fields.next())
+        else {
             continue;
         };
         if is_runtime(name) {
@@ -174,13 +171,18 @@ async fn measure_mounted(names: &[String]) -> HashMap<String, u64> {
         return HashMap::new();
     }
 
-    let mut command = tokio::process::Command::new("du");
-    command.arg("-sbL").args(&targets);
-    let Ok(Ok(out)) = tokio::time::timeout(MOUNTED_SIZE_TIMEOUT, command.output()).await else {
+    let mut args = vec!["-sbL".to_string()];
+    args.extend(
+        targets
+            .iter()
+            .map(|path| path.to_string_lossy().into_owned()),
+    );
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    let Ok(out) = capture_output("du", &args, MOUNTED_SIZE_TIMEOUT).await else {
         return HashMap::new();
     };
 
-    parse_du_totals(&String::from_utf8_lossy(&out.stdout))
+    parse_du_totals(&out.stdout)
 }
 
 /// Parse `du` totals into a snap-name to bytes map.
@@ -218,21 +220,23 @@ async fn check_updates(packages: &mut [InstalledPackage]) {
         Err(_) => return,
     };
 
+    let indexes: HashMap<String, usize> = packages
+        .iter()
+        .enumerate()
+        .map(|(index, package)| (package.package_id.clone(), index))
+        .collect();
     for line in output.lines().skip(1) {
         let line = line.trim();
         if line.is_empty() {
             continue;
         }
         let mut fields = line.split_whitespace();
-        let (Some(name), Some(_), Some(_), Some(_)) = (
-            fields.next(),
-            fields.next(),
-            fields.next(),
-            fields.next(),
-        ) else {
+        let (Some(name), Some(_), Some(_), Some(_)) =
+            (fields.next(), fields.next(), fields.next(), fields.next())
+        else {
             continue;
         };
-        if let Some(pkg) = packages.iter_mut().find(|p| p.package_id == name) {
+        if let Some(pkg) = indexes.get(name).and_then(|index| packages.get_mut(*index)) {
             pkg.has_update = true;
             // The Version column in refresh --list is the current version, not
             // the target. We mark the update as available without a target version.
@@ -260,7 +264,10 @@ mod tests {
     #[test]
     fn image_stem_matches_snapd_layout() {
         assert_eq!(image_stem("code", "263"), "code_263");
-        assert_eq!(image_stem("desktop-security-center", "12"), "desktop-security-center_12");
+        assert_eq!(
+            image_stem("desktop-security-center", "12"),
+            "desktop-security-center_12"
+        );
     }
 
     /// `du` can exit non-zero (unreadable files inside a snap) while still
@@ -285,8 +292,17 @@ mod tests {
     /// The scrubber must keep real apps while hiding runtimes and base snaps.
     #[test]
     fn runtime_scrub_covers_snap_internals() {
-        for runtime in ["snapd", "bare", "core22", "gtk-common-themes", "gnome-46-2404"] {
-            assert!(is_runtime(runtime), "{runtime} should be treated as a runtime");
+        for runtime in [
+            "snapd",
+            "bare",
+            "core22",
+            "gtk-common-themes",
+            "gnome-46-2404",
+        ] {
+            assert!(
+                is_runtime(runtime),
+                "{runtime} should be treated as a runtime"
+            );
         }
         for app in ["firefox", "code", "vlc", "onlyoffice-desktopeditors"] {
             assert!(!is_runtime(app), "{app} should be treated as an app");

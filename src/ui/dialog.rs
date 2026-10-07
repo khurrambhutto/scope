@@ -3,14 +3,12 @@
 use std::time::Duration;
 
 use gpui_kit::prelude::*;
-use gpui_kit::{div, px, rgba, rgb, AnyElement, App, ClickEvent, FontWeight, WeakEntity, Window};
+use gpui_kit::{div, px, rgb, rgba, AnyElement, App, ClickEvent, FontWeight, WeakEntity, Window};
 
 use crate::backend::OpKind;
 use crate::domain::operations::{OperationPlan, OperationResult, OperationStage};
 use crate::domain::package::InstalledPackage;
-use crate::theme::{
-    self, accent, border, display_title, elev, elev2, text, text_dim, text_faint,
-};
+use crate::theme::{self, accent, border, display_title, elev, elev2, text, text_dim, text_faint};
 
 use super::app_view::{act, ScopeApp};
 use super::widgets::{banner, button, dialog_actions, plan_rows, BannerKind, ButtonStyle};
@@ -102,17 +100,12 @@ impl ScopeApp {
                 .flex_col()
                 .gap(px(16.))
                 .child(banner(message, BannerKind::Error))
-                .child(
-                    div()
-                        .flex()
-                        .justify_end()
-                        .child(button(
-                            "dlg-error-close",
-                            "Close",
-                            ButtonStyle::Neutral,
-                            act(entity, |this, cx| this.close_dialog(cx)),
-                        )),
-                )
+                .child(div().flex().justify_end().child(button(
+                    "dlg-error-close",
+                    "Close",
+                    ButtonStyle::Neutral,
+                    act(entity, |this, cx| this.close_dialog(cx)),
+                )))
                 .into_any_element(),
             Dialog::Confirm { kind, pkg, plan } => confirm_body(entity, *kind, pkg, plan),
             Dialog::Running {
@@ -124,9 +117,7 @@ impl ScopeApp {
                 elapsed,
             } => running_body(*kind, pkg, plan, *stage, lines, *elapsed),
             Dialog::Done {
-                result,
-                show_logs,
-                ..
+                result, show_logs, ..
             } => done_body(entity, result, *show_logs),
         };
 
@@ -226,8 +217,8 @@ fn confirm_body(
             .into_any_element();
     }
 
-    let mut rows: Vec<(&'static str, String)> = vec![("Package", plan.package_id.clone())];
-    if let Some(scope) = plan.install_scope {
+    let mut rows: Vec<(&'static str, String)> = vec![("Package", plan.target.id().to_string())];
+    if let Some(scope) = plan.target.install_scope() {
         rows.push(("Scope", scope.id().to_string()));
     }
     match kind {
@@ -382,7 +373,11 @@ fn spinner() -> impl IntoElement {
         )
 }
 
-fn done_body(entity: &WeakEntity<ScopeApp>, result: &OperationResult, show_logs: bool) -> AnyElement {
+fn done_body(
+    entity: &WeakEntity<ScopeApp>,
+    result: &OperationResult,
+    show_logs: bool,
+) -> AnyElement {
     if is_cancelled(result) {
         return div()
             .p(px(20.))

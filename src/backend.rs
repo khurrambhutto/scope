@@ -69,7 +69,9 @@ fn now_ms() -> u64 {
 fn cache_path() -> Option<PathBuf> {
     let base = std::env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share")))?;
+        .or_else(|| {
+            std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share"))
+        })?;
     Some(base.join("scope").join("scan-cache.json"))
 }
 
@@ -86,7 +88,17 @@ pub fn write_cache(scan: &Scan) {
         let _ = std::fs::create_dir_all(parent);
     }
     if let Ok(bytes) = serde_json::to_vec(scan) {
-        let _ = std::fs::write(path, bytes);
+        if let Some(parent) = path.parent() {
+            if let Ok(mut temp) = tempfile::Builder::new()
+                .prefix(".scan-cache-")
+                .tempfile_in(parent)
+            {
+                use std::io::Write as _;
+                if temp.write_all(&bytes).is_ok() && temp.as_file().sync_all().is_ok() {
+                    let _ = temp.persist(path);
+                }
+            }
+        }
     }
 }
 
@@ -125,15 +137,24 @@ pub fn spawn_preview(
     tx: oneshot::Sender<Result<OperationPlan, String>>,
 ) {
     std::thread::spawn(move || {
-        let plan = match kind {
-            OpKind::Uninstall => uninstall::preview(&pkg),
-            OpKind::Update => {
-                if !pkg.has_update {
-                    let title = crate::theme::display_title(&pkg);
-                    let _ = tx.send(Err(format!("'{title}' has no updates available.")));
-                    return;
+        let plan = match block_on(async {
+            match kind {
+                OpKind::Uninstall => uninstall::preview(&pkg).await,
+                OpKind::Update => {
+                    if !pkg.has_update {
+                        anyhow::bail!(
+                            "'{}' has no updates available.",
+                            crate::theme::display_title(&pkg)
+                        );
+                    }
+                    update::preview(&pkg).await
                 }
-                update::preview(&pkg)
+            }
+        }) {
+            Ok(plan) => plan,
+            Err(error) => {
+                let _ = tx.send(Err(error.to_string()));
+                return;
             }
         };
         if !plan.protected {
@@ -147,10 +168,10 @@ pub fn spawn_preview(
 ///
 /// Mirrors `apply_uninstall` / `apply_update`: take the plan from the store,
 /// probe the live system, re-run the safety revalidation, then execute.
-pub fn spawn_apply(plans: PlanStore, plan: OperationPlan, tx: mpsc::UnboundedSender<OpMsg>) {
+pub fn spawn_apply(plans: PlanStore, plan_id: String, tx: mpsc::UnboundedSender<OpMsg>) {
     std::thread::spawn(move || {
         block_on(async move {
-            let Some(plan) = plans.take(&plan.plan_id) else {
+            let Some(plan) = plans.take(&plan_id) else {
                 let _ = tx.unbounded_send(OpMsg::Done(failed(
                     "Stale or unknown plan. Please preview again.",
                 )));
@@ -158,10 +179,32 @@ pub fn spawn_apply(plans: PlanStore, plan: OperationPlan, tx: mpsc::UnboundedSen
             };
 
             let _ = tx.unbounded_send(OpMsg::Stage(OperationStage::Verifying));
+            if let Some(expected) = plan.apt_transaction_fingerprint.as_deref() {
+                let transaction = match crate::domain::operations::apt_transaction::simulate(
+                    plan.operation,
+                    plan.target.id(),
+                )
+                .await
+                {
+                    Ok(transaction) => transaction,
+                    Err(error) => {
+                        let _ = tx.unbounded_send(OpMsg::Done(failed(format!(
+                            "Could not re-simulate the APT transaction: {error}"
+                        ))));
+                        return;
+                    }
+                };
+                if transaction.fingerprint != expected {
+                    let _ = tx.unbounded_send(OpMsg::Done(failed(
+                        "The APT transaction changed since preview. Preview it again.",
+                    )));
+                    return;
+                }
+            }
             let probed = match crate::domain::operations::probe::probe_package(
-                plan.source,
-                &plan.package_id,
-                plan.install_scope,
+                plan.target.source(),
+                plan.target.id(),
+                plan.target.install_scope(),
             )
             .await
             {
@@ -199,9 +242,7 @@ pub fn spawn_apply(plans: PlanStore, plan: OperationPlan, tx: mpsc::UnboundedSen
 }
 
 /// Check for a self-update off the UI thread.
-pub fn spawn_updater_check(
-    tx: oneshot::Sender<Option<crate::domain::updater::UpdateCheck>>,
-) {
+pub fn spawn_updater_check(tx: oneshot::Sender<Option<crate::domain::updater::UpdateCheck>>) {
     std::thread::spawn(move || {
         let result = block_on(async {
             let kind = crate::domain::updater::detect();
@@ -228,29 +269,24 @@ pub fn spawn_updater_install(
                 "Downloading Scope {} ...",
                 check.latest
             )));
-            let file_name = check
-                .url
-                .rsplit('/')
-                .next()
-                .filter(|s| !s.is_empty())
-                .unwrap_or("scope-update");
-            let dest = std::env::temp_dir().join(file_name);
             let line_tx = tx.clone();
             let on_line = move |line: &str| {
                 let _ = line_tx.unbounded_send(OpMsg::Log(line.to_string()));
             };
-            if let Err(e) = crate::domain::updater::download(&check.url, &dest, &on_line).await
-            {
-                let _ = tx.unbounded_send(OpMsg::Done(failed(format!(
-                    "Update download failed: {e}"
-                ))));
-                return;
-            }
+            let artifact = match crate::domain::updater::download_verified(&check, &on_line).await {
+                Ok(artifact) => artifact,
+                Err(e) => {
+                    let _ = tx.unbounded_send(OpMsg::Done(failed(format!(
+                        "Update verification failed: {e}"
+                    ))));
+                    return;
+                }
+            };
             let _ = tx.unbounded_send(OpMsg::Stage(OperationStage::Executing));
             let appimage_target = std::env::var_os("APPIMAGE").map(std::path::PathBuf::from);
             let result = crate::domain::updater::install(
                 check.kind,
-                &dest,
+                &artifact,
                 appimage_target.as_deref(),
                 &on_line,
             )
@@ -326,7 +362,10 @@ mod tests {
         assert_eq!(icon_path(&pkg), Some(PathBuf::from("/opt/my app.png")));
 
         pkg.icon = Some("scope-icon://themes/hicolor/icon.svg".to_string());
-        assert_eq!(icon_path(&pkg), Some(PathBuf::from("themes/hicolor/icon.svg")));
+        assert_eq!(
+            icon_path(&pkg),
+            Some(PathBuf::from("themes/hicolor/icon.svg"))
+        );
 
         pkg.icon = Some("https://example.com/icon.png".to_string());
         assert_eq!(icon_path(&pkg), None);
@@ -354,7 +393,9 @@ mod tests {
     fn spawn_preview_registers_a_non_protected_plan() {
         let store = PlanStore::default();
         let (tx, rx) = oneshot::channel();
-        spawn_preview(store.clone(), OpKind::Uninstall, apt_package("gimp"), tx);
+        let mut pkg = apt_package("code");
+        pkg.source = PackageSource::Snap;
+        spawn_preview(store.clone(), OpKind::Uninstall, pkg, tx);
         let plan = block_on(rx).unwrap().unwrap();
         assert!(store.take(&plan.plan_id).is_some());
     }

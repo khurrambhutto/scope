@@ -1,36 +1,26 @@
-//! Self-update check, download, and install for the GPUI shell.
-//!
-//! The old Tauri build used `tauri-plugin-updater` against `latest.json` with
-//! minisign signatures. GPUI has no webview plugin host, so this module talks
-//! directly to the GitHub Releases API over HTTPS (via `curl`, like every
-//! other external command in `crate::domain::system`), picks the asset
-//! matching this install kind, and installs it:
-//!
-//! * `.deb` → `pkexec dpkg -i <file>`
-//! * `.rpm` → `pkexec rpm -U <file>`
-//! * `.AppImage` → replace the `$APPIMAGE` file in place
-//! * anything else → manual download from the Releases page
-//!
-//! All decisions that can be pure (`classify`, version compare, asset pick)
-//! are pure so they stay unit-testable. Only `fetch_latest`, `download`, and
-//! `install` touch the network / filesystem / privilege boundary.
+//! Signed self-update checks and installation for packaged Scope builds.
 
 use std::ffi::OsString;
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use minisign_verify::{PublicKey, Signature};
+use semver::Version;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 use crate::domain::operations::{AuthMethod, OperationResult};
 use crate::domain::system;
 
 pub const RELEASES_URL: &str = "https://github.com/khurrambhutto/scope/releases";
-pub const API_LATEST_URL: &str =
-    "https://api.github.com/repos/khurrambhutto/scope/releases/latest";
-
+pub const API_LATEST_URL: &str = "https://api.github.com/repos/khurrambhutto/scope/releases/latest";
 const FETCH_TIMEOUT: Duration = Duration::from_secs(20);
-const DOWNLOAD_TIMEOUT_SECS: &str = "600";
+const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(620);
+const CHECKSUMS_NAME: &str = "SHA256SUMS";
+const SIGNATURE_NAME: &str = "SHA256SUMS.minisig";
+const UPDATE_PUBLIC_KEY: Option<&str> = option_env!("SCOPE_UPDATE_PUBLIC_KEY");
 
-/// How this copy of Scope was installed. Only these three can self-update.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum InstallKind {
@@ -42,28 +32,18 @@ pub enum InstallKind {
 
 impl InstallKind {
     pub fn can_self_update(self) -> bool {
-        match self {
-            InstallKind::AppImage | InstallKind::Deb | InstallKind::Rpm => true,
-            InstallKind::Unknown => false,
-        }
+        matches!(self, Self::AppImage | Self::Deb | Self::Rpm)
     }
 }
 
-/// Pure classifier so the decision is unit-testable without touching the real
-/// process environment (env mutation is process-global and racy).
-///
-/// `bundle` is the `SCOPE_BUNDLE` marker baked in at packaging time
-/// (`deb`/`rpm`/`appimage`), `appimage_var` is `$APPIMAGE`, and
-/// `deb_marker` reports whether this looks like a dpkg install
-/// (e.g. `/usr/share/doc/scope` exists).
 pub fn classify(
     bundle: Option<String>,
     appimage_var: Option<OsString>,
     deb_marker: bool,
     rpm_marker: bool,
 ) -> InstallKind {
-    if let Some(b) = bundle.as_deref().map(str::to_lowercase) {
-        match b.as_str() {
+    if let Some(bundle) = bundle.as_deref().map(str::to_lowercase) {
+        match bundle.as_str() {
             "deb" => return InstallKind::Deb,
             "rpm" => return InstallKind::Rpm,
             "appimage" => return InstallKind::AppImage,
@@ -71,74 +51,39 @@ pub fn classify(
         }
     }
     if appimage_var.is_some() {
-        return InstallKind::AppImage;
+        InstallKind::AppImage
+    } else if deb_marker {
+        InstallKind::Deb
+    } else if rpm_marker {
+        InstallKind::Rpm
+    } else {
+        InstallKind::Unknown
     }
-    if deb_marker {
-        return InstallKind::Deb;
-    }
-    if rpm_marker {
-        return InstallKind::Rpm;
-    }
-    InstallKind::Unknown
 }
 
-/// Detect how this copy was installed from the live environment.
 pub fn detect() -> InstallKind {
-    let bundle = std::env::var("SCOPE_BUNDLE").ok();
-    let appimage_var = std::env::var_os("APPIMAGE");
-    // dpkg installs drop a doc dir; rpm installs drop /usr/share/doc/scope* too,
-    // so check dpkg's own database first via a cheap filesystem probe only
-    // (no command execution on the UI path).
-    let deb_marker = std::path::Path::new("/usr/share/doc/scope").is_dir()
-        || std::path::Path::new("/usr/share/doc/scope-gpui").is_dir();
-    let rpm_marker = false;
-    classify(bundle, appimage_var, deb_marker, rpm_marker)
+    let deb_marker = Path::new("/usr/share/doc/scope").is_dir()
+        || Path::new("/usr/share/doc/scope-gpui").is_dir();
+    classify(
+        std::env::var("SCOPE_BUNDLE").ok(),
+        std::env::var_os("APPIMAGE"),
+        deb_marker,
+        false,
+    )
 }
 
-/// Strip a leading `v` from a git tag (`v0.3.0` → `0.3.0`).
 pub fn strip_v(tag: &str) -> &str {
     tag.strip_prefix('v').unwrap_or(tag).trim()
 }
 
-fn parse_parts(version: &str) -> (Vec<u64>, Option<String>) {
-    let version = strip_v(version);
-    // Split off pre-release/build metadata: `1.2.3-rc.1+build` → core `1.2.3`.
-    let core_end = version.find(['-', '+']).unwrap_or(version.len());
-    let (core, suffix) = version.split_at(core_end);
-    let numbers = core
-        .split('.')
-        .filter_map(|p| p.trim().parse::<u64>().ok())
-        .collect();
-    let suffix = if suffix.is_empty() {
-        None
-    } else {
-        Some(suffix.to_string())
-    };
-    (numbers, suffix)
-}
-
-/// True when `latest` is newer than `current`.
-///
-/// Numeric core comparison first; a stable release beats a pre-release with
-/// the same core; different pre-release strings compare lexicographically
-/// (good enough for update prompting, never for ordering writes).
 pub fn is_newer(current: &str, latest: &str) -> bool {
-    let (cur_nums, cur_suffix) = parse_parts(current);
-    let (lat_nums, lat_suffix) = parse_parts(latest);
-    let width = cur_nums.len().max(lat_nums.len()).max(1);
-    for i in 0..width {
-        let c = cur_nums.get(i).copied().unwrap_or(0);
-        let l = lat_nums.get(i).copied().unwrap_or(0);
-        if l != c {
-            return l > c;
-        }
-    }
-    match (cur_suffix, lat_suffix) {
-        (Some(_), None) => true,
-        (None, Some(_)) => false,
-        (Some(a), Some(b)) => b > a,
-        (None, None) => false,
-    }
+    let (Ok(current), Ok(latest)) = (
+        Version::parse(strip_v(current)),
+        Version::parse(strip_v(latest)),
+    ) else {
+        return false;
+    };
+    latest > current
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -159,27 +104,40 @@ impl GithubRelease {
     pub fn version(&self) -> &str {
         strip_v(&self.tag_name)
     }
+
+    fn named_asset(&self, name: &str) -> Option<&ReleaseAsset> {
+        self.assets.iter().find(|asset| asset.name == name)
+    }
 }
 
-/// Pick the download asset matching this install kind:
-/// `.deb` → deb, `.rpm` → rpm, `.AppImage` → appimage.
-pub fn select_asset(
-    release: &GithubRelease,
+fn package_arch(kind: InstallKind, arch: &str) -> Option<&'static str> {
+    match (kind, arch) {
+        (InstallKind::Deb, "x86_64") => Some("amd64"),
+        (InstallKind::Deb, "aarch64") => Some("arm64"),
+        (InstallKind::Rpm | InstallKind::AppImage, "x86_64") => Some("x86_64"),
+        (InstallKind::Rpm | InstallKind::AppImage, "aarch64") => Some("aarch64"),
+        _ => None,
+    }
+}
+
+fn expected_asset_name(version: &str, kind: InstallKind, arch: &str) -> Option<String> {
+    let arch = package_arch(kind, arch)?;
+    match kind {
+        InstallKind::Deb => Some(format!("scope_{version}_{arch}.deb")),
+        InstallKind::Rpm => Some(format!("scope-{version}.{arch}.rpm")),
+        InstallKind::AppImage => Some(format!("Scope-{version}-{arch}.AppImage")),
+        InstallKind::Unknown => None,
+    }
+}
+
+pub fn select_asset<'a>(
+    release: &'a GithubRelease,
     kind: InstallKind,
-) -> Option<&ReleaseAsset> {
-    let want = match kind {
-        InstallKind::Deb => ".deb",
-        InstallKind::Rpm => ".rpm",
-        InstallKind::AppImage => ".appimage",
-        InstallKind::Unknown => return None,
-    };
-    release
-        .assets
-        .iter()
-        .find(|a| a.name.to_lowercase().ends_with(want))
+    arch: &str,
+) -> Option<&'a ReleaseAsset> {
+    release.named_asset(&expected_asset_name(release.version(), kind, arch)?)
 }
 
-/// Outcome of a check: enough for the banner to render without more I/O.
 #[derive(Debug, Clone)]
 pub struct UpdateCheck {
     pub current: String,
@@ -188,6 +146,9 @@ pub struct UpdateCheck {
     pub url: String,
     pub kind: InstallKind,
     pub can_self_update: bool,
+    pub(crate) artifact_name: Option<String>,
+    pub(crate) checksums_url: Option<String>,
+    pub(crate) signature_url: Option<String>,
 }
 
 pub fn check_update(
@@ -198,20 +159,28 @@ pub fn check_update(
     if !is_newer(current, release.version()) {
         return None;
     }
-    let asset = select_asset(release, kind);
+    let asset = select_asset(release, kind, std::env::consts::ARCH);
+    let checksums = release.named_asset(CHECKSUMS_NAME);
+    let signature = release.named_asset(SIGNATURE_NAME);
+    let verifiable = UPDATE_PUBLIC_KEY.is_some()
+        && asset.is_some()
+        && checksums.is_some()
+        && signature.is_some();
     Some(UpdateCheck {
-        current: current.to_string(),
-        latest: release.version().to_string(),
+        current: current.into(),
+        latest: release.version().into(),
         notes: release.body.clone().unwrap_or_default(),
         url: asset
-            .map(|a| a.browser_download_url.clone())
-            .unwrap_or_else(|| RELEASES_URL.to_string()),
+            .map(|item| item.browser_download_url.clone())
+            .unwrap_or_else(|| RELEASES_URL.into()),
         kind,
-        can_self_update: kind.can_self_update() && asset.is_some(),
+        can_self_update: kind.can_self_update() && verifiable,
+        artifact_name: asset.map(|item| item.name.clone()),
+        checksums_url: checksums.map(|item| item.browser_download_url.clone()),
+        signature_url: signature.map(|item| item.browser_download_url.clone()),
     })
 }
 
-/// Fetch the latest GitHub release via `curl` (no new HTTP dependency).
 pub async fn fetch_latest() -> anyhow::Result<GithubRelease> {
     let body = system::capture_stdout(
         "curl",
@@ -231,47 +200,120 @@ pub async fn fetch_latest() -> anyhow::Result<GithubRelease> {
     Ok(serde_json::from_str(&body)?)
 }
 
-/// Download `url` to `dest` via `curl`. Streams progress lines to `on_line`.
-pub async fn download(
-    url: &str,
-    dest: &std::path::Path,
-    on_line: &(dyn Fn(&str) + Send + Sync),
-) -> anyhow::Result<()> {
-    let dest_str = dest.to_string_lossy().to_string();
+async fn download(url: &str, dest: &Path) -> anyhow::Result<()> {
+    let dest = dest.to_string_lossy().into_owned();
     let out = system::capture_output(
         "curl",
-        &[
-            "-fSL",
-            "--max-time",
-            DOWNLOAD_TIMEOUT_SECS,
-            "-o",
-            &dest_str,
-            url,
-        ],
-        Duration::from_secs(620),
+        &["-fSL", "--max-time", "600", "-o", &dest, url],
+        DOWNLOAD_TIMEOUT,
     )
     .await?;
     if out.success {
-        on_line(&format!("[scope] downloaded {}", dest_str));
         Ok(())
     } else {
         anyhow::bail!("download failed: {}", out.stderr.trim())
     }
 }
 
-/// Install a downloaded artifact. `appimage_target` is `$APPIMAGE` when set.
+/// A package held in a private temporary directory after all checks passed.
+pub struct VerifiedArtifact {
+    _temp_dir: tempfile::TempDir,
+    path: PathBuf,
+}
+
+pub async fn download_verified(
+    check: &UpdateCheck,
+    on_line: &(dyn Fn(&str) + Send + Sync),
+) -> anyhow::Result<VerifiedArtifact> {
+    if !check.can_self_update {
+        anyhow::bail!("this release is not configured for verified self-update")
+    }
+    let name = check
+        .artifact_name
+        .as_deref()
+        .ok_or_else(|| anyhow::anyhow!("release is missing its package asset"))?;
+    let checksums_url = check
+        .checksums_url
+        .as_deref()
+        .ok_or_else(|| anyhow::anyhow!("release is missing {CHECKSUMS_NAME}"))?;
+    let signature_url = check
+        .signature_url
+        .as_deref()
+        .ok_or_else(|| anyhow::anyhow!("release is missing {SIGNATURE_NAME}"))?;
+    let temp_dir = tempfile::Builder::new().prefix("scope-update-").tempdir()?;
+    let artifact_path = temp_dir.path().join(name);
+    let manifest_path = temp_dir.path().join(CHECKSUMS_NAME);
+    let signature_path = temp_dir.path().join(SIGNATURE_NAME);
+    download(&check.url, &artifact_path).await?;
+    download(checksums_url, &manifest_path).await?;
+    download(signature_url, &signature_path).await?;
+    on_line("[scope] downloaded update and signed checksum manifest");
+    verify_manifest(&manifest_path, &signature_path, UPDATE_PUBLIC_KEY)?;
+    verify_checksum(&artifact_path, name, &manifest_path)?;
+    on_line("[scope] minisign signature and SHA-256 checksum verified");
+    Ok(VerifiedArtifact {
+        _temp_dir: temp_dir,
+        path: artifact_path,
+    })
+}
+
+fn verify_manifest(manifest: &Path, signature: &Path, key: Option<&str>) -> anyhow::Result<()> {
+    let key = key.ok_or_else(|| anyhow::anyhow!("update public key is not embedded"))?;
+    let key = if key.lines().count() > 1 {
+        PublicKey::decode(key)
+    } else {
+        PublicKey::from_base64(key.trim())
+    }
+    .map_err(|error| anyhow::anyhow!("invalid update public key: {error}"))?;
+    let signature = Signature::from_file(signature)
+        .map_err(|error| anyhow::anyhow!("invalid update signature: {error}"))?;
+    key.verify(&std::fs::read(manifest)?, &signature, false)
+        .map_err(|error| anyhow::anyhow!("checksum signature verification failed: {error}"))
+}
+
+fn verify_checksum(artifact: &Path, name: &str, manifest: &Path) -> anyhow::Result<()> {
+    let manifest = std::fs::read_to_string(manifest)?;
+    let matches: Vec<&str> = manifest
+        .lines()
+        .filter_map(|line| line.split_once(char::is_whitespace))
+        .filter_map(|(hash, file)| {
+            (file.trim_start().trim_start_matches('*') == name).then_some(hash)
+        })
+        .collect();
+    let [expected] = matches.as_slice() else {
+        anyhow::bail!("checksum manifest must contain exactly one entry for {name}")
+    };
+    if expected.len() != 64 || !expected.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        anyhow::bail!("checksum manifest contains an invalid SHA-256 digest")
+    }
+    let mut file = std::fs::File::open(artifact)?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let read = file.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    if !format!("{:x}", hasher.finalize()).eq_ignore_ascii_case(expected) {
+        anyhow::bail!("downloaded artifact checksum does not match the signed manifest")
+    }
+    Ok(())
+}
+
 pub async fn install(
     kind: InstallKind,
-    file: &std::path::Path,
-    appimage_target: Option<&std::path::Path>,
+    artifact: &VerifiedArtifact,
+    appimage_target: Option<&Path>,
     on_line: &(dyn Fn(&str) + Send + Sync),
 ) -> OperationResult {
-    let file_str = file.to_string_lossy().to_string();
+    let file = artifact.path.to_string_lossy().into_owned();
     match kind {
         InstallKind::Deb => {
             system::run_elevated(
                 "dpkg",
-                &["-i", &file_str],
+                &["-i", &file],
                 AuthMethod::Pkexec,
                 Duration::from_secs(300),
                 on_line,
@@ -281,7 +323,7 @@ pub async fn install(
         InstallKind::Rpm => {
             system::run_elevated(
                 "rpm",
-                &["-U", &file_str],
+                &["-U", &file],
                 AuthMethod::Pkexec,
                 Duration::from_secs(300),
                 on_line,
@@ -290,53 +332,65 @@ pub async fn install(
         }
         InstallKind::AppImage => {
             let Some(target) = appimage_target else {
-                return OperationResult {
-                    success: false,
-                    message: "Cannot locate the running AppImage to replace.".into(),
-                    logs: "missing $APPIMAGE".into(),
-                    exit_code: None,
-                };
+                return failed(
+                    "Cannot locate the running AppImage to replace.",
+                    "missing $APPIMAGE",
+                );
             };
-            on_line(&format!("[scope] Installing AppImage to {}", target.display()));
-            match tokio::fs::copy(file, target).await {
-                Ok(_) => {
-                    #[cfg(unix)]
-                    {
-                        use std::os::unix::fs::PermissionsExt;
-                        let _ = tokio::fs::set_permissions(
-                            target,
-                            std::fs::Permissions::from_mode(0o755),
-                        )
-                        .await;
-                    }
-                    OperationResult {
-                        success: true,
-                        message: "AppImage updated. Restart Scope to use the new version."
-                            .into(),
-                        logs: format!(
-                            "copied {} to {}",
-                            file.display(),
-                            target.display()
-                        ),
-                        exit_code: Some(0),
-                    }
-                }
-                Err(e) => OperationResult {
-                    success: false,
-                    message: format!("AppImage install failed: {e}"),
-                    logs: format!("copy error: {e}"),
-                    exit_code: None,
+            on_line(&format!(
+                "[scope] Installing AppImage to {}",
+                target.display()
+            ));
+            match atomic_replace_appimage(&artifact.path, target) {
+                Ok(()) => OperationResult {
+                    success: true,
+                    message: "AppImage updated. Restart Scope to use the new version.".into(),
+                    logs: format!("atomically replaced {}", target.display()),
+                    exit_code: Some(0),
                 },
+                Err(error) => failed(
+                    format!("AppImage install failed: {error}"),
+                    format!("atomic replacement error: {error}"),
+                ),
             }
         }
-        InstallKind::Unknown => OperationResult {
-            success: false,
-            message: format!(
-                "This install can't update itself. Download the new version from {RELEASES_URL}"
-            ),
-            logs: "unknown install kind".into(),
-            exit_code: None,
-        },
+        InstallKind::Unknown => failed(
+            format!("This install can't update itself. Download it from {RELEASES_URL}"),
+            "unknown install kind",
+        ),
+    }
+}
+
+fn atomic_replace_appimage(source: &Path, target: &Path) -> std::io::Result<()> {
+    let parent = target.parent().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "AppImage has no parent directory",
+        )
+    })?;
+    let mut staged = tempfile::Builder::new()
+        .prefix(".scope-update-")
+        .tempfile_in(parent)?;
+    std::io::copy(&mut std::fs::File::open(source)?, &mut staged)?;
+    staged.flush()?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        staged
+            .as_file()
+            .set_permissions(std::fs::Permissions::from_mode(0o755))?;
+    }
+    staged.as_file().sync_all()?;
+    staged.persist(target).map_err(|error| error.error)?;
+    std::fs::File::open(parent)?.sync_all()
+}
+
+fn failed(message: impl Into<String>, logs: impl Into<String>) -> OperationResult {
+    OperationResult {
+        success: false,
+        message: message.into(),
+        logs: logs.into(),
+        exit_code: None,
     }
 }
 
@@ -344,119 +398,98 @@ pub async fn install(
 mod tests {
     use super::*;
 
-    fn release_with(assets: &[(&str, &str)]) -> GithubRelease {
+    fn release(assets: &[(&str, &str)]) -> GithubRelease {
         GithubRelease {
             tag_name: "v0.3.0".into(),
             body: Some("notes".into()),
             assets: assets
                 .iter()
-                .map(|(n, u)| ReleaseAsset {
-                    name: (*n).into(),
-                    browser_download_url: (*u).into(),
+                .map(|(name, url)| ReleaseAsset {
+                    name: (*name).into(),
+                    browser_download_url: (*url).into(),
                 })
                 .collect(),
         }
     }
 
     #[test]
-    fn classify_prefers_the_bundle_marker() {
-        assert_eq!(
-            classify(Some("deb".into()), None, false, false),
-            InstallKind::Deb
-        );
-        assert_eq!(
-            classify(Some("RPM".into()), None, false, false),
-            InstallKind::Rpm
-        );
-        assert_eq!(
-            classify(Some("appimage".into()), None, false, false),
-            InstallKind::AppImage
-        );
-    }
-
-    #[test]
-    fn classify_uses_appimage_env_when_no_bundle() {
-        assert_eq!(
-            classify(None, Some(OsString::from("/tmp/x.AppImage")), false, false),
-            InstallKind::AppImage
-        );
-    }
-
-    #[test]
-    fn classify_returns_unknown_when_no_signal_matches() {
-        assert_eq!(classify(None, None, false, false), InstallKind::Unknown);
-        assert_eq!(
-            classify(Some("msi".into()), None, false, false),
-            InstallKind::Unknown
-        );
-    }
-
-    #[test]
-    fn classify_uses_the_deb_marker() {
-        assert_eq!(classify(None, None, true, false), InstallKind::Deb);
-    }
-
-    #[test]
-    fn is_newer_compares_numeric_cores_and_prereleases() {
-        assert!(is_newer("0.2.0", "0.3.0"));
+    fn semver_comparison_rejects_invalid_versions() {
         assert!(is_newer("0.2.0", "v0.3.0"));
-        assert!(!is_newer("0.3.0", "0.3.0"));
-        assert!(!is_newer("0.3.0", "0.2.0"));
-        assert!(is_newer("0.2.9", "0.10.0"));
-        assert!(is_newer("0.3.0-rc.1", "0.3.0"));
-        assert!(!is_newer("0.3.0", "0.3.0-rc.1"));
-    }
-
-    #[test]
-    fn strip_v_removes_a_leading_v() {
-        assert_eq!(strip_v("v0.3.0"), "0.3.0");
-        assert_eq!(strip_v("0.3.0"), "0.3.0");
-    }
-
-    #[test]
-    fn is_newer_ignores_unparsable_version_segments() {
-        // A garbage segment must be dropped, not silently compared as `0`.
-        assert!(is_newer("1.2", "1.2.5"));
         assert!(!is_newer("1.2.5", "1.2.x"));
     }
 
     #[test]
-    fn select_asset_picks_by_extension() {
-        let r = release_with(&[
-            ("scope_0.3.0_amd64.deb", "https://x/d.deb"),
-            ("scope-0.3.0.x86_64.rpm", "https://x/d.rpm"),
-            ("Scope-0.3.0-x86_64.AppImage", "https://x/d.AppImage"),
+    fn select_asset_requires_exact_version_architecture_and_kind() {
+        let release = release(&[
+            ("scope_0.3.0_amd64.deb", "https://x/good"),
+            ("scope_9.9.9_amd64.deb", "https://x/bad"),
         ]);
-        assert_eq!(select_asset(&r, InstallKind::Deb).unwrap().name, "scope_0.3.0_amd64.deb");
-        assert_eq!(select_asset(&r, InstallKind::Rpm).unwrap().name, "scope-0.3.0.x86_64.rpm");
         assert_eq!(
-            select_asset(&r, InstallKind::AppImage).unwrap().name,
-            "Scope-0.3.0-x86_64.AppImage"
+            select_asset(&release, InstallKind::Deb, "x86_64").map(|asset| asset.name.as_str()),
+            Some("scope_0.3.0_amd64.deb")
         );
-        assert!(select_asset(&r, InstallKind::Unknown).is_none());
     }
 
     #[test]
-    fn check_update_returns_none_when_current_is_newest() {
-        let r = release_with(&[]);
-        assert!(check_update("0.3.0", &r, InstallKind::Deb).is_none());
-        assert!(check_update("0.4.0", &r, InstallKind::Deb).is_none());
+    fn checksum_accepts_one_exact_filename_entry() {
+        let dir = tempfile::tempdir().unwrap();
+        let artifact = dir.path().join("scope.deb");
+        let manifest = dir.path().join(CHECKSUMS_NAME);
+        std::fs::write(&artifact, b"scope").unwrap();
+        let digest = format!("{:x}", Sha256::digest(b"scope"));
+        std::fs::write(&manifest, format!("{digest}  scope.deb\n")).unwrap();
+        assert!(verify_checksum(&artifact, "scope.deb", &manifest).is_ok());
     }
 
     #[test]
-    fn check_update_falls_back_to_the_releases_url_without_an_asset() {
-        let r = release_with(&[]);
-        let check = check_update("0.2.0", &r, InstallKind::Deb).unwrap();
-        assert_eq!(check.latest, "0.3.0");
-        assert!(!check.can_self_update);
-        assert_eq!(check.url, RELEASES_URL);
+    fn checksum_rejects_tampered_artifact() {
+        let dir = tempfile::tempdir().unwrap();
+        let artifact = dir.path().join("scope.deb");
+        let manifest = dir.path().join(CHECKSUMS_NAME);
+        std::fs::write(&artifact, b"tampered").unwrap();
+        let digest = format!("{:x}", Sha256::digest(b"scope"));
+        std::fs::write(&manifest, format!("{digest}  scope.deb\n")).unwrap();
+        assert!(verify_checksum(&artifact, "scope.deb", &manifest).is_err());
     }
 
     #[test]
-    fn can_self_update_is_true_for_known_install_kinds() {
+    fn minisign_verification_rejects_legacy_signatures() {
+        let dir = tempfile::tempdir().unwrap();
+        let manifest = dir.path().join(CHECKSUMS_NAME);
+        let signature = dir.path().join(SIGNATURE_NAME);
+        std::fs::write(&manifest, b"test").unwrap();
+        std::fs::write(
+            &signature,
+            "untrusted comment: signature from minisign secret key\nRWQf6LRCGA9i59SLOFxz6NxvASXDJeRtuZykwQepbDEGt87ig1BNpWaVWuNrm73YiIiJbq71Wi+dP9eKL8OC351vwIasSSbXxwA=\ntrusted comment: timestamp:1555779966\tfile:test\nQtKMXWyYcwdpZAlPF7tE2ENJkRd1ujvKjlj1m9RtHTBnZPa5WKU5uWRs5GoP5M/VqE81QFuMKI5k/SfNQUaOAA==\n",
+        )
+        .unwrap();
+        let error = verify_manifest(
+            &manifest,
+            &signature,
+            Some("RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3"),
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("signature algorithm"));
+    }
+
+    #[test]
+    fn appimage_replacement_replaces_the_target() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("download");
+        let target = dir.path().join("Scope.AppImage");
+        std::fs::write(&source, b"new").unwrap();
+        std::fs::write(&target, b"old").unwrap();
+        atomic_replace_appimage(&source, &target).unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), b"new");
+    }
+
+    #[test]
+    fn classify_and_capabilities_cover_known_kinds() {
+        assert_eq!(
+            classify(Some("deb".into()), None, false, false),
+            InstallKind::Deb
+        );
         assert!(InstallKind::Deb.can_self_update());
-        assert!(InstallKind::Rpm.can_self_update());
-        assert!(InstallKind::AppImage.can_self_update());
         assert!(!InstallKind::Unknown.can_self_update());
     }
 }

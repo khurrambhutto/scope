@@ -106,9 +106,7 @@ async fn apt_has_update(pkg: &str) -> Option<bool> {
     }
     let (installed, candidate) = parse_apt_policy(&out.stdout);
     match (installed, candidate) {
-        (Some(installed), Some(candidate)) => {
-            Some(has_update_from_policy(&installed, &candidate))
-        }
+        (Some(installed), Some(candidate)) => Some(has_update_from_policy(&installed, &candidate)),
         _ => None,
     }
 }
@@ -131,7 +129,8 @@ async fn probe_flatpak(app_id: &str, scope: Option<InstallScope>) -> Result<Prob
     // Scope comes from the plan (originally from the scan), never re-guessed.
     let scope_flag = match scope {
         Some(InstallScope::User) => "--user",
-        Some(InstallScope::System) | None => "--system",
+        Some(InstallScope::System) => "--system",
+        None => anyhow::bail!("Flatpak installation scope is missing."),
     };
     let out = capture_output(
         "flatpak",

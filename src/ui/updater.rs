@@ -27,9 +27,13 @@ pub enum UpdaterStatus {
         lines: Vec<String>,
     },
     /// Finished successfully.
-    Ready { message: String },
+    Ready {
+        message: String,
+    },
     /// Finished with an error.
-    Error { message: String },
+    Error {
+        message: String,
+    },
 }
 
 #[derive(Debug, Default)]
@@ -73,8 +77,7 @@ impl UpdaterUi {
                     s.push_str("\nYour desktop will ask for your administrator password.");
                 }
                 if !check.notes.is_empty() {
-                    let first: String =
-                        check.notes.lines().take(3).collect::<Vec<_>>().join("\n");
+                    let first: String = check.notes.lines().take(3).collect::<Vec<_>>().join("\n");
                     s.push_str(&format!("\n{first}"));
                 }
                 s
@@ -212,6 +215,9 @@ mod tests {
             url: "https://example.com/scope".into(),
             kind: InstallKind::Deb,
             can_self_update: true,
+            artifact_name: Some("scope_0.4.0_amd64.deb".into()),
+            checksums_url: Some("https://example.com/SHA256SUMS".into()),
+            signature_url: Some("https://example.com/SHA256SUMS.minisig".into()),
         }
     }
 

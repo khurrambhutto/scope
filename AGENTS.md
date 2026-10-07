@@ -30,7 +30,7 @@ src/                      GPUI app
     scanner/              per-source scanners (apt.rs, snap.rs, flatpak.rs, appimage.rs)
     desktop_entries/      .desktop discovery and parsing
     icons/                icon theme resolution and scope-icon:// URLs
-    operations/           preview/apply flows: probe.rs, uninstall.rs, update.rs, PlanStore
+    operations/           preview/apply flows, APT simulation, PlanStore
     safety/               deny-lists for packages and paths
     system/               command execution, timeouts, pkexec
     package.rs            InstalledPackage plus source/scope enums
@@ -43,6 +43,8 @@ src/                      GPUI app
     title_bar.rs          client-side title bar
     text_input.rs         search field
     widgets.rs            banners, empty/loading states
+    package_list_model.rs scan replacement and stable-key list behavior
+    operation_controller.rs request identity and apply exclusivity
 assets/                   SVG icons (filter, refresh, logo, window controls)
 docs/                     GitHub Pages site
 ```
@@ -59,7 +61,6 @@ docs/                     GitHub Pages site
 - Run `cargo run`. Linux needs GPUI's system deps; notably `libxkbcommon-x11-dev`, because GPUI links `-lxkbcommon-x11` on Linux even in Wayland-only builds.
 - Depend on `gpui-kit` alone (it brings the pinned `gpui-pre` snapshot); never list `gpui` separately. Import UI types via `use gpui_kit::*` / `gpui_kit::prelude::*`. Call `gpui_kit::init` once at startup for the theme; open the window with plain `cx.open_window` (no Base `Root`) to stay borderless — kit's `Root` draws a 1px `WindowBorder` frame on Linux. Overlay components (dropdowns, popovers, toasts) need `Root` and are out until the frame question is revisited.
 - The crate pins `[lints]` in its `Cargo.toml` (`unsafe_code = "forbid"`, deny `dbg_macro`/`todo`/`unimplemented`).
-- Not yet ported: the self-updater banner.
 
 ## Product rules
 
@@ -71,6 +72,7 @@ Scanner and list filters are deliberate product choices:
 - The footer's `Show all` toggle bypasses app/tool classification and reveals every row returned by package scanners plus discovered user-local desktop apps. It never bypasses `safety/`; protected rows have a disabled uninstall action. APT still scans manual packages only and Snap/Flatpak runtimes remain excluded at scan time.
 - Snap hides runtimes and bases (`core*`, `snapd`, `bare`, `gtk-*`, `gnome-*`, `*-gtk3`). A matching visible `.desktop` entry classifies a snap as GUI/CLI according to its `Terminal` flag; a `/snap/bin/<snap-name>` command can classify it as CLI.
 - Flatpak scans user and system as separate installs. Keys are `flatpak:user:<id>` and `flatpak:system:<id>`, and the DTO's `install_scope` is the single source of truth for which scope every later command uses. Never re-guess scope at preview or apply time.
+- Missing Flatpak scope is an error at preview, probe, and apply. Never default it to system scope.
 - AppImage scans `/opt`, `/usr/local/bin`, `~/Applications`, `~/apps`, `~/AppImages`, `~/Downloads`, `~/.local/bin` for ELF+`AI` magic files. Valid AppImages appear in the main list, but uninstall and update actions remain unsupported; `safety::check_appimage` denies every AppImage path, so preview yields a protected plan and apply-time revalidation fails closed.
 - Visible launchers in the user's applications directory that no APT/Snap/Flatpak/AppImage scanner owns appear as `Desktop` apps. They are discovery-only and protected from uninstall/update. APT package file lists associate `.desktop` launchers and icons with package IDs when their names differ.
 
@@ -94,8 +96,10 @@ Always:
 
 - Preview first for every destructive action. Preview builds an `OperationPlan`; apply accepts only a `plan_id` from `PlanStore` (5-minute TTL, single-use).
 - Revalidate before executing (`operations::probe` plus the operation's `revalidate`): package present, version unchanged for updates, deny-list still clear. Fail closed when state cannot be verified.
+- Simulate every APT transaction with `LC_ALL=C`, reject indirect protected removals, store its fingerprint in the plan, and require the same simulation immediately before apply.
 - Escalate with `pkexec` through `system::run_elevated`. Scope never handles passwords.
 - Delete files through Trash (`gio trash`, manual `~/.local/share/Trash` fallback).
+- Install self-updates only after verifying a minisign-signed SHA-256 manifest. Keep downloads in a private temporary directory.
 
 Never:
 

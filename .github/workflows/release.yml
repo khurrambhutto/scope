@@ -30,13 +30,30 @@ jobs:
             wayland-protocols \
             curl \
             jq \
+            minisign \
             dpkg-dev
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Verify tag matches Cargo version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          CARGO_VERSION="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "scope-gpui") | .version')"
+          test "$TAG_VERSION" = "$CARGO_VERSION" || {
+            echo "tag version $TAG_VERSION does not match Cargo.toml version $CARGO_VERSION" >&2
+            exit 1
+          }
+
       - name: Build release binary
-        run: cargo build --release
+        env:
+          SCOPE_UPDATE_PUBLIC_KEY: ${{ vars.SCOPE_UPDATE_PUBLIC_KEY }}
+        run: |
+          test -n "$SCOPE_UPDATE_PUBLIC_KEY" || {
+            echo "SCOPE_UPDATE_PUBLIC_KEY is not configured" >&2
+            exit 1
+          }
+          cargo build --release
 
       - name: Package .deb (.deb first per product scope)
         run: |
@@ -77,6 +94,18 @@ jobs:
           mv "$PKGDIR.deb" "scope_${VERSION}_amd64.deb"
           ls -la scope_${VERSION}_amd64.deb
 
+      - name: Sign release checksums
+        env:
+          SCOPE_UPDATE_SECRET_KEY: ${{ secrets.SCOPE_UPDATE_SECRET_KEY }}
+        run: |
+          test -n "$SCOPE_UPDATE_SECRET_KEY" || {
+            echo "SCOPE_UPDATE_SECRET_KEY is not configured" >&2
+            exit 1
+          }
+          printf '%s\n' "$SCOPE_UPDATE_SECRET_KEY" > "$RUNNER_TEMP/scope-minisign.key"
+          sha256sum scope_*_amd64.deb > SHA256SUMS
+          minisign -S -s "$RUNNER_TEMP/scope-minisign.key" -m SHA256SUMS -x SHA256SUMS.minisig
+
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -87,3 +116,5 @@ jobs:
           generate_release_notes: true
           files: |
             scope_*_amd64.deb
+            SHA256SUMS
+            SHA256SUMS.minisig

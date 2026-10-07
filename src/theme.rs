@@ -79,7 +79,10 @@ pub fn format_all_count(shown: usize, total: usize) -> String {
 
 fn format_item_count(shown: usize, total: usize, singular: &str, plural: &str) -> String {
     if shown == total {
-        format!("Showing {total} {}", if total == 1 { singular } else { plural })
+        format!(
+            "Showing {total} {}",
+            if total == 1 { singular } else { plural }
+        )
     } else {
         format!("Showing {shown} of {total} {plural}")
     }
@@ -124,9 +127,7 @@ pub fn search_text(pkg: &InstalledPackage) -> String {
 
 /// The name a row/detail/dialog should show for a package.
 pub fn display_title(pkg: &InstalledPackage) -> String {
-    pkg.display_name
-        .clone()
-        .unwrap_or_else(|| pkg.name.clone())
+    pkg.display_name.clone().unwrap_or_else(|| pkg.name.clone())
 }
 
 // ---- Scope palette (moved from the app view) ------------------------------

@@ -13,6 +13,12 @@ use tokio::process::Command;
 use crate::domain::operations::AuthMethod;
 use crate::domain::operations::OperationResult;
 
+const MAX_CAPTURE_BYTES: usize = 2 * 1024 * 1024;
+const MAX_LOG_BYTES: usize = 1024 * 1024;
+const MAX_LINE_BYTES: usize = 16 * 1024;
+const MAX_STREAM_LINES: usize = 2_000;
+const TRUNCATED: &str = "\n[scope] output truncated\n";
+
 /// Failure of a command Scope tried to run.
 ///
 /// A typed error (rather than a formatted `anyhow` string) lets callers
@@ -58,23 +64,76 @@ pub async fn capture_output(
     args: &[&str],
     timeout: Duration,
 ) -> Result<ProcessOutput, SystemError> {
-    let output = tokio::time::timeout(timeout, Command::new(program).args(args).output()).await;
-    match output {
-        Ok(Ok(out)) => Ok(ProcessOutput {
-            success: out.status.success(),
-            exit_code: out.status.code(),
-            stdout: String::from_utf8_lossy(&out.stdout).to_string(),
-            stderr: String::from_utf8_lossy(&out.stderr).to_string(),
-        }),
-        Ok(Err(source)) => Err(SystemError::Spawn {
+    capture_output_env(program, args, &[], timeout).await
+}
+
+pub async fn capture_output_env(
+    program: &str,
+    args: &[&str],
+    envs: &[(&str, &str)],
+    timeout: Duration,
+) -> Result<ProcessOutput, SystemError> {
+    let mut command = Command::new(program);
+    command
+        .args(args)
+        .envs(envs.iter().copied())
+        .kill_on_drop(true)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    let mut child = command.spawn().map_err(|source| SystemError::Spawn {
+        program: program.to_string(),
+        source,
+    })?;
+    let stdout = child.stdout.take().expect("piped stdout is available");
+    let stderr = child.stderr.take().expect("piped stderr is available");
+    let stdout_task = tokio::spawn(read_limited(stdout, MAX_CAPTURE_BYTES));
+    let stderr_task = tokio::spawn(read_limited(stderr, MAX_CAPTURE_BYTES));
+    let status = match tokio::time::timeout(timeout, child.wait()).await {
+        Ok(status) => status.map_err(|source| SystemError::Spawn {
             program: program.to_string(),
             source,
-        }),
-        Err(_) => Err(SystemError::Timeout {
-            program: program.to_string(),
-            timeout,
-        }),
+        })?,
+        Err(_) => {
+            let _ = child.kill().await;
+            let _ = child.wait().await;
+            stdout_task.abort();
+            stderr_task.abort();
+            return Err(SystemError::Timeout {
+                program: program.to_string(),
+                timeout,
+            });
+        }
+    };
+    let stdout = stdout_task.await.unwrap_or_default();
+    let stderr = stderr_task.await.unwrap_or_default();
+    Ok(ProcessOutput {
+        success: status.success(),
+        exit_code: status.code(),
+        stdout,
+        stderr,
+    })
+}
+
+async fn read_limited<R>(mut reader: R, limit: usize) -> String
+where
+    R: tokio::io::AsyncRead + Unpin,
+{
+    let mut kept = Vec::new();
+    let mut truncated = false;
+    let mut buffer = [0_u8; 8192];
+    while let Ok(read) = reader.read(&mut buffer).await {
+        if read == 0 {
+            break;
+        }
+        let remaining = limit.saturating_sub(kept.len());
+        kept.extend_from_slice(&buffer[..read.min(remaining)]);
+        truncated |= read > remaining;
     }
+    let mut output = String::from_utf8_lossy(&kept).into_owned();
+    if truncated {
+        output.push_str(TRUNCATED);
+    }
+    output
 }
 
 /// Capture stdout of a command as a UTF-8 string, with a timeout.
@@ -206,7 +265,7 @@ where
                             }
                             pending.clear();
                         }
-                    } else {
+                    } else if pending.len() < MAX_LINE_BYTES {
                         pending.push(byte);
                     }
                 }
@@ -238,7 +297,8 @@ pub async fn run_elevated(
     on_line: &(dyn Fn(&str) + Send + Sync),
 ) -> OperationResult {
     let (mut cmd, display_program, argv) = elevated_command(program, args, auth);
-    cmd.stdout(std::process::Stdio::piped())
+    cmd.kill_on_drop(true)
+        .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
 
     let started = std::time::Instant::now();
@@ -259,7 +319,10 @@ pub async fn run_elevated(
     if args.is_empty() {
         on_line(&format!("[scope] Running: {display_program}"));
     } else {
-        on_line(&format!("[scope] Running: {display_program} {}", args.join(" ")));
+        on_line(&format!(
+            "[scope] Running: {display_program} {}",
+            args.join(" ")
+        ));
     }
 
     let (tx, mut rx) = tokio::sync::mpsc::channel::<(bool, String)>(512);
@@ -277,6 +340,7 @@ pub async fn run_elevated(
     let mut stderr_log = String::new();
     let mut status: Option<std::io::Result<std::process::ExitStatus>> = None;
     let mut readers_done = false;
+    let mut streamed_lines = 0_usize;
 
     let drain = async {
         loop {
@@ -284,10 +348,18 @@ pub async fn run_elevated(
                 maybe = rx.recv(), if !readers_done => {
                     match maybe {
                         Some((is_stderr, line)) => {
-                            on_line(&line);
+                            if streamed_lines < MAX_STREAM_LINES {
+                                on_line(&line);
+                                streamed_lines += 1;
+                            }
                             let buf = if is_stderr { &mut stderr_log } else { &mut stdout_log };
-                            buf.push_str(&line);
-                            buf.push('\n');
+                            if buf.len() < MAX_LOG_BYTES {
+                                let remaining = MAX_LOG_BYTES - buf.len();
+                                buf.push_str(&String::from_utf8_lossy(
+                                    &line.as_bytes()[..line.len().min(remaining)],
+                                ));
+                                buf.push('\n');
+                            }
                         }
                         None => readers_done = true,
                     }
@@ -384,7 +456,10 @@ mod tests {
         assert!(out.success, "echo should succeed: {}", out.message);
         assert!(out.logs.contains("hello world"));
         let seen = seen.into_inner().unwrap();
-        assert!(seen.iter().any(|l| l == "hello world"), "streamed lines: {seen:?}");
+        assert!(
+            seen.iter().any(|l| l == "hello world"),
+            "streamed lines: {seen:?}"
+        );
     }
 
     #[tokio::test]
@@ -420,7 +495,11 @@ mod tests {
         .await;
 
         assert!(!out.success);
-        assert!(out.message.contains("timed out"), "message: {}", out.message);
+        assert!(
+            out.message.contains("timed out"),
+            "message: {}",
+            out.message
+        );
     }
 
     #[tokio::test]
@@ -445,5 +524,33 @@ mod tests {
             .await
             .unwrap_err();
         assert!(matches!(err, SystemError::Timeout { .. }), "got {err}");
+    }
+
+    #[tokio::test]
+    async fn capture_output_bounds_large_stdout() {
+        let output = capture_output("seq", &["1", "1000000"], Duration::from_secs(5))
+            .await
+            .unwrap();
+        assert!(output.stdout.len() <= MAX_CAPTURE_BYTES + TRUNCATED.len());
+        assert!(output.stdout.ends_with(TRUNCATED));
+    }
+
+    #[tokio::test]
+    async fn timeout_kills_and_reaps_the_child() {
+        let dir = tempfile::tempdir().unwrap();
+        let pid_file = dir.path().join("pid");
+        let script = format!("echo $$ > {}; exec sleep 30", pid_file.display());
+        let error = capture_output("sh", &["-c", &script], Duration::from_millis(200))
+            .await
+            .unwrap_err();
+        assert!(matches!(error, SystemError::Timeout { .. }));
+        let pid = std::fs::read_to_string(pid_file).unwrap();
+        let status = std::process::Command::new("kill")
+            .args(["-0", pid.trim()])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .unwrap();
+        assert!(!status.success(), "timed-out child {pid} is still alive");
     }
 }

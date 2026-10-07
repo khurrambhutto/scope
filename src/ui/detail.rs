@@ -3,8 +3,8 @@
 use gpui_kit::prelude::*;
 use gpui_kit::{div, px, rgba, AnyElement, FontWeight};
 
-use crate::domain::package::InstalledPackage;
 use crate::domain::listing;
+use crate::domain::package::InstalledPackage;
 use crate::theme::{self, display_title, text_dim};
 
 use super::row::package_icon;
@@ -23,7 +23,10 @@ pub(super) fn detail_element(pkg: &InstalledPackage) -> AnyElement {
                 pkg.version.clone()
             },
         ),
-        ("Installed size".to_string(), theme::format_size(pkg.size_bytes)),
+        (
+            "Installed size".to_string(),
+            theme::format_size(pkg.size_bytes),
+        ),
         (
             "Categories".to_string(),
             pkg.categories.clone().unwrap_or_else(|| "—".to_string()),
@@ -76,8 +79,14 @@ pub(super) fn detail_element(pkg: &InstalledPackage) -> AnyElement {
                                 .flex()
                                 .flex_wrap()
                                 .gap(px(6.))
-                                .child(tag(theme::source_label(pkg.source), theme::source_color(pkg.source)))
-                                .child(tag(theme::kind_label(pkg.app_kind), theme::kind_color(pkg.app_kind))),
+                                .child(tag(
+                                    theme::source_label(pkg.source),
+                                    theme::source_color(pkg.source),
+                                ))
+                                .child(tag(
+                                    theme::kind_label(pkg.app_kind),
+                                    theme::kind_color(pkg.app_kind),
+                                )),
                         ),
                 ),
         )
@@ -94,10 +103,7 @@ pub(super) fn detail_element(pkg: &InstalledPackage) -> AnyElement {
             div()
                 .flex()
                 .flex_col()
-                .children(
-                    rows.into_iter()
-                        .map(|(label, value)| kv_row(label, value)),
-                ),
+                .children(rows.into_iter().map(|(label, value)| kv_row(label, value))),
         )
         .into_any_element()
 }

@@ -245,6 +245,12 @@ mod tests {
 
     #[test]
     fn desktop_launcher_apps_are_not_removable_through_scope() {
-        assert!(check_package(PackageSource::Desktop, "/home/user/.local/share/applications/zed.desktop").protected);
+        assert!(
+            check_package(
+                PackageSource::Desktop,
+                "/home/user/.local/share/applications/zed.desktop"
+            )
+            .protected
+        );
     }
 }

@@ -79,8 +79,7 @@ fn user_application_dir() -> Option<PathBuf> {
     if let Some(data_home) = env::var_os("XDG_DATA_HOME") {
         Some(PathBuf::from(data_home).join("applications"))
     } else {
-        env::var_os("HOME")
-            .map(|home| PathBuf::from(home).join(".local/share/applications"))
+        env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share/applications"))
     }
 }
 
@@ -236,20 +235,15 @@ impl DesktopIndex {
                     .map(Arc::as_ref)
                     .or_else(|| self.lookup_stripped(package_id))
             }
-            crate::domain::package::PackageSource::Desktop => self
-                .by_path
-                .get(Path::new(package_id))
-                .map(Arc::as_ref),
+            crate::domain::package::PackageSource::Desktop => {
+                self.by_path.get(Path::new(package_id)).map(Arc::as_ref)
+            }
         }
     }
 
     fn lookup_apt(&self, package_id: &str, name: &str) -> Option<&DesktopApp> {
         let lc = package_id.to_lowercase();
-        if let Some(app) = self
-            .by_id
-            .get(&lc)
-            .or_else(|| self.by_exec.get(&lc))
-        {
+        if let Some(app) = self.by_id.get(&lc).or_else(|| self.by_exec.get(&lc)) {
             return Some(app.as_ref());
         }
         let owned_files = crate::domain::package_files::list(package_id);
@@ -263,7 +257,11 @@ impl DesktopIndex {
         owned_files: &[PathBuf],
     ) -> Option<&DesktopApp> {
         self.lookup_owned_desktop_files(owned_files)
-            .or_else(|| self.by_name_lower.get(&name.to_lowercase()).map(Arc::as_ref))
+            .or_else(|| {
+                self.by_name_lower
+                    .get(&name.to_lowercase())
+                    .map(Arc::as_ref)
+            })
             .or_else(|| self.lookup_stripped(package_id))
     }
 
@@ -320,10 +318,9 @@ impl DesktopIndex {
                     AppKind::Gui
                 };
                 if let Some(icon) = app.icon.as_deref() {
-                    if let Some(path) = crate::domain::icons::resolve_for_app(
-                        icon,
-                        app.executable.as_deref(),
-                    ) {
+                    if let Some(path) =
+                        crate::domain::icons::resolve_for_app(icon, app.executable.as_deref())
+                    {
                         pkg.icon = Some(crate::domain::icons::icon_url(&path));
                     }
                 }
@@ -430,18 +427,11 @@ mod tests {
 
     #[test]
     fn unmatched_user_desktop_launchers_are_listed_as_unmanaged_apps() {
-        let mut zed = app(
-            "dev.zed.Zed",
-            "Zed",
-            "/home/user/.local/zed.app/bin/zed %U",
-        );
+        let mut zed = app("dev.zed.Zed", "Zed", "/home/user/.local/zed.app/bin/zed %U");
         zed.file_path = PathBuf::from("/home/user/.local/share/applications/dev.zed.Zed.desktop");
         let index = DesktopIndex::from_apps(vec![zed]);
 
-        let apps = index.unmanaged_apps_in(
-            &[],
-            Path::new("/home/user/.local/share/applications"),
-        );
+        let apps = index.unmanaged_apps_in(&[], Path::new("/home/user/.local/share/applications"));
 
         assert_eq!(apps.len(), 1);
         assert_eq!(apps[0].source, PackageSource::Desktop);
@@ -451,7 +441,8 @@ mod tests {
 
     #[test]
     fn visible_user_launcher_with_an_existing_executable_is_imported() {
-        let root = std::env::temp_dir().join(format!("scope-local-launcher-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("scope-local-launcher-{}", std::process::id()));
         let user_applications = root.join("home/.local/share/applications");
         let executable = root.join("home/.local/opt/editor/bin/editor");
         let desktop_file = user_applications.join("com.example.Editor.desktop");
@@ -506,9 +497,16 @@ mod tests {
 
     #[test]
     fn apt_strips_stable_suffix_to_find_app() {
-        let index =
-            DesktopIndex::from_apps(vec![app("google-chrome", "Google Chrome", "google-chrome-stable %U")]);
-        let found = index.lookup(PackageSource::Apt, "google-chrome-stable", "google-chrome-stable");
+        let index = DesktopIndex::from_apps(vec![app(
+            "google-chrome",
+            "Google Chrome",
+            "google-chrome-stable %U",
+        )]);
+        let found = index.lookup(
+            PackageSource::Apt,
+            "google-chrome-stable",
+            "google-chrome-stable",
+        );
         assert_eq!(found.map(|a| a.id.as_str()), Some("google-chrome"));
     }
 

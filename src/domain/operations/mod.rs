@@ -6,17 +6,81 @@
 //! itself issued (stored in [`PlanStore`]) and revalidates the system state
 //! before executing — so a stale or tampered plan is rejected.
 
+pub mod apt_transaction;
 pub mod probe;
 pub mod uninstall;
 pub mod update;
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
+use crate::domain::package::InstalledPackage;
 use crate::domain::package::{InstallScope, PackageSource};
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "source", rename_all = "lowercase")]
+pub enum OperationTarget {
+    Apt { package_id: String },
+    Snap { package_id: String },
+    Flatpak { app_id: String, scope: InstallScope },
+    AppImage { path: PathBuf },
+    Desktop { desktop_file: PathBuf },
+}
+
+impl OperationTarget {
+    pub fn from_package(package: &InstalledPackage) -> anyhow::Result<Self> {
+        match package.source {
+            PackageSource::Apt => Ok(Self::Apt {
+                package_id: package.package_id.clone(),
+            }),
+            PackageSource::Snap => Ok(Self::Snap {
+                package_id: package.package_id.clone(),
+            }),
+            PackageSource::Flatpak => Ok(Self::Flatpak {
+                app_id: package.package_id.clone(),
+                scope: package.install_scope.ok_or_else(|| {
+                    anyhow::anyhow!("Flatpak installation scope is missing. Rescan and try again.")
+                })?,
+            }),
+            PackageSource::AppImage => Ok(Self::AppImage {
+                path: PathBuf::from(&package.package_id),
+            }),
+            PackageSource::Desktop => Ok(Self::Desktop {
+                desktop_file: PathBuf::from(&package.package_id),
+            }),
+        }
+    }
+
+    pub fn source(&self) -> PackageSource {
+        match self {
+            Self::Apt { .. } => PackageSource::Apt,
+            Self::Snap { .. } => PackageSource::Snap,
+            Self::Flatpak { .. } => PackageSource::Flatpak,
+            Self::AppImage { .. } => PackageSource::AppImage,
+            Self::Desktop { .. } => PackageSource::Desktop,
+        }
+    }
+
+    pub fn id(&self) -> &str {
+        match self {
+            Self::Apt { package_id } | Self::Snap { package_id } => package_id,
+            Self::Flatpak { app_id, .. } => app_id,
+            Self::AppImage { path } => path.to_str().unwrap_or(""),
+            Self::Desktop { desktop_file } => desktop_file.to_str().unwrap_or(""),
+        }
+    }
+
+    pub fn install_scope(&self) -> Option<InstallScope> {
+        match self {
+            Self::Flatpak { scope, .. } => Some(*scope),
+            _ => None,
+        }
+    }
+}
 
 /// What kind of operation a plan describes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -54,9 +118,7 @@ pub struct PlanStep {
 pub struct OperationPlan {
     pub plan_id: String,
     pub operation: Operation,
-    pub source: PackageSource,
-    pub package_id: String,
-    pub install_scope: Option<InstallScope>,
+    pub target: OperationTarget,
     pub display_name: String,
     pub current_version: String,
     pub target_version: String,
@@ -66,6 +128,7 @@ pub struct OperationPlan {
     pub protection_reason: Option<String>,
     pub steps: Vec<PlanStep>,
     pub created_at_ms: u64,
+    pub apt_transaction_fingerprint: Option<String>,
 }
 
 /// Outcome of applying a plan.
@@ -209,9 +272,9 @@ mod tests {
         OperationPlan {
             plan_id: id.into(),
             operation: Operation::Uninstall,
-            source: PackageSource::Apt,
-            package_id: "gimp".into(),
-            install_scope: None,
+            target: OperationTarget::Apt {
+                package_id: "gimp".into(),
+            },
             display_name: "GIMP".into(),
             current_version: "2.10".into(),
             target_version: String::new(),
@@ -221,6 +284,7 @@ mod tests {
             protection_reason: None,
             steps: vec![],
             created_at_ms: 0,
+            apt_transaction_fingerprint: None,
         }
     }
 
@@ -228,7 +292,10 @@ mod tests {
     fn issue_then_take_returns_the_plan() {
         let store = PlanStore::default();
         store.issue(plan("plan-1"));
-        assert_eq!(store.take("plan-1").map(|p| p.package_id), Some("gimp".into()));
+        assert_eq!(
+            store.take("plan-1").map(|p| p.target.id().to_string()),
+            Some("gimp".into())
+        );
     }
 
     #[test]
@@ -267,9 +334,14 @@ mod tests {
         let store = PlanStore::default();
         store.issue(plan("plan-1"));
         let mut replacement = plan("plan-1");
-        replacement.package_id = "vlc".into();
+        replacement.target = OperationTarget::Apt {
+            package_id: "vlc".into(),
+        };
         store.issue(replacement);
-        assert_eq!(store.take("plan-1").map(|p| p.package_id), Some("vlc".into()));
+        assert_eq!(
+            store.take("plan-1").map(|p| p.target.id().to_string()),
+            Some("vlc".into())
+        );
     }
 
     #[test]

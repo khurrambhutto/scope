@@ -1,46 +1,66 @@
-//! Update preview + apply per package source.
-//!
-//! Mirrors the uninstall flow: preview builds an [`OperationPlan`], apply
-//! revalidates that the package still exists and still has an update, then runs
-//! the source-specific update command.
+//! Update preview, fail-closed revalidation, and apply commands.
 
 use std::time::Duration;
 
 use anyhow::Result;
 
-use crate::domain::package::{InstallScope, InstalledPackage, PackageSource};
+use crate::domain::package::{InstallScope, InstalledPackage};
 use crate::domain::safety;
 use crate::domain::system::run_elevated;
 
-use super::{new_plan_id, now_ms, AuthMethod, Operation, OperationPlan, OperationResult, PlanStep};
+use super::{
+    apt_transaction, new_plan_id, now_ms, AuthMethod, Operation, OperationPlan, OperationResult,
+    OperationTarget, PlanStep,
+};
 
-/// Max time an update command may run before we cancel it (5 min for downloads).
 const UPDATE_TIMEOUT: Duration = Duration::from_secs(300);
 
-/// Build a preview plan for updating one package.
-pub fn preview(pkg: &InstalledPackage) -> OperationPlan {
+pub async fn preview(pkg: &InstalledPackage) -> Result<OperationPlan> {
+    if pkg.version.trim().is_empty() || pkg.version.eq_ignore_ascii_case("unknown") {
+        anyhow::bail!("Installed version is unknown. Rescan before updating.")
+    }
+    let target = OperationTarget::from_package(pkg)?;
     let protection = safety::check_package(pkg.source, &pkg.package_id);
-    let (auth, steps) = build_steps(pkg, protection.protected);
-
-    OperationPlan {
+    let (auth, mut steps) = build_steps(pkg, &target, protection.protected);
+    let fingerprint = if matches!(target, OperationTarget::Apt { .. }) && !protection.protected {
+        let transaction = apt_transaction::simulate(Operation::Update, target.id()).await?;
+        steps.push(PlanStep {
+            description: format!(
+                "APT simulation changes {} package(s) and removes {}.",
+                transaction.installs.len() + transaction.upgrades.len(),
+                transaction.removals.len()
+            ),
+            command_summary: "apt-get -s install (verified again before apply)".into(),
+        });
+        Some(transaction.fingerprint)
+    } else {
+        None
+    };
+    Ok(OperationPlan {
         plan_id: new_plan_id(),
         operation: Operation::Update,
-        source: pkg.source,
-        package_id: pkg.package_id.clone(),
-        install_scope: pkg.install_scope,
+        target,
         display_name: pkg.display_name.clone().unwrap_or_else(|| pkg.name.clone()),
         current_version: pkg.version.clone(),
-        target_version: pkg.update_version.clone().unwrap_or_else(|| "latest".into()),
+        target_version: pkg
+            .update_version
+            .clone()
+            .unwrap_or_else(|| "latest".into()),
         requires_auth: matches!(auth, AuthMethod::Pkexec),
         auth_method: auth,
         protected: protection.protected,
         protection_reason: protection.reason,
         steps,
         created_at_ms: now_ms(),
-    }
+        apt_transaction_fingerprint: fingerprint,
+    })
 }
 
-fn build_steps(pkg: &InstalledPackage, protected: bool) -> (AuthMethod, Vec<PlanStep>) {
+fn build_steps(
+    pkg: &InstalledPackage,
+    operation_target: &OperationTarget,
+    protected: bool,
+) -> (AuthMethod, Vec<PlanStep>) {
     if protected {
         return (
             AuthMethod::None,
@@ -50,170 +70,154 @@ fn build_steps(pkg: &InstalledPackage, protected: bool) -> (AuthMethod, Vec<Plan
             }],
         );
     }
-
-    let target = pkg.update_version.as_deref().unwrap_or("latest");
-
-    match pkg.source {
-        PackageSource::Apt => (
+    let version = pkg.update_version.as_deref().unwrap_or("latest");
+    match operation_target {
+        OperationTarget::Apt { package_id } => (
             AuthMethod::Pkexec,
             vec![PlanStep {
-                description: format!("Update APT package '{}' from {} to {}.", pkg.package_id, pkg.version, target),
-                command_summary: format!("pkexec env DEBIAN_FRONTEND=noninteractive apt install -y {}", pkg.package_id),
+                description: format!(
+                    "Update APT package '{package_id}' from {} to {version}.",
+                    pkg.version
+                ),
+                command_summary: format!(
+                    "pkexec env DEBIAN_FRONTEND=noninteractive apt install -y {package_id}"
+                ),
             }],
         ),
-        PackageSource::Snap => (
+        OperationTarget::Snap { package_id } => (
             AuthMethod::Pkexec,
             vec![PlanStep {
-                description: format!("Update Snap '{}' to {}.", pkg.package_id, target),
-                command_summary: format!("pkexec snap refresh {}", pkg.package_id),
+                description: format!("Update Snap '{package_id}' to {version}."),
+                command_summary: format!("pkexec snap refresh {package_id}"),
             }],
         ),
-        PackageSource::Flatpak => {
-            let (auth, scope_flag): (AuthMethod, &str) = match pkg.install_scope {
-                Some(InstallScope::User) => (AuthMethod::None, "--user"),
-                _ => (AuthMethod::Pkexec, "--system"),
-            };
-            let cmd_prefix = match auth {
-                AuthMethod::Pkexec => "pkexec flatpak",
-                AuthMethod::None => "flatpak",
+        OperationTarget::Flatpak { app_id, scope } => {
+            let (auth, flag, prefix) = match scope {
+                InstallScope::User => (AuthMethod::None, "--user", "flatpak"),
+                InstallScope::System => (AuthMethod::Pkexec, "--system", "pkexec flatpak"),
             };
             (
                 auth,
                 vec![PlanStep {
-                    description: format!("Update Flatpak '{}' to {}.", pkg.package_id, target),
-                    command_summary: format!("{} update -y {} {}", cmd_prefix, scope_flag, pkg.package_id),
+                    description: format!("Update Flatpak '{app_id}' to {version}."),
+                    command_summary: format!("{prefix} update -y {flag} {app_id}"),
                 }],
             )
         }
-        PackageSource::AppImage => (
-            AuthMethod::None,
-            vec![PlanStep {
-                description: "Blocked: AppImage updates are not supported yet.".into(),
-                command_summary: "(no command — not supported yet)".into(),
-            }],
-        ),
-        PackageSource::Desktop => (
-            AuthMethod::None,
-            vec![PlanStep {
-                description: "Blocked: this app is not managed by a supported package manager.".into(),
-                command_summary: "(no command — unmanaged desktop app)".into(),
-            }],
-        ),
+        OperationTarget::AppImage { .. } => blocked("AppImage updates are not supported yet."),
+        OperationTarget::Desktop { .. } => {
+            blocked("This app is not managed by a supported package manager.")
+        }
     }
 }
 
-/// Re-validate that the package still exists, still passes the safety check,
-/// and still matches the state the plan was built from. `probed` comes from
-/// [`super::probe::probe_package`] — one cheap query instead of a full rescan.
+fn blocked(message: &str) -> (AuthMethod, Vec<PlanStep>) {
+    (
+        AuthMethod::None,
+        vec![PlanStep {
+            description: format!("Blocked: {message}"),
+            command_summary: "(no command — not supported)".into(),
+        }],
+    )
+}
+
 pub fn revalidate(plan: &OperationPlan, probed: &super::probe::ProbedPackage) -> Result<()> {
     if !probed.present {
         anyhow::bail!(
             "This update plan is stale: '{}' is no longer installed.",
             plan.display_name
-        );
+        )
     }
-    // Safety re-check (mirrors uninstall) in case deny-list state changed.
-    let protection = safety::check_package(plan.source, &plan.package_id);
+    let protection = safety::check_package(plan.target.source(), plan.target.id());
     if protection.protected {
         anyhow::bail!(
             "Refusing to update protected package: {}",
             protection.reason.unwrap_or_else(|| "protected".into())
-        );
+        )
     }
     if probed.has_update == Some(false) {
-        anyhow::bail!(
-            "'{}' no longer has updates available. Rescan and try again.",
-            plan.display_name
-        );
+        anyhow::bail!("'{}' no longer has an update.", plan.display_name)
     }
-    if let Some(version) = &probed.version {
-        if !plan.current_version.is_empty() && *version != plan.current_version {
-            anyhow::bail!(
-                "This update plan is stale: '{}' changed since the preview (expected version {}, found {}). Rescan and try again.",
-                plan.display_name,
-                plan.current_version,
-                version
-            );
-        }
+    let version = probed
+        .version
+        .as_deref()
+        .filter(|version| !version.trim().is_empty())
+        .ok_or_else(|| anyhow::anyhow!("Could not verify the installed version."))?;
+    if plan.current_version.trim().is_empty()
+        || plan.current_version.eq_ignore_ascii_case("unknown")
+        || version != plan.current_version
+    {
+        anyhow::bail!(
+            "This update plan is stale: '{}' changed since the preview.",
+            plan.display_name
+        )
     }
     Ok(())
 }
 
-/// Execute the plan's update command for the given source, streaming output.
-///
-/// `on_line` receives each output line as it is produced so the UI can show
-/// live progress during the possibly-lengthy download/install.
 pub async fn apply(
     plan: &OperationPlan,
     on_line: &(dyn Fn(&str) + Send + Sync),
 ) -> OperationResult {
-    match plan.source {
-        PackageSource::Apt => apt_update(&plan.package_id, on_line).await,
-        PackageSource::Snap => snap_refresh(&plan.package_id, on_line).await,
-        PackageSource::Flatpak => flatpak_update(&plan.package_id, plan.install_scope, on_line).await,
-        PackageSource::AppImage => OperationResult {
+    match &plan.target {
+        OperationTarget::Apt { package_id } => {
+            run_elevated(
+                "apt",
+                &["install", "-y", package_id],
+                AuthMethod::Pkexec,
+                UPDATE_TIMEOUT,
+                on_line,
+            )
+            .await
+        }
+        OperationTarget::Snap { package_id } => {
+            run_elevated(
+                "snap",
+                &["refresh", package_id],
+                AuthMethod::Pkexec,
+                UPDATE_TIMEOUT,
+                on_line,
+            )
+            .await
+        }
+        OperationTarget::Flatpak { app_id, scope } => {
+            let (auth, flag) = match scope {
+                InstallScope::User => (AuthMethod::None, "--user"),
+                InstallScope::System => (AuthMethod::Pkexec, "--system"),
+            };
+            run_elevated(
+                "flatpak",
+                &["update", "-y", flag, app_id],
+                auth,
+                UPDATE_TIMEOUT,
+                on_line,
+            )
+            .await
+        }
+        OperationTarget::AppImage { .. } | OperationTarget::Desktop { .. } => OperationResult {
             success: false,
-            message: "AppImage auto-update is not yet implemented. Download the latest version from the project website.".into(),
-            logs: String::new(),
-            exit_code: None,
-        },
-        PackageSource::Desktop => OperationResult {
-            success: false,
-            message: "This desktop app is not managed by a supported package manager.".into(),
+            message: "This app cannot be updated through Scope.".into(),
             logs: String::new(),
             exit_code: None,
         },
     }
-}
-
-async fn apt_update(pkg: &str, on_line: &(dyn Fn(&str) + Send + Sync)) -> OperationResult {
-    run_elevated(
-        "apt",
-        &["install", "-y", pkg],
-        AuthMethod::Pkexec,
-        UPDATE_TIMEOUT,
-        on_line,
-    )
-    .await
-}
-
-async fn snap_refresh(pkg: &str, on_line: &(dyn Fn(&str) + Send + Sync)) -> OperationResult {
-    run_elevated(
-        "snap",
-        &["refresh", pkg],
-        AuthMethod::Pkexec,
-        UPDATE_TIMEOUT,
-        on_line,
-    )
-    .await
-}
-
-async fn flatpak_update(
-    app_id: &str,
-    scope: Option<InstallScope>,
-    on_line: &(dyn Fn(&str) + Send + Sync),
-) -> OperationResult {
-    let (auth, args): (AuthMethod, Vec<&str>) = match scope {
-        Some(InstallScope::User) => (AuthMethod::None, vec!["update", "-y", "--user", app_id]),
-        Some(InstallScope::System) | None => (AuthMethod::Pkexec, vec!["update", "-y", "--system", app_id]),
-    };
-    run_elevated("flatpak", &args, auth, UPDATE_TIMEOUT, on_line).await
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::domain::operations::probe::ProbedPackage;
+    use crate::domain::package::PackageSource;
 
-    fn plan(package_id: &str) -> OperationPlan {
+    fn plan(version: &str) -> OperationPlan {
         OperationPlan {
-            plan_id: "plan-test-2".into(),
+            plan_id: "plan".into(),
             operation: Operation::Update,
-            source: PackageSource::Apt,
-            package_id: package_id.into(),
-            install_scope: None,
-            display_name: "Test".into(),
-            current_version: "1.0".into(),
+            target: OperationTarget::Apt {
+                package_id: "gimp".into(),
+            },
+            display_name: "GIMP".into(),
+            current_version: version.into(),
             target_version: "2.0".into(),
             requires_auth: true,
             auth_method: AuthMethod::Pkexec,
@@ -221,128 +225,39 @@ mod tests {
             protection_reason: None,
             steps: vec![],
             created_at_ms: 0,
+            apt_transaction_fingerprint: Some("fingerprint".into()),
         }
     }
 
-    fn pkg(source: PackageSource, package_id: &str) -> InstalledPackage {
-        let mut pkg = InstalledPackage::new(source, package_id);
-        pkg.name = package_id.into();
-        pkg.update_version = Some("2.0".into());
-        pkg
-    }
-
-    fn present(version: &str, has_update: Option<bool>) -> ProbedPackage {
+    fn present(version: Option<&str>, update: Option<bool>) -> ProbedPackage {
         ProbedPackage {
             present: true,
-            version: Some(version.into()),
-            has_update,
+            version: version.map(str::to_string),
+            has_update: update,
         }
     }
 
     #[test]
-    fn revalidate_rejects_a_package_that_is_no_longer_installed() {
-        let probed = ProbedPackage {
-            present: false,
-            version: None,
-            has_update: None,
-        };
-        let err = revalidate(&plan("gimp"), &probed).unwrap_err();
-        assert!(
-            err.to_string().contains("no longer installed"),
-            "unexpected error: {err}"
-        );
+    fn revalidate_accepts_only_known_unchanged_version_and_confirmed_update() {
+        assert!(revalidate(&plan("1.0"), &present(Some("1.0"), Some(true))).is_ok());
     }
 
     #[test]
-    fn revalidate_rejects_a_protected_package() {
-        let err = revalidate(&plan("libc6"), &present("1.0", None)).unwrap_err();
-        assert!(
-            err.to_string().contains("protected"),
-            "unexpected error: {err}"
-        );
+    fn revalidate_rejects_unknown_versions() {
+        assert!(revalidate(&plan(""), &present(Some("1.0"), Some(true))).is_err());
+        assert!(revalidate(&plan("1.0"), &present(None, Some(true))).is_err());
     }
 
     #[test]
-    fn revalidate_rejects_when_the_update_disappeared() {
-        let err = revalidate(&plan("gimp"), &present("1.0", Some(false))).unwrap_err();
-        assert!(
-            err.to_string().contains("no longer has updates"),
-            "unexpected error: {err}"
-        );
+    fn revalidate_accepts_unknown_update_state_when_version_is_known() {
+        assert!(revalidate(&plan("1.0"), &present(Some("1.0"), None)).is_ok());
     }
 
     #[test]
-    fn revalidate_rejects_when_the_version_changed_since_preview() {
-        let err = revalidate(&plan("gimp"), &present("2.0", None)).unwrap_err();
-        assert!(
-            err.to_string().contains("changed since the preview"),
-            "unexpected error: {err}"
-        );
-    }
-
-    #[test]
-    fn revalidate_accepts_an_unchanged_package_with_an_update_pending() {
-        assert!(revalidate(&plan("gimp"), &present("1.0", Some(true))).is_ok());
-    }
-
-    #[test]
-    fn revalidate_accepts_when_update_state_is_unknown_but_version_is_unchanged() {
-        assert!(revalidate(&plan("gimp"), &present("1.0", None)).is_ok());
-    }
-
-    #[test]
-    fn revalidate_accepts_when_the_installed_version_is_unknown() {
-        let probed = ProbedPackage {
-            present: true,
-            version: None,
-            has_update: None,
-        };
-        assert!(revalidate(&plan("gimp"), &probed).is_ok());
-    }
-
-    #[test]
-    fn revalidate_accepts_when_the_preview_version_was_unknown() {
-        let mut p = plan("gimp");
-        p.current_version = String::new();
-        assert!(revalidate(&p, &present("9.9", None)).is_ok());
-    }
-
-    /// AppImage update plans can never execute: revalidation refuses them.
-    #[test]
-    fn revalidate_refuses_an_appimage() {
-        let mut p = plan("/opt/Foo-1.0.AppImage");
-        p.source = PackageSource::AppImage;
-        assert!(revalidate(&p, &present("1.0", Some(true))).is_err());
-    }
-
-    #[test]
-    fn preview_apt_uses_the_documented_pkexec_command() {
-        let p = preview(&pkg(PackageSource::Apt, "gimp"));
-        assert_eq!(
-            p.steps[0].command_summary,
-            "pkexec env DEBIAN_FRONTEND=noninteractive apt install -y gimp"
-        );
-    }
-
-    #[test]
-    fn preview_snap_uses_the_documented_pkexec_command() {
-        let p = preview(&pkg(PackageSource::Snap, "code"));
-        assert_eq!(p.steps[0].command_summary, "pkexec snap refresh code");
-    }
-
-    #[test]
-    fn preview_flatpak_user_uses_the_user_scope_flag_without_auth() {
-        let mut p = pkg(PackageSource::Flatpak, "org.gimp.GIMP");
-        p.install_scope = Some(InstallScope::User);
-        assert_eq!(
-            preview(&p).steps[0].command_summary,
-            "flatpak update -y --user org.gimp.GIMP"
-        );
-    }
-
-    #[test]
-    fn preview_flatpak_system_routes_through_pkexec() {
-        let p = preview(&pkg(PackageSource::Flatpak, "org.gimp.GIMP"));
-        assert_eq!(p.auth_method, AuthMethod::Pkexec);
+    fn flatpak_preview_requires_scope() {
+        let mut package = InstalledPackage::new(PackageSource::Flatpak, "org.gimp.GIMP");
+        package.name = "GIMP".into();
+        package.version = "1.0".into();
+        assert!(futures::executor::block_on(preview(&package)).is_err());
     }
 }

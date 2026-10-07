@@ -89,11 +89,7 @@ fn main() {
             // while kit boots in Light mode (dark text, light input chrome).
             // Flip to Dark so the search input's text, placeholder, caret,
             // and selection stay visible on our background.
-            gpui_kit::component::Theme::change(
-                gpui_kit::component::ThemeMode::Dark,
-                None,
-                cx,
-            );
+            gpui_kit::component::Theme::change(gpui_kit::component::ThemeMode::Dark, None, cx);
             // Kit input handles its own keymap via init above.
             cx.bind_keys(ui::app_view::key_bindings());
 

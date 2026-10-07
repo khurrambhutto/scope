@@ -6,9 +6,7 @@ use gpui_kit::{
     ClickEvent, FontWeight, Hsla, ImageSource, IntoElement, Resource, SharedString, Window,
 };
 
-use crate::theme::{
-    accent, border, danger, elev, elev2, text, text_dim, text_faint, update_green,
-};
+use crate::theme::{accent, border, danger, elev, elev2, text, text_dim, text_faint, update_green};
 
 pub(super) fn view_toggle_button(
     id: &'static str,
@@ -33,9 +31,8 @@ pub(super) fn view_toggle_button(
             .text_color(rgb(0xffffff))
         })
         .when(!active, |this| {
-            this.text_color(text_dim()).hover(|this| {
-                this.text_color(text()).bg(rgba(0xffffff08))
-            })
+            this.text_color(text_dim())
+                .hover(|this| this.text_color(text()).bg(rgba(0xffffff08)))
         })
         .on_click(on_click)
         .child(label)
@@ -77,7 +74,11 @@ pub(super) fn select_widget(
                     .flex_none(),
             )
         })
-        .child(div().text_color(text_dim()).child(if open { "▴" } else { "▾" }));
+        .child(
+            div()
+                .text_color(text_dim())
+                .child(if open { "▴" } else { "▾" }),
+        );
 
     div()
         .relative()
@@ -229,7 +230,10 @@ pub(super) fn button(
 }
 
 /// One label/value line in the inline detail panel or a plan summary.
-pub(super) fn kv_row(label: impl Into<SharedString>, value: impl Into<SharedString>) -> impl IntoElement {
+pub(super) fn kv_row(
+    label: impl Into<SharedString>,
+    value: impl Into<SharedString>,
+) -> impl IntoElement {
     let (label, value): (SharedString, SharedString) = (label.into(), value.into());
     div()
         .flex()

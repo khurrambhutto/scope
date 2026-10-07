@@ -89,10 +89,9 @@ fn merge_scopes(
             packages,
             Some(format!("flatpak system scan failed: {err:#}")),
         )),
-        (Err(err), Ok(packages)) => Ok((
-            packages,
-            Some(format!("flatpak user scan failed: {err:#}")),
-        )),
+        (Err(err), Ok(packages)) => {
+            Ok((packages, Some(format!("flatpak user scan failed: {err:#}"))))
+        }
         (Err(user_err), Err(system_err)) => {
             Err(user_err.context(format!("flatpak system scan also failed: {system_err}")))
         }
@@ -173,7 +172,10 @@ async fn available_updates(scope: InstallScope) -> HashMap<String, Option<String
         }
         let mut parts = line.split('\t');
         let Some(app_id) = parts.next() else { continue };
-        let version = parts.next().filter(|v| !v.is_empty()).map(|s| s.to_string());
+        let version = parts
+            .next()
+            .filter(|v| !v.is_empty())
+            .map(|s| s.to_string());
         updates.insert(app_id.to_string(), version);
     }
     updates

@@ -29,7 +29,6 @@ impl PackageSource {
             PackageSource::Desktop => "desktop",
         }
     }
-
 }
 
 /// Coarse classification used for filtering/feedback only. Best-effort.
@@ -183,16 +182,23 @@ mod tests {
     #[test]
     fn new_scoped_embeds_the_scope_in_the_key() {
         assert_eq!(
-            InstalledPackage::new_scoped(PackageSource::Flatpak, "org.gimp.GIMP", InstallScope::User)
-                .key,
+            InstalledPackage::new_scoped(
+                PackageSource::Flatpak,
+                "org.gimp.GIMP",
+                InstallScope::User
+            )
+            .key,
             "flatpak:user:org.gimp.GIMP"
         );
     }
 
     #[test]
     fn new_scoped_distinguishes_user_and_system_installs() {
-        let user =
-            InstalledPackage::new_scoped(PackageSource::Flatpak, "org.gimp.GIMP", InstallScope::User);
+        let user = InstalledPackage::new_scoped(
+            PackageSource::Flatpak,
+            "org.gimp.GIMP",
+            InstallScope::User,
+        );
         let system = InstalledPackage::new_scoped(
             PackageSource::Flatpak,
             "org.gimp.GIMP",
@@ -204,8 +210,12 @@ mod tests {
     #[test]
     fn new_scoped_records_the_install_scope() {
         assert_eq!(
-            InstalledPackage::new_scoped(PackageSource::Flatpak, "org.gimp.GIMP", InstallScope::System)
-                .install_scope,
+            InstalledPackage::new_scoped(
+                PackageSource::Flatpak,
+                "org.gimp.GIMP",
+                InstallScope::System
+            )
+            .install_scope,
             Some(InstallScope::System)
         );
     }

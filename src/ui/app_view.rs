@@ -10,13 +10,13 @@ use std::time::Duration;
 
 use futures::channel::{mpsc, oneshot};
 use futures::StreamExt;
+use gpui_kit::component::input::{InputEvent, InputState};
 use gpui_kit::prelude::*;
 use gpui_kit::{
     actions, div, linear_color_stop, linear_gradient, list, px, rgb, AnyElement, App, ClickEvent,
     Context, Entity, IntoElement, KeyBinding, ListAlignment, ListState, Render, Subscription,
-    Window, WeakEntity,
+    WeakEntity, Window,
 };
-use gpui_kit::component::input::{InputEvent, InputState};
 
 use crate::backend::{self, OpKind, OpMsg};
 use crate::domain::operations::{OperationPlan, OperationStage, PlanStore};
@@ -26,6 +26,8 @@ use crate::theme::{self, text, text_faint};
 use super::detail::detail_element;
 use super::dialog::Dialog;
 use super::filters::{OpenSelect, SourceFilter, ViewMode};
+use super::operation_controller::OperationController;
+use super::package_list_model::PackageListModel;
 use super::row::row_element;
 use super::title_bar::title_bar;
 use super::updater::{updater_banner, UpdaterStatus, UpdaterUi};
@@ -80,6 +82,7 @@ pub struct ScopeApp {
     pub(super) selected_key: Option<String>,
     pub(super) open_select: Option<OpenSelect>,
     pub(super) dialog: Option<Dialog>,
+    operation: OperationController,
     pub(super) plans: PlanStore,
     pub(super) updater: UpdaterUi,
     pub(super) updater_busy: bool,
@@ -87,8 +90,7 @@ pub struct ScopeApp {
     pub(super) list_state: ListState,
     /// The currently visible rows, owned so the list's render closure can read
     /// them without cloning the whole filtered set every frame.
-    pub(super) entries: Vec<InstalledPackage>,
-    pub(super) entry_keys: Vec<String>,
+    pub(super) packages: PackageListModel,
     /// Last inputs [`ScopeApp::sync_entries`] rebuilt from; unchanged inputs
     /// skip the rebuild (and its package clones) entirely.
     filter_inputs: Option<FilterInputs>,
@@ -108,14 +110,11 @@ impl ScopeApp {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let search_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Search apps or packages"));
-        let search_change = cx.subscribe(
-            &search_input,
-            |_this, _input, event: &InputEvent, cx| {
-                if matches!(event, InputEvent::Change) {
-                    cx.notify();
-                }
-            },
-        );
+        let search_change = cx.subscribe(&search_input, |_this, _input, event: &InputEvent, cx| {
+            if matches!(event, InputEvent::Change) {
+                cx.notify();
+            }
+        });
 
         // Paint the previous session's list immediately, then always rescan.
         let scan = backend::read_cache();
@@ -133,6 +132,7 @@ impl ScopeApp {
             selected_key: None,
             open_select: None,
             dialog: None,
+            operation: OperationController::default(),
             plans: PlanStore::default(),
             updater: UpdaterUi::default(),
             updater_busy: false,
@@ -140,8 +140,7 @@ impl ScopeApp {
             // and unmeasured rows count as zero height, so without look-ahead
             // the scrollable extent would equal only the visible rows.
             list_state: ListState::new(0, ListAlignment::Top, px(1000.)),
-            entries: Vec::new(),
-            entry_keys: Vec::new(),
+            packages: PackageListModel::default(),
             filter_inputs: None,
             search_blobs: Vec::new(),
             blob_gen: u64::MAX,
@@ -159,19 +158,22 @@ impl ScopeApp {
     }
 
     pub(super) fn start_scan(&mut self, cx: &mut Context<Self>) {
+        let request = self.packages.begin_scan();
         self.refreshing = true;
         self.error = None;
         let (tx, rx) = oneshot::channel::<backend::Scan>();
         std::thread::spawn(move || {
             let scan = backend::scan_blocking();
-            // Cache write happens on this worker thread, not the UI thread.
-            backend::write_cache(&scan);
             let _ = tx.send(scan);
         });
         cx.spawn(async move |this, cx| {
             let scan = rx.await;
             this.update(cx, |this, cx| {
+                if !this.packages.accepts_scan(request) {
+                    return;
+                }
                 if let Ok(scan) = scan {
+                    backend::write_cache(&scan);
                     this.scan = Some(scan);
                     this.scan_gen += 1;
                 }
@@ -196,7 +198,12 @@ impl ScopeApp {
         // inline detail panel, and the one that lost it) for re-measuring,
         // without disturbing the list's scroll offset.
         for changed in [previous.as_deref(), next.as_deref()].into_iter().flatten() {
-            if let Some(index) = self.entries.iter().position(|pkg| pkg.key == changed) {
+            if let Some(index) = self
+                .packages
+                .entries
+                .iter()
+                .position(|pkg| pkg.key == changed)
+            {
                 self.list_state.splice(index..index + 1, 1);
             }
         }
@@ -204,7 +211,7 @@ impl ScopeApp {
         cx.notify();
     }
 
-    /// Keep [`Self::entries`] and the list's item count in sync with the active
+    /// Keep the package list and its item count in sync with the active
     /// filters. Rebuilds only when the query, filters, or scan actually changed,
     /// so a plain re-render never re-clones the package list. Resets the virtual
     /// list only when the visible set actually changed, so a plain rescan keeps
@@ -243,15 +250,15 @@ impl ScopeApp {
         }
 
         let filtered = self.filtered(&query);
-        let keys: Vec<String> = filtered.iter().map(|pkg| pkg.key.clone()).collect();
-        if keys != self.entry_keys {
-            self.entry_keys = keys;
-            self.entries = filtered;
-            self.list_state.reset(self.entries.len());
+        if self.packages.replace(filtered) {
+            self.list_state.reset(self.packages.entries.len());
         }
     }
 
     pub(super) fn open_op(&mut self, kind: OpKind, pkg: InstalledPackage, cx: &mut Context<Self>) {
+        let Some(request) = self.operation.begin_preview() else {
+            return;
+        };
         let (tx, rx) = oneshot::channel::<Result<OperationPlan, String>>();
         backend::spawn_preview(self.plans.clone(), kind, pkg.clone(), tx);
         self.dialog = Some(Dialog::Loading {
@@ -263,8 +270,12 @@ impl ScopeApp {
             let result = rx.await;
             entity
                 .update(cx, |this, cx| {
-                    // Never resurrect a dialog the user already dismissed.
-                    if this.dialog.is_some() {
+                    let plan_id = result
+                        .as_ref()
+                        .ok()
+                        .and_then(|result| result.as_ref().ok())
+                        .map(|plan| plan.plan_id.clone());
+                    if this.operation.accept_preview(request, plan_id) && this.dialog.is_some() {
                         this.dialog = Some(match result {
                             Ok(Ok(plan)) => Dialog::Confirm { kind, pkg, plan },
                             Ok(Err(message)) => Dialog::Failed { kind, pkg, message },
@@ -285,7 +296,7 @@ impl ScopeApp {
     /// Open the operation dialog for a visible row by its stable key. The row
     /// handler captures only the key, so no package is cloned per frame.
     pub(super) fn open_op_by_key(&mut self, kind: OpKind, key: &str, cx: &mut Context<Self>) {
-        let Some(pkg) = self.entries.iter().find(|p| p.key == key).cloned() else {
+        let Some(pkg) = self.packages.entries.iter().find(|p| p.key == key).cloned() else {
             return;
         };
         self.open_op(kind, pkg, cx);
@@ -298,6 +309,9 @@ impl ScopeApp {
         let kind = *kind;
         let pkg = pkg.clone();
         let plan = plan.clone();
+        let Some(request) = self.operation.begin_apply(&plan.plan_id) else {
+            return;
+        };
         self.dialog = Some(Dialog::Running {
             kind,
             pkg: pkg.clone(),
@@ -308,41 +322,54 @@ impl ScopeApp {
         });
 
         let (tx, mut rx) = mpsc::unbounded::<OpMsg>();
-        backend::spawn_apply(self.plans.clone(), plan, tx);
+        backend::spawn_apply(self.plans.clone(), plan.plan_id.clone(), tx);
 
         let entity = cx.entity().downgrade();
         cx.spawn(async move |_this, cx| {
             while let Some(message) = rx.next().await {
                 entity
-                    .update(cx, |this, cx| match message {
-                        OpMsg::Stage(stage) => {
-                            if let Some(Dialog::Running { stage: current, .. }) = &mut this.dialog {
-                                *current = stage;
-                            }
-                            cx.notify();
+                    .update(cx, |this, cx| {
+                        if !this.operation.accepts_apply(request) {
+                            return;
                         }
-                        OpMsg::Log(line) => {
-                            if let Some(Dialog::Running { lines, .. }) = &mut this.dialog {
-                                lines.push(line);
+                        match message {
+                            OpMsg::Stage(stage) => {
+                                if let Some(Dialog::Running { stage: current, .. }) =
+                                    &mut this.dialog
+                                {
+                                    *current = stage;
+                                }
+                                cx.notify();
                             }
-                            cx.notify();
-                        }
-                        OpMsg::Done(result) => {
-                            // Refresh even when the dialog was dismissed
-                            // mid-run, so a successful operation is never lost.
-                            let refresh = result.success;
-                            if matches!(this.dialog, Some(Dialog::Running { .. })) {
-                                this.dialog = Some(Dialog::Done {
-                                    kind,
-                                    pkg: pkg.clone(),
-                                    result,
-                                    show_logs: false,
-                                });
+                            OpMsg::Log(line) => {
+                                if let Some(Dialog::Running { lines, .. }) = &mut this.dialog {
+                                    if lines.len() >= 200 {
+                                        lines.remove(0);
+                                    }
+                                    lines.push(line);
+                                }
+                                cx.notify();
                             }
-                            cx.notify();
-                            if refresh {
-                                this.selected_key = None;
-                                this.start_scan(cx);
+                            OpMsg::Done(result) => {
+                                if !this.operation.finish_apply(request) {
+                                    return;
+                                }
+                                // Refresh even when the dialog was dismissed
+                                // mid-run, so a successful operation is never lost.
+                                let refresh = result.success;
+                                if matches!(this.dialog, Some(Dialog::Running { .. })) {
+                                    this.dialog = Some(Dialog::Done {
+                                        kind,
+                                        pkg: pkg.clone(),
+                                        result,
+                                        show_logs: false,
+                                    });
+                                }
+                                cx.notify();
+                                if refresh {
+                                    this.selected_key = None;
+                                    this.start_scan(cx);
+                                }
                             }
                         }
                     })
@@ -373,6 +400,9 @@ impl ScopeApp {
     }
 
     pub(super) fn close_dialog(&mut self, cx: &mut Context<Self>) {
+        if !self.operation.is_applying() {
+            self.operation.cancel_preview();
+        }
         self.dialog = None;
         cx.notify();
     }
@@ -495,16 +525,16 @@ impl ScopeApp {
 
     /// The virtualized package list, or a loading/empty state.
     fn list_element(&self, list_entity: &Entity<ScopeApp>) -> AnyElement {
-        if self.loading && self.entries.is_empty() {
+        if self.loading && self.packages.entries.is_empty() {
             loading_state().into_any_element()
-        } else if self.entries.is_empty() {
+        } else if self.packages.entries.is_empty() {
             empty_state().into_any_element()
         } else {
             let state = self.list_state.clone();
             let list_entity = list_entity.clone();
             list(state, move |index, _window, cx| {
                 let this = list_entity.read(cx);
-                match this.entries.get(index) {
+                match this.packages.entries.get(index) {
                     Some(pkg) => {
                         let selected = this.selected_key.as_deref() == Some(pkg.key.as_str());
                         let mut column = div().flex().flex_col().w_full();
@@ -561,7 +591,7 @@ impl Render for ScopeApp {
                     .count()
             })
             .unwrap_or(0);
-        let rows_len = self.entries.len();
+        let rows_len = self.packages.entries.len();
 
         let list_element = self.list_element(&list_entity);
 
@@ -576,7 +606,11 @@ impl Render for ScopeApp {
         };
         let show_all_button = super::widgets::view_toggle_button(
             "show-all",
-            if self.show_all { "Show apps" } else { "Show all" },
+            if self.show_all {
+                "Show apps"
+            } else {
+                "Show all"
+            },
             self.show_all,
             act(&entity, |this, cx| {
                 this.show_all = !this.show_all;

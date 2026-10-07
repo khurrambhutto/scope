@@ -15,8 +15,7 @@ pub fn is_listable(pkg: &InstalledPackage) -> bool {
     }
     // Keep discovered AppImages and unmanaged desktop apps visible, but their
     // row action and detail panel explain why Scope cannot remove them.
-    matches!(pkg.source, PackageSource::AppImage | PackageSource::Desktop)
-        || can_uninstall(pkg)
+    matches!(pkg.source, PackageSource::AppImage | PackageSource::Desktop) || can_uninstall(pkg)
 }
 
 /// Apply the optional all-packages override to the default app/tool list policy.

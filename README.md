@@ -16,7 +16,7 @@ Built with Zed's GPUI (Rust binary in `src/`, no webview). Architecture and modu
 
 ## Install
 
-Download the `.deb` from [GitHub Releases](https://github.com/khurrambhutto/scope/releases). The app checks the Releases API on startup and self-updates (`.deb` via `pkexec dpkg -i`; `.rpm`/AppImage installs and unknown installs fall back to the Releases page).
+Download the `.deb` from [GitHub Releases](https://github.com/khurrambhutto/scope/releases). The app checks the Releases API on startup. Packaged builds offer one-click updates only when the release contains the exact architecture-specific artifact plus a minisign-signed `SHA256SUMS` manifest. Other installs open the Releases page.
 
 ```bash
 # Ubuntu / Debian
@@ -67,6 +67,14 @@ cargo clippy
 Run all three checks before submitting. Safety-sensitive backend changes need targeted Rust tests first.
 
 Good first contributions are AppImage auto-update (`src/domain/operations/update.rs`), Snap target versions (`src/domain/scanner/snap.rs`), `.rpm`/AppImage release artifacts (`.github/workflows/release.yml`), and new scanners through the `Scanner` trait (`src/domain/scanner/`).
+
+## Release signing
+
+The release job refuses tags that do not match `Cargo.toml`, hashes every package artifact, and signs `SHA256SUMS` with minisign. Repository variable `SCOPE_UPDATE_PUBLIC_KEY` is compiled into release builds. Repository secret `SCOPE_UPDATE_SECRET_KEY` signs the manifest in GitHub Actions. Never commit the private key.
+
+To rotate keys, generate a new pair, replace both GitHub values before the next release, and publish that release through the normal workflow. Existing builds trust their embedded old key and must update manually across a key rotation.
+
+APT previews run a package-manager simulation and show the transaction impact. Scope rejects any indirect protected removal and repeats the simulation before applying. Flatpak operations fail if the scanner did not provide an explicit user or system scope.
 
 Keep feature logic in domain modules; `main.rs` and `app_view.rs` only compose and wire, `backend.rs` stays a thin orchestration layer. PRs welcome.
 

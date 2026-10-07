@@ -11,7 +11,6 @@ use std::path::{Path, PathBuf};
 use std::pin::Pin;
 
 use anyhow::Result;
-use tokio::fs;
 use walkdir::WalkDir;
 
 use crate::domain::package::{AppKind, InstalledPackage, PackageSource};
@@ -70,39 +69,27 @@ fn dirs() -> Vec<PathBuf> {
 }
 
 async fn scan(dirs: Vec<PathBuf>) -> Result<Vec<InstalledPackage>> {
-    let mut packages = Vec::new();
-    for dir in dirs {
-        // Walk runs on a blocking thread to avoid stalling the async runtime.
-        let dir_clone = dir.clone();
-        let candidates = tokio::task::spawn_blocking(move || {
-            let mut out: Vec<PathBuf> = Vec::new();
-            for entry in WalkDir::new(&dir_clone)
+    Ok(tokio::task::spawn_blocking(move || {
+        let mut packages = Vec::new();
+        for dir in dirs {
+            for entry in WalkDir::new(&dir)
                 .max_depth(3)
                 .into_iter()
                 .filter_entry(|e| !is_hidden(e.path()))
                 .filter_map(Result::ok)
             {
-                let p = entry.path();
-                if p.is_file() && has_appimage_extension(p) {
-                    out.push(p.to_path_buf());
+                let path = entry.path();
+                if path.is_file() && has_appimage_extension(path) && is_appimage(path) {
+                    if let Some(package) = build_package(path) {
+                        packages.push(package);
+                    }
                 }
             }
-            out
-        })
-        .await
-        .unwrap_or_default();
-
-        for path in candidates {
-            // Validate magic bytes before reporting.
-            if !is_appimage(&path).await {
-                continue;
-            }
-            if let Some(pkg) = build_package(&path).await {
-                packages.push(pkg);
-            }
         }
-    }
-    Ok(packages)
+        packages
+    })
+    .await
+    .unwrap_or_default())
 }
 
 fn is_hidden(name: &Path) -> bool {
@@ -120,13 +107,13 @@ fn has_appimage_extension(path: &Path) -> bool {
 }
 
 /// AppImage magic: ELF header + "AI" + type byte (1 or 2) at offset 8..11.
-async fn is_appimage(path: &Path) -> bool {
-    use tokio::io::AsyncReadExt;
-    let Ok(mut file) = fs::File::open(path).await else {
+fn is_appimage(path: &Path) -> bool {
+    use std::io::Read as _;
+    let Ok(mut file) = std::fs::File::open(path) else {
         return false;
     };
     let mut buf = [0u8; 11];
-    if file.read_exact(&mut buf).await.is_err() {
+    if file.read_exact(&mut buf).is_err() {
         return false;
     }
     &buf[0..4] == b"\x7fELF"
@@ -135,12 +122,12 @@ async fn is_appimage(path: &Path) -> bool {
         && (buf[10] == 0x01 || buf[10] == 0x02)
 }
 
-async fn build_package(path: &Path) -> Option<InstalledPackage> {
+fn build_package(path: &Path) -> Option<InstalledPackage> {
     let filename = path.file_name()?.to_string_lossy().to_string();
     let name = extract_name(&filename);
     let version = extract_version(&filename);
 
-    let size_bytes = fs::metadata(path).await.map(|m| m.len()).unwrap_or(0);
+    let size_bytes = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
 
     let mut pkg =
         InstalledPackage::new(PackageSource::AppImage, path.to_string_lossy().to_string());

@@ -1,15 +1,14 @@
 //! Filter enums and the header filter bar: search, view toggle, selects, rescan.
 
-use gpui_kit::prelude::*;
-use gpui_kit::{div, img, px, rems, rgba, AnyElement, Context, ImageSource, Resource};
 use gpui_kit::assets::IconName;
 use gpui_kit::component::{
-    FocusableExt as _,
-    Icon,
     input::{
         InputGroup, InputGroupAddon, InputGroupAddonAlignment, InputGroupInput, InputGroupText,
     },
+    FocusableExt as _, Icon,
 };
+use gpui_kit::prelude::*;
+use gpui_kit::{div, img, px, rems, rgba, AnyElement, Context, ImageSource, Resource};
 
 use crate::domain::package::PackageSource;
 use crate::theme::{accent, border, elev, text, text_dim, text_faint};
@@ -71,7 +70,7 @@ impl ScopeApp {
     /// count suffix. The query state lives in [`ScopeApp::search_input`];
     /// typing emits `InputEvent::Change`, which re-renders the list.
     fn search_box(&self, _cx: &mut Context<Self>) -> impl IntoElement {
-        let shown = self.entries.len();
+        let shown = self.packages.entries.len();
         let count = format!("{shown} result{}", if shown == 1 { "" } else { "s" });
         InputGroup::new("scope-search")
             .focus_ring(false)
@@ -116,17 +115,15 @@ impl ScopeApp {
             .border_1()
             .border_color(border())
             .hover(|this| this.border_color(accent()))
-            .child(
-                view_toggle_button(
-                    "view-uninstall",
-                    "Uninstall",
-                    self.view_mode == ViewMode::Uninstall,
-                    act(&entity, |this, cx| {
-                        this.view_mode = ViewMode::Uninstall;
-                        cx.notify();
-                    }),
-                ),
-            )
+            .child(view_toggle_button(
+                "view-uninstall",
+                "Uninstall",
+                self.view_mode == ViewMode::Uninstall,
+                act(&entity, |this, cx| {
+                    this.view_mode = ViewMode::Uninstall;
+                    cx.notify();
+                }),
+            ))
             .child(view_toggle_button(
                 "view-updates",
                 "Updates",

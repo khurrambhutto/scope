@@ -2,7 +2,10 @@
 //! the app draws its own controls; GPUI drives them through `Window` methods.
 
 use gpui_kit::prelude::*;
-use gpui_kit::{div, img, px, rgb, svg, FontWeight, ImageSource, MouseButton, Resource, Window, WindowControlArea};
+use gpui_kit::{
+    div, img, px, rgb, svg, FontWeight, ImageSource, MouseButton, Resource, Window,
+    WindowControlArea,
+};
 
 use crate::theme::{danger, elev2, text_dim};
 
