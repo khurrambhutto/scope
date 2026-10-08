@@ -18,6 +18,7 @@ pub(super) fn row_element(
     pkg: &InstalledPackage,
     selected: bool,
     view_mode: ViewMode,
+    operation_busy: bool,
     index: usize,
 ) -> AnyElement {
     let title = display_title(pkg);
@@ -35,6 +36,7 @@ pub(super) fn row_element(
             OpKind::Update,
             "Update",
             selected,
+            operation_busy,
         ))
     } else if view_mode == ViewMode::Uninstall {
         Some(if listing::can_uninstall(pkg) {
@@ -44,6 +46,7 @@ pub(super) fn row_element(
                 OpKind::Uninstall,
                 "Uninstall",
                 selected,
+                operation_busy,
             )
         } else {
             unavailable_action_button()
@@ -136,6 +139,7 @@ fn action_button(
     kind: OpKind,
     label: &'static str,
     selected: bool,
+    operation_busy: bool,
 ) -> AnyElement {
     let entity = entity.clone();
     let action_id = match kind {
@@ -157,7 +161,8 @@ fn action_button(
                 .ok();
         },
     )
-    .tab_stop(selected)
+    .disabled(operation_busy)
+    .tab_stop(selected && !operation_busy)
     .into_any_element()
 }
 

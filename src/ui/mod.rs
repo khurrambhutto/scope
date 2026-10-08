@@ -8,6 +8,7 @@ pub mod detail;
 pub mod dialog;
 pub mod filters;
 mod operation_controller;
+mod operation_footer;
 mod package_list_model;
 pub mod row;
 pub mod title_bar;

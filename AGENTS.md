@@ -39,7 +39,8 @@ src/                      GPUI app
     app_view.rs           header, filters, virtualized list, inline detail, dialogs
     filters.rs            search, view toggle, selects, rescan
     row.rs / detail.rs    list row + inline detail panel
-    dialog.rs             uninstall/update dialogs
+    dialog.rs             uninstall/update preview and confirmation
+    operation_footer.rs   inline footer progress and dismissible results
     title_bar.rs          client-side title bar
     text_input.rs         search field
     widgets.rs            banners, empty/loading states
@@ -55,6 +56,7 @@ docs/                     GitHub Pages site
 - `backend.rs` is a thin wrapper: look up state, delegate to `domain/scanner/` / `domain/operations/` / `domain/safety/`, return DTOs.
 - A feature that fits no existing module gets a new small module instead of growing a file past a few hundred lines.
 - Keep screens operational and app-like, never marketing pages.
+- Uninstall/update previews use a modal. Applying and results live between the app count and Show all control in the bottom footer so browsing stays available; only one package operation may apply at a time.
 - UI colors come from `theme.rs`: dark red surfaces, burgundy borders, coral emphasis. Kit-owned controls use `theme::init`; actions share the pill button in `ui/widgets.rs`. Keep source colors confined to app icons and source indicators.
 
 ## GPUI notes

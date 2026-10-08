@@ -27,6 +27,7 @@ use super::detail::detail_element;
 use super::dialog::Dialog;
 use super::filters::{OpenSelect, SourceFilter, ViewMode};
 use super::operation_controller::OperationController;
+use super::operation_footer::{operation_footer, OperationStatus};
 use super::package_list_model::PackageListModel;
 use super::row::row_element;
 use super::title_bar::title_bar;
@@ -83,6 +84,7 @@ pub struct ScopeApp {
     pub(super) open_select: Option<OpenSelect>,
     pub(super) dialog: Option<Dialog>,
     operation: OperationController,
+    pub(super) operation_status: Option<OperationStatus>,
     pub(super) plans: PlanStore,
     pub(super) updater: UpdaterUi,
     pub(super) updater_busy: bool,
@@ -133,6 +135,7 @@ impl ScopeApp {
             open_select: None,
             dialog: None,
             operation: OperationController::default(),
+            operation_status: None,
             plans: PlanStore::default(),
             updater: UpdaterUi::default(),
             updater_busy: false,
@@ -312,14 +315,15 @@ impl ScopeApp {
         let Some(request) = self.operation.begin_apply(&plan.plan_id) else {
             return;
         };
-        self.dialog = Some(Dialog::Running {
+        self.dialog = None;
+        self.operation_status = Some(OperationStatus::Running {
             kind,
             pkg: pkg.clone(),
-            plan: plan.clone(),
+            requires_auth: plan.requires_auth,
             stage: OperationStage::Verifying,
-            lines: Vec::new(),
             elapsed: 0,
         });
+        cx.notify();
 
         let (tx, mut rx) = mpsc::unbounded::<OpMsg>();
         backend::spawn_apply(self.plans.clone(), plan.plan_id.clone(), tx);
@@ -334,40 +338,27 @@ impl ScopeApp {
                         }
                         match message {
                             OpMsg::Stage(stage) => {
-                                if let Some(Dialog::Running { stage: current, .. }) =
-                                    &mut this.dialog
+                                if let Some(OperationStatus::Running { stage: current, .. }) =
+                                    &mut this.operation_status
                                 {
                                     *current = stage;
                                 }
                                 cx.notify();
                             }
-                            OpMsg::Log(line) => {
-                                if let Some(Dialog::Running { lines, .. }) = &mut this.dialog {
-                                    if lines.len() >= 200 {
-                                        lines.remove(0);
-                                    }
-                                    lines.push(line);
-                                }
-                                cx.notify();
-                            }
+                            // Output remains in the backend result for diagnostics.
+                            OpMsg::Log(_line) => {}
                             OpMsg::Done(result) => {
                                 if !this.operation.finish_apply(request) {
                                     return;
                                 }
-                                // Refresh even when the dialog was dismissed
-                                // mid-run, so a successful operation is never lost.
                                 let refresh = result.success;
-                                if matches!(this.dialog, Some(Dialog::Running { .. })) {
-                                    this.dialog = Some(Dialog::Done {
-                                        kind,
-                                        pkg: pkg.clone(),
-                                        result,
-                                        show_logs: false,
-                                    });
-                                }
+                                this.operation_status = Some(OperationStatus::Done {
+                                    kind,
+                                    pkg: pkg.clone(),
+                                    result,
+                                });
                                 cx.notify();
                                 if refresh {
-                                    this.selected_key = None;
                                     this.start_scan(cx);
                                 }
                             }
@@ -383,7 +374,12 @@ impl ScopeApp {
             cx.background_executor().timer(Duration::from_secs(1)).await;
             let running = entity
                 .update(cx, |this, cx| {
-                    if let Some(Dialog::Running { elapsed, .. }) = &mut this.dialog {
+                    if !this.operation.accepts_apply(request) {
+                        return false;
+                    }
+                    if let Some(OperationStatus::Running { elapsed, .. }) =
+                        &mut this.operation_status
+                    {
                         *elapsed += 1;
                         cx.notify();
                         true
@@ -553,6 +549,7 @@ impl ScopeApp {
                             pkg,
                             selected,
                             this.view_mode,
+                            this.operation.is_applying(),
                             index,
                         ));
                         if selected {
@@ -639,6 +636,11 @@ impl Render for ScopeApp {
             }),
         );
 
+        let operation_footer = self
+            .operation_status
+            .as_ref()
+            .map(|status| operation_footer(&entity, status));
+
         let dialog_el: Option<AnyElement> = if self.dialog.is_some() {
             Some(self.dialog_element(&entity, corner_radius))
         } else {
@@ -721,14 +723,24 @@ impl Render for ScopeApp {
                 div()
                     .flex_none()
                     .px(px(32.))
-                    .py(px(10.))
+                    .py(px(12.))
+                    .min_h(px(72.))
                     .flex()
                     .items_center()
                     .justify_between()
+                    .gap(px(16.))
                     .text_size(px(12.))
                     .text_color(text_faint())
-                    .child(footer)
-                    .child(show_all_button),
+                    .child(div().flex_none().w(px(136.)).child(footer))
+                    .when_some(operation_footer, |this, status| this.child(status))
+                    .child(
+                        div()
+                            .flex_none()
+                            .w(px(136.))
+                            .flex()
+                            .justify_end()
+                            .child(show_all_button),
+                    ),
             )
             .when_some(dropdown_backdrop, |this, backdrop| this.child(backdrop))
             .when_some(dialog_el, |this, dialog| this.child(dialog))

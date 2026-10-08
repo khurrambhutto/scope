@@ -11,7 +11,7 @@ use gpui_kit::{
     Window,
 };
 
-use crate::theme::{self, border, elev, elev2, text, text_dim, text_faint};
+use crate::theme::{self, border, elev2, text, text_dim, text_faint};
 
 pub(super) fn view_toggle_button(
     id: &'static str,
@@ -155,7 +155,6 @@ pub(super) enum BannerKind {
     Error,
     Warn,
     Ok,
-    Muted,
 }
 
 pub(super) fn banner(message: &str, kind: BannerKind) -> impl IntoElement {
@@ -167,7 +166,6 @@ pub(super) fn banner(message: &str, kind: BannerKind) -> impl IntoElement {
         ),
         BannerKind::Warn => (elev2(), theme::border_hover(), text()),
         BannerKind::Ok => (elev2(), border(), text()),
-        BannerKind::Muted => (elev(), border(), text_dim()),
     };
     div()
         .px(px(14.))

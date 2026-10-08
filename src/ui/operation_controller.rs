@@ -81,4 +81,34 @@ mod tests {
         controller.begin_apply("plan").unwrap();
         assert!(controller.begin_preview().is_none());
     }
+
+    #[test]
+    fn closing_a_dialog_does_not_cancel_a_background_apply() {
+        let mut controller = OperationController::default();
+        let preview = controller.begin_preview().unwrap();
+        controller.accept_preview(preview, Some("plan".into()));
+        let apply = controller.begin_apply("plan").unwrap();
+
+        controller.cancel_preview();
+
+        assert!(controller.accepts_apply(apply));
+        assert!(controller.finish_apply(apply));
+        assert!(controller.begin_preview().is_some());
+    }
+
+    #[test]
+    fn previous_apply_events_and_timer_ticks_cannot_affect_the_next_operation() {
+        let mut controller = OperationController::default();
+        let preview = controller.begin_preview().unwrap();
+        controller.accept_preview(preview, Some("first".into()));
+        let first = controller.begin_apply("first").unwrap();
+        controller.finish_apply(first);
+        let preview = controller.begin_preview().unwrap();
+        controller.accept_preview(preview, Some("second".into()));
+        let second = controller.begin_apply("second").unwrap();
+
+        assert!(!controller.accepts_apply(first));
+        assert!(!controller.finish_apply(first));
+        assert!(controller.accepts_apply(second));
+    }
 }
