@@ -3,12 +3,18 @@
 //! Small module so `app_view.rs` stays composition-only: this owns the
 //! updater status machine, `app_view` owns the async pumps that drive it.
 
+use gpui_kit::assets::IconName;
+use gpui_kit::component::{
+    button::{Button, ButtonVariants},
+    Disableable, Icon,
+};
 use gpui_kit::prelude::*;
-use gpui_kit::{div, px, AnyElement, IntoElement, SharedString};
+use gpui_kit::{div, px, AnyElement, FontWeight, IntoElement, SharedString};
 
 use crate::domain::operations::OperationResult;
-use crate::domain::updater::UpdateCheck;
-use crate::ui::widgets::{banner, button, BannerKind, ButtonStyle};
+use crate::domain::updater::{InstallKind, UpdateCheck, RELEASES_URL};
+use crate::theme;
+use crate::ui::widgets::{button, progress_bar, ButtonStyle};
 
 /// The updater lifecycle. Each phase carries exactly the data it needs, so an
 /// "available" banner cannot render without a check and a finished banner cannot
@@ -54,10 +60,10 @@ impl UpdaterUi {
 
     pub fn title(&self) -> SharedString {
         match &self.status {
-            UpdaterStatus::Available(_) => "A new version of Scope is available".into(),
-            UpdaterStatus::Installing { .. } => "Installing update…".into(),
-            UpdaterStatus::Ready { .. } => "Update ready".into(),
-            UpdaterStatus::Error { .. } => "Update failed".into(),
+            UpdaterStatus::Available(_) => "Scope update available".into(),
+            UpdaterStatus::Installing { .. } => "Updating Scope…".into(),
+            UpdaterStatus::Ready { .. } => "Scope update installed".into(),
+            UpdaterStatus::Error { .. } => "Could not update Scope".into(),
             _ => "".into(),
         }
     }
@@ -65,29 +71,19 @@ impl UpdaterUi {
     pub fn body(&self) -> String {
         match &self.status {
             UpdaterStatus::Available(check) => {
-                let mut s = format!("{} → {}", check.current, check.latest);
                 if !check.can_self_update {
-                    s.push_str(&format!(
-                        "\nThis install can't update itself. Download from {}",
-                        check.url
-                    ));
-                } else if check.kind == crate::domain::updater::InstallKind::Deb
-                    || check.kind == crate::domain::updater::InstallKind::Rpm
-                {
-                    s.push_str("\nYour desktop will ask for your administrator password.");
-                }
-                if !check.notes.is_empty() {
-                    let first: String = check.notes.lines().take(3).collect::<Vec<_>>().join("\n");
-                    s.push_str(&format!("\n{first}"));
-                }
-                s
-            }
-            UpdaterStatus::Installing { check, lines } => {
-                if lines.is_empty() {
-                    format!("Downloading {}…", check.latest)
+                    "Download the latest version to update this installation.".to_string()
+                } else if matches!(check.kind, InstallKind::Deb | InstallKind::Rpm) {
+                    "Your desktop will ask for your administrator password.".to_string()
                 } else {
-                    lines.last().cloned().unwrap_or_default()
+                    "Install the latest version, then restart Scope.".to_string()
                 }
+            }
+            UpdaterStatus::Installing { check, .. } => {
+                format!(
+                    "Installing version {}. You can keep browsing.",
+                    check.latest
+                )
             }
             UpdaterStatus::Ready { message } | UpdaterStatus::Error { message } => message.clone(),
             _ => String::new(),
@@ -127,7 +123,7 @@ impl UpdaterUi {
     pub fn finish(&mut self, result: OperationResult) {
         self.status = if result.success {
             UpdaterStatus::Ready {
-                message: format!("{}. Restart Scope to use the new version.", result.message),
+                message: "Restart Scope to use the new version.".to_string(),
             }
         } else {
             UpdaterStatus::Error {
@@ -145,46 +141,130 @@ pub fn updater_banner(
     on_update: impl Fn(&gpui_kit::ClickEvent, &mut gpui_kit::Window, &mut gpui_kit::App) + 'static,
     on_dismiss: impl Fn(&gpui_kit::ClickEvent, &mut gpui_kit::Window, &mut gpui_kit::App) + 'static,
 ) -> AnyElement {
-    let kind = match ui.status {
-        UpdaterStatus::Error { .. } => BannerKind::Error,
-        UpdaterStatus::Ready { .. } => BannerKind::Ok,
-        _ => BannerKind::Warn,
+    let installing = matches!(ui.status, UpdaterStatus::Installing { .. });
+    let icon = match ui.status {
+        UpdaterStatus::Ready { .. } => IconName::Check,
+        UpdaterStatus::Error { .. } => IconName::CircleAlert,
+        _ => IconName::RefreshCw,
     };
-    let text = format!("{}\n{}", ui.title(), ui.body());
-    let show_update = matches!(ui.status, UpdaterStatus::Available(_))
-        && ui.available().is_some_and(|c| c.can_self_update)
-        && can_act;
-    let action_label: &'static str = match ui.status {
-        UpdaterStatus::Available(_) => "Update",
-        UpdaterStatus::Ready { .. } | UpdaterStatus::Error { .. } => "Dismiss",
-        UpdaterStatus::Installing { .. } => "Working…",
-        _ => "Dismiss",
-    };
+    let mut actions = div().flex_none().flex().items_center().gap(px(8.));
+    if let Some(check) = ui.available() {
+        if !check.notes.trim().is_empty() {
+            let notes_url = format!("{RELEASES_URL}/tag/v{}", check.latest);
+            actions = actions.child(
+                Button::new("updater-notes")
+                    .label("Release notes")
+                    .ghost()
+                    .rounded(px(18.))
+                    .h(px(34.))
+                    .px(px(12.))
+                    .text_size(px(13.))
+                    .on_click(move |_, _, cx| cx.open_url(&notes_url)),
+            );
+        }
+        if check.can_self_update {
+            actions = actions.child(
+                button(
+                    "updater-apply",
+                    "Update Scope",
+                    ButtonStyle::Update,
+                    on_update,
+                )
+                .disabled(!can_act),
+            );
+        } else {
+            let url = check.url.clone();
+            actions = actions.child(button(
+                "updater-download",
+                "Download",
+                ButtonStyle::Update,
+                move |_, _, cx| cx.open_url(&url),
+            ));
+        }
+    }
+    if !installing {
+        actions = actions.child(
+            Button::new("updater-dismiss")
+                .ghost()
+                .icon(IconName::Close)
+                .accessibility_label("Dismiss Scope update notice")
+                .size(px(28.))
+                .rounded_full()
+                .text_color(theme::text_dim())
+                .on_click(on_dismiss),
+        );
+    }
+
     div()
+        .id("self-update-notice")
         .mx(px(32.))
         .mt(px(10.))
-        .child(banner(&text, kind))
+        .mb(px(12.))
+        .p(px(16.))
+        .rounded(px(18.))
+        .bg(theme::elev())
+        .flex()
+        .flex_col()
+        .gap(px(14.))
         .child(
             div()
                 .flex()
-                .justify_end()
-                .gap(px(10.))
-                .mt(px(8.))
-                .child(button(
-                    "updater-dismiss",
-                    "Later",
-                    ButtonStyle::Neutral,
-                    on_dismiss,
-                ))
-                .when(show_update, |this| {
-                    this.child(button(
-                        "updater-apply",
-                        action_label,
-                        ButtonStyle::Update,
-                        on_update,
-                    ))
-                }),
+                .items_center()
+                .gap(px(14.))
+                .child(
+                    div()
+                        .flex_none()
+                        .size(px(34.))
+                        .rounded_full()
+                        .bg(theme::selected_surface())
+                        .text_color(theme::accent_text())
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(Icon::new(icon).size(px(17.))),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w(px(0.))
+                        .flex()
+                        .flex_col()
+                        .gap(px(5.))
+                        .child(
+                            div()
+                                .flex()
+                                .flex_wrap()
+                                .items_center()
+                                .gap(px(10.))
+                                .child(
+                                    div()
+                                        .text_size(px(14.))
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(theme::text())
+                                        .child(ui.title()),
+                                )
+                                .when_some(ui.available(), |this, check| {
+                                    this.child(
+                                        div()
+                                            .text_size(px(12.))
+                                            .text_color(theme::accent_text())
+                                            .child(format!("{} → {}", check.current, check.latest)),
+                                    )
+                                }),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(12.))
+                                .line_height(px(18.))
+                                .text_color(theme::text_dim())
+                                .child(ui.body()),
+                        ),
+                )
+                .child(actions),
         )
+        .when(installing, |this| {
+            this.child(progress_bar("self-update-progress"))
+        })
         .into_any_element()
 }
 
@@ -279,5 +359,19 @@ mod tests {
             exit_code: Some(1),
         });
         assert_eq!(ui.body(), "boom");
+    }
+
+    #[test]
+    fn installing_keeps_command_output_out_of_the_notice() {
+        let mut ui = UpdaterUi {
+            status: UpdaterStatus::Available(check()),
+        };
+        ui.begin_install();
+        ui.push_line("[scope] Running: pkexec dpkg -i /tmp/update.deb".into());
+
+        assert_eq!(
+            ui.body(),
+            "Installing version 0.4.0. You can keep browsing."
+        );
     }
 }

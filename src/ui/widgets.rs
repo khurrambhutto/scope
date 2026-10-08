@@ -7,8 +7,8 @@ use gpui_kit::component::{
 };
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    deferred, div, px, AnyElement, App, ClickEvent, FontWeight, Hsla, IntoElement, SharedString,
-    Window,
+    deferred, div, px, relative, AnyElement, App, ClickEvent, FontWeight, Hsla, IntoElement,
+    SharedString, Window,
 };
 
 use crate::theme::{self, border, elev2, text, text_dim, text_faint};
@@ -154,7 +154,6 @@ pub(super) fn loading_state() -> impl IntoElement {
 pub(super) enum BannerKind {
     Error,
     Warn,
-    Ok,
 }
 
 pub(super) fn banner(message: &str, kind: BannerKind) -> impl IntoElement {
@@ -165,7 +164,6 @@ pub(super) fn banner(message: &str, kind: BannerKind) -> impl IntoElement {
             theme::accent_text(),
         ),
         BannerKind::Warn => (elev2(), theme::border_hover(), text()),
-        BannerKind::Ok => (elev2(), border(), text()),
     };
     div()
         .px(px(14.))
@@ -247,4 +245,31 @@ pub(super) fn dialog_actions(children: Vec<AnyElement>) -> impl IntoElement {
         .gap(px(10.))
         .mt(px(18.))
         .children(children)
+}
+
+/// Package managers expose stages, but no reliable completion percentage.
+pub(super) fn progress_bar(id: &'static str) -> impl IntoElement {
+    use gpui_kit::{Animation, AnimationExt};
+
+    div()
+        .w_full()
+        .h(px(4.))
+        .relative()
+        .overflow_hidden()
+        .rounded_full()
+        .bg(theme::border())
+        .child(
+            div()
+                .absolute()
+                .top_0()
+                .h_full()
+                .w(relative(0.3))
+                .rounded_full()
+                .bg(theme::accent())
+                .with_animation(
+                    id,
+                    Animation::new(std::time::Duration::from_millis(1500)).repeat(),
+                    |this, delta| this.left(relative(-0.3 + delta * 1.3)),
+                ),
+        )
 }

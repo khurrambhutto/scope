@@ -440,6 +440,7 @@ impl ScopeApp {
             return;
         };
         self.updater_busy = true;
+        cx.notify();
         let (tx, mut rx) = mpsc::unbounded::<OpMsg>();
         backend::spawn_updater_install(check, tx);
         let entity = cx.entity().downgrade();

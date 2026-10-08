@@ -1,7 +1,5 @@
 //! Compact package operation status embedded in the app footer.
 
-use std::time::Duration;
-
 use gpui_kit::assets::IconName;
 use gpui_kit::component::{
     button::{Button, ButtonVariants},
@@ -16,6 +14,7 @@ use crate::domain::package::InstalledPackage;
 use crate::theme;
 
 use super::app_view::{act, ScopeApp};
+use super::widgets::progress_bar;
 
 pub(super) enum OperationStatus {
     Running {
@@ -132,7 +131,12 @@ pub(super) fn operation_footer(
                 }),
         )
         .when(running, |this| {
-            this.child(div().flex_1().min_w(px(0.)).child(progress_bar()))
+            this.child(
+                div()
+                    .flex_1()
+                    .min_w(px(0.))
+                    .child(progress_bar("operation-progress")),
+            )
         });
     if let OperationStatus::Running { elapsed, .. } = status {
         row = row.child(
@@ -175,33 +179,6 @@ pub(super) fn operation_footer(
         .flex_col()
         .child(row)
         .into_any_element()
-}
-
-/// Package managers expose stages, but no reliable completion percentage.
-fn progress_bar() -> impl IntoElement {
-    use gpui_kit::{Animation, AnimationExt};
-
-    div()
-        .w_full()
-        .h(px(4.))
-        .relative()
-        .overflow_hidden()
-        .rounded_full()
-        .bg(theme::border())
-        .child(
-            div()
-                .absolute()
-                .top_0()
-                .h_full()
-                .w(relative(0.3))
-                .rounded_full()
-                .bg(theme::accent())
-                .with_animation(
-                    "operation-progress",
-                    Animation::new(Duration::from_millis(1500)).repeat(),
-                    |this, delta| this.left(relative(-0.3 + delta * 1.3)),
-                ),
-        )
 }
 
 /// A dismissed Polkit prompt comes back as exit 126 rather than an error.
