@@ -132,7 +132,7 @@ jobs:
           }
           umask 077
           printf '%s\n' "$SCOPE_UPDATE_SECRET_KEY" > "$RUNNER_TEMP/scope-minisign.key"
-          sha256sum scope_*_amd64.deb Scope-*_x86_64.AppImage > SHA256SUMS
+          sha256sum scope_*_amd64.deb Scope-*-x86_64.AppImage > SHA256SUMS
           minisign -S -s "$RUNNER_TEMP/scope-minisign.key" -m SHA256SUMS -x SHA256SUMS.minisig
           printf '%s\n' "$SCOPE_UPDATE_PUBLIC_KEY" > "$RUNNER_TEMP/scope-minisign.pub"
           minisign -V -p "$RUNNER_TEMP/scope-minisign.pub" -m SHA256SUMS -x SHA256SUMS.minisig
@@ -148,6 +148,6 @@ jobs:
           generate_release_notes: true
           files: |
             scope_*_amd64.deb
-            Scope-*_x86_64.AppImage
+            Scope-*-x86_64.AppImage
             SHA256SUMS
             SHA256SUMS.minisig
