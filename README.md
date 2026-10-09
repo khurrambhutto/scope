@@ -1,32 +1,40 @@
 <p align="center">
-  <img src="assets/scope-logo.svg" alt="Scope" width="96" />
+  <img src="assets/scope-logo.svg" alt="Scope logo" width="96" />
 </p>
 
 <h1 align="center">Scope</h1>
 
 <p align="center"><strong>See, update, and uninstall every app on your Linux system in one place.</strong></p>
 
-Scope brings APT, Snap, Flatpak, AppImages, and user-local desktop apps into one searchable list. Update or uninstall supported apps after reviewing a preview of the operation. Privileged actions use the standard Polkit dialog, so Scope never handles your password.
+<p align="center">
+  <a href="https://khurrambhutto.github.io/scope/">Website</a> ·
+  <a href="https://github.com/khurrambhutto/scope/releases">Releases</a> ·
+  <a href="https://github.com/khurrambhutto/scope/issues">Issues</a>
+</p>
+
+Scope puts apps from APT, Snap, Flatpak, AppImage, and user-local desktop launchers into one searchable list. You can update or uninstall supported apps, and you see the exact commands before anything runs. Privileged steps go through the standard Polkit dialog, so Scope never sees your password.
 
 <p align="center">
   <img src="docs/image.png" alt="Scope v0.3.4 showing the Apps and Updates toggle, installed apps, search, source filter, and Show all control in its dark red interface" width="960" />
 </p>
 
-Built with Zed's GPUI (Rust binary in `src/`, no webview). Architecture and module rules live in [AGENTS.md](AGENTS.md).
+Scope is written in Rust with Zed's GPUI. It has no webview. Architecture and module rules live in [AGENTS.md](AGENTS.md).
 
 ## Install
 
-Current release: [v0.3.4](https://github.com/khurrambhutto/scope/releases/tag/v0.3.4).
+The current release is [v0.3.4](https://github.com/khurrambhutto/scope/releases/tag/v0.3.4). Scope targets Ubuntu on x86-64 first.
 
-Download [scope_0.3.4_amd64.deb](https://github.com/khurrambhutto/scope/releases/download/v0.3.4/scope_0.3.4_amd64.deb) for Ubuntu on x86-64, then run this command from the download directory:
+Download [scope_0.3.4_amd64.deb](https://github.com/khurrambhutto/scope/releases/download/v0.3.4/scope_0.3.4_amd64.deb), then run this from the download folder:
 
 ```bash
 sudo apt install ./scope_0.3.4_amd64.deb
 ```
 
-Scope checks GitHub Releases on startup. Official `.deb` builds from v0.3.4 can install updates after verifying the signed checksum manifest. Install v0.3.4 manually when upgrading from an earlier version without an embedded verification key. Other install types open the Releases page when a compatible verified package is unavailable.
+Scope checks GitHub Releases on startup. Official `.deb` builds from v0.3.4 can install later updates after verifying a signed checksum manifest. If you upgrade from an older version that has no embedded verification key, install v0.3.4 by hand. Other install types open the Releases page when no verified package is available.
 
-To build from source, install Rust stable and the Linux dependencies, then clone the repository:
+### Build from source
+
+Install Rust stable and the Linux build dependencies, then clone and run the app:
 
 ```bash
 sudo apt install build-essential pkg-config libfontconfig1-dev libx11-dev libx11-xcb-dev \
@@ -36,33 +44,60 @@ cd scope
 cargo run
 ```
 
-## How it works
+## Using Scope
 
-Use the centered **Apps / Updates** toggle to switch between installed apps and available updates. Search by app or package name, filter by source, or refresh to rescan. Select a row for details and supported actions.
+Use the **Apps / Updates** toggle at the top to switch between installed apps and available updates. Search by app or package name, filter by source, or refresh to rescan. Select a row to see its details and the actions it supports.
 
-The default list shows recognizable GUI apps and command-line tools. AppImages and user-local desktop apps appear for discovery, with update and uninstall disabled. **Show all** in the footer reveals every row returned by the scanners, including libraries and system components. APT scans manual installs only, and Snap and Flatpak runtimes remain excluded. Protected packages cannot be uninstalled, even with Show all enabled.
+The default list shows GUI apps and command-line tools that you would expect to manage. AppImages and user-local desktop launchers appear for discovery only, and their update and uninstall actions are disabled.
 
-Update and uninstall follow the same flow. Scope builds a plan showing exactly what will run and waits for your confirmation. The backend then revalidates the package against the live system and executes. Commands that need root trigger the standard system password dialog. System-critical packages are deny-listed in the backend and cannot be removed through Scope.
+Turn on **Show all** in the footer to see every row the scanners return, including libraries and system components. Show all does not bypass safety checks. Protected packages stay locked even when it is on.
+
+Every update or uninstall follows the same steps:
+
+1. Scope builds a plan that lists the exact commands.
+2. You review the plan and confirm it.
+3. Scope checks the package against the live system.
+4. Scope runs the command and streams the log to the footer.
+
+Only one package operation can run at a time.
+
+## Supported sources
+
+| Source | Scanned | Uninstall | Update |
+| --- | --- | --- | --- |
+| APT | Manual installs only | `apt remove` | `apt install` |
+| Snap | Apps only, runtimes hidden | `snap remove` | `snap refresh` |
+| Flatpak | User and system installs, scoped separately | `flatpak uninstall` | `flatpak update` |
+| AppImage | Common locations | Not yet supported | Not yet supported |
+| Desktop launchers | Launchers no package manager owns | Disabled | Disabled |
+
+Scope runs each package manager's own command. It never edits dpkg or apt databases directly.
 
 ## Status
 
-Works today:
+What works today:
 
-- App/tool list across APT (manual app/tool installs), Snap (runtimes hidden), Flatpak (user and system scoped), detected AppImages, and unmanaged user desktop launchers (uninstall disabled)
-- Desktop-entry enrichment and freedesktop icon theme resolution
-- Uninstall with preview, Polkit auth, and a protected-package deny-list
-- Update with preview for APT, Snap, and Flatpak
-- Rounded window with a centered Apps / Updates toggle and consistent dark red controls
-- Self-updater with signed checksum verification for official `.deb` builds
-- `.deb` releases with a signed SHA-256 manifest, targeting Ubuntu first
+- One list across APT, Snap, Flatpak, AppImages, and unmanaged desktop launchers
+- Display names, categories, and icons from desktop entries and the freedesktop icon theme
+- Uninstall with a preview, Polkit authentication, and a deny-list for protected packages
+- Update with a preview for APT, Snap, and Flatpak
+- A self-updater that verifies signed checksums for official `.deb` builds
 
-Not yet:
+What is not done yet:
 
-- `.rpm` releases (installs of that kind fall back to manual download)
+- `.rpm` release packages (these installs fall back to a manual download)
 - AppImage uninstall and update
-- Snap target version in the update preview
+- Snap target versions in the update preview
 - Whole-system cleanup and disk usage views
 - Fedora and Arch package-manager support
+
+## Safety
+
+- **Preview first.** Every destructive action builds a plan. Applying a plan works only once, and a plan expires after five minutes.
+- **Revalidate before running.** Scope checks that the package is still present, that an update's version has not changed, and that the deny-list still allows the action. If it cannot verify the state, it stops.
+- **Simulate APT first.** Each APT transaction runs in a simulation. Scope rejects any removal that would take a protected package with it, and it repeats the simulation right before applying.
+- **Protect system packages.** The deny-list covers critical APT packages, kernel images, Snap runtimes, and AppImage paths outside the allow-list.
+- **Use Trash.** Deleted files go to the Trash through `gio trash`, with a manual fallback to `~/.local/share/Trash`.
 
 ## Development
 
@@ -73,19 +108,26 @@ cargo test
 cargo clippy
 ```
 
-Run all three checks before submitting. Safety-sensitive backend changes need targeted Rust tests first.
+Run all four before you open a pull request. Changes to the backend's safety code, such as probing, revalidation, the deny-list, or the plan store, need targeted Rust tests in the same change.
 
-Good first contributions are AppImage auto-update (`src/domain/operations/update.rs`), Snap target versions (`src/domain/scanner/snap.rs`), `.rpm` release artifacts (`.github/workflows/release.yml`), and new scanners through the `Scanner` trait (`src/domain/scanner/`).
+Good first contributions:
 
-## Release signing
+- AppImage auto-update in `src/domain/operations/update.rs`
+- Snap target versions in `src/domain/scanner/snap.rs`
+- `.rpm` release artifacts in `.github/workflows/release.yml`
+- New scanners that implement the `Scanner` trait in `src/domain/scanner/`
 
-The release job refuses tags that do not match `Cargo.toml`, hashes every package artifact, and signs `SHA256SUMS` with minisign. Repository variable `SCOPE_UPDATE_PUBLIC_KEY` is compiled into release builds. Repository secret `SCOPE_UPDATE_SECRET_KEY` signs the manifest in GitHub Actions. Never commit the private key.
+Keep feature logic in domain modules. `main.rs` and `ui/app_view.rs` only compose and wire. `backend.rs` stays a thin orchestration layer.
 
-To rotate keys, generate a new pair, replace both GitHub values before the next release, and publish that release through the normal workflow. Existing builds trust their embedded old key and must update manually across a key rotation.
+## Releases and signing
 
-APT previews run a package-manager simulation and show the transaction impact. Scope rejects any indirect protected removal and repeats the simulation before applying. Flatpak operations fail if the scanner did not provide an explicit user or system scope.
+The release workflow refuses tags that do not match `Cargo.toml`. It hashes every package artifact and signs `SHA256SUMS` with minisign. The public key comes from the `SCOPE_UPDATE_PUBLIC_KEY` repository variable and is compiled into release builds. The private key lives only in the `SCOPE_UPDATE_SECRET_KEY` repository secret. Never commit it.
 
-Keep feature logic in domain modules; `main.rs` and `app_view.rs` only compose and wire, `backend.rs` stays a thin orchestration layer. PRs welcome.
+To rotate keys, generate a new pair, replace both GitHub values, and publish a release through the normal workflow. Existing builds trust the key they were built with, so users on those builds must update by hand across a rotation.
+
+## Contributing
+
+Pull requests are welcome. Please keep commits in conventional form (`feat:`, `fix:`, `docs:`, `chore:`, `style:`), and keep each change limited to what it needs.
 
 ## License
 

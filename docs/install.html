@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>How to install Scope on Ubuntu, and how to remove it</title>
+  <meta name="description" content="Install Scope, the Linux app manager, on Ubuntu with one apt command. Build from source, check the signed release, and remove Scope with apt.">
+  <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+  <meta name="author" content="Khurram Bhutto">
+  <meta name="theme-color" content="#211719">
+  <link rel="canonical" href="https://khurrambhutto.github.io/scope/install.html">
+  <link rel="icon" href="favicon.png" type="image/png" sizes="256x256">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://khurrambhutto.github.io/scope/install.html">
+  <meta property="og:title" content="How to install Scope on Ubuntu, and how to remove it">
+  <meta property="og:description" content="Install Scope on Ubuntu with one apt command, or build it from source.">
+  <meta property="og:image" content="https://khurrambhutto.github.io/scope/image.png">
+  <meta property="og:site_name" content="Scope">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://khurrambhutto.github.io/scope/image.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="styles.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to install Scope on Ubuntu",
+    "description": "Install the Scope Linux app manager from its .deb release with apt.",
+    "url": "https://khurrambhutto.github.io/scope/install.html",
+    "tool": ["apt"],
+    "totalTime": "PT2M",
+    "step": [
+      {
+        "@type": "HowToStep",
+        "name": "Download the .deb",
+        "text": "Download scope_0.3.4_amd64.deb from the Scope v0.3.4 release on GitHub.",
+        "url": "https://github.com/khurrambhutto/scope/releases/tag/v0.3.4"
+      },
+      {
+        "@type": "HowToStep",
+        "name": "Install with apt",
+        "text": "Run sudo apt install ./scope_0.3.4_amd64.deb from the folder that holds the download."
+      },
+      {
+        "@type": "HowToStep",
+        "name": "Open Scope",
+        "text": "Start Scope from the application menu. It scans your sources when it opens."
+      }
+    ]
+  }
+  </script>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="page">
+      <a class="wordmark" href="index.html">
+        <img src="scope-logo.svg" width="26" height="26" alt="">
+        Scope
+      </a>
+      <nav class="site-nav" aria-label="Primary">
+        <a href="index.html#how">How it works</a>
+        <a href="index.html#sources">Sources</a>
+        <a href="install.html" aria-current="page">Install</a>
+        <a href="safety.html">Safety</a>
+        <a href="index.html#faq">FAQ</a>
+        <a class="nav-github" href="https://github.com/khurrambhutto/scope" target="_blank" rel="noopener noreferrer">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <header class="page-head">
+      <div class="page">
+        <p class="crumbs"><a href="index.html">Scope</a> / Install</p>
+        <h1>Install Scope on Ubuntu</h1>
+        <p class="lead">One apt command installs Scope from the official .deb. This page also covers building from source and removing Scope.</p>
+      </div>
+    </header>
+
+    <div class="page doc">
+      <article>
+        <h2 id="install-deb">Install the .deb</h2>
+        <p>Scope targets Ubuntu on x86-64. Download the package for the current release, then install it from the folder that holds the file.</p>
+        <ol>
+          <li>Download <a href="https://github.com/khurrambhutto/scope/releases/download/v0.3.4/scope_0.3.4_amd64.deb" style="color:var(--coral)">scope_0.3.4_amd64.deb</a> from the <a href="https://github.com/khurrambhutto/scope/releases/tag/v0.3.4" style="color:var(--coral)">v0.3.4 release</a>.</li>
+          <li>Open a terminal in the download folder and run:</li>
+        </ol>
+        <div class="command">
+          <button class="copy-button" type="button" data-copy="sudo apt install ./scope_0.3.4_amd64.deb">Copy</button>
+          <span class="prompt">$ </span>sudo apt install ./scope_0.3.4_amd64.deb
+        </div>
+        <p>Start Scope from the application menu or run <code>scope</code> in a terminal. Scope scans your package sources when it opens.</p>
+        <p>The <code>./</code> in the command matters. Without it, apt looks for a package in its repositories, not in your download folder.</p>
+
+        <h2 id="updates">Updates to Scope</h2>
+        <p>Scope checks GitHub Releases on startup. Official .deb builds from v0.3.4 can install later updates after they verify a signed SHA-256 manifest. The manifest is signed with minisign, and the public key is compiled into the app.</p>
+        <p>If you are upgrading from a build that predates the embedded verification key, install v0.3.4 by hand with the command above. Other install types open the Releases page when no verified package is available.</p>
+
+        <h2 id="build">Build from source</h2>
+        <p>Build from source on any Linux distribution where you can install Rust and the GPUI dependencies. Scope needs Rust stable. The first build takes a while because it compiles the GPUI toolkit.</p>
+        <p>Install the system libraries for the build, clone the repository, and run the app:</p>
+        <div class="command">
+          <span class="line"><span class="prompt">$ </span>sudo apt install build-essential pkg-config libfontconfig1-dev libx11-dev libx11-xcb-dev \</span>
+          <span class="line">    libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev wayland-protocols</span>
+          <span class="line"><span class="prompt">$ </span>git clone https://github.com/khurrambhutto/scope.git</span>
+          <span class="line"><span class="prompt">$ </span>cd scope</span>
+          <span class="line"><span class="prompt">$ </span>cargo run</span>
+        </div>
+        <p><code>libxkbcommon-x11-dev</code> is required even on Wayland-only sessions, because GPUI links against <code>-lxkbcommon-x11</code> on Linux.</p>
+        <p>Before you open a pull request, run the same checks the project uses:</p>
+        <div class="command">
+          <span class="line"><span class="prompt">$ </span>cargo check</span>
+          <span class="line"><span class="prompt">$ </span>cargo test</span>
+          <span class="line"><span class="prompt">$ </span>cargo clippy</span>
+        </div>
+
+        <h2 id="remove">Remove Scope</h2>
+        <p>Scope installs as the <code>scope</code> package. To remove it, run:</p>
+        <div class="command">
+          <button class="copy-button" type="button" data-copy="sudo apt remove scope">Copy</button>
+          <span class="prompt">$ </span>sudo apt remove scope
+        </div>
+        <p>Removing Scope does not remove the apps it lists. Those stay installed under their own package managers.</p>
+
+        <h2 id="other-systems">Other distributions</h2>
+        <p>Packages for Fedora, Arch, and other .rpm-based systems are not available yet. On those systems, build from source. The .rpm release is on the roadmap, and the README lists the remaining work.</p>
+      </article>
+
+      <aside>
+        <h2>On this page</h2>
+        <ul>
+          <li><a href="#install-deb" aria-current="page">Install the .deb</a></li>
+          <li><a href="#updates">Updates to Scope</a></li>
+          <li><a href="#build">Build from source</a></li>
+          <li><a href="#remove">Remove Scope</a></li>
+          <li><a href="#other-systems">Other distributions</a></li>
+        </ul>
+        <h2 style="margin-top:1.6rem">Related</h2>
+        <ul>
+          <li><a href="safety.html">How Scope keeps changes safe</a></li>
+          <li><a href="index.html#sources">Supported sources</a></li>
+          <li><a href="https://github.com/khurrambhutto/scope/issues">Report a problem</a></li>
+        </ul>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="page footer-grid">
+      <div>
+        <span class="wordmark">Scope</span>
+        <p class="footer-note">Free and open source under the MIT License. Built by <a href="https://khurrambhutto.tech/" target="_blank" rel="noopener noreferrer" style="color:inherit">Khurram Bhutto</a>.</p>
+      </div>
+      <nav class="footer-links" aria-label="Footer">
+        <a href="index.html">Home</a>
+        <a href="safety.html">Safety</a>
+        <a href="https://github.com/khurrambhutto/scope">GitHub</a>
+        <a href="https://github.com/khurrambhutto/scope/releases">Releases</a>
+        <a href="llms-full.txt">Full text for AI tools</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script>
+    document.querySelectorAll('.copy-button').forEach(function (button) {
+      button.addEventListener('click', function () {
+        navigator.clipboard.writeText(button.dataset.copy).then(function () {
+          button.textContent = 'Copied';
+          setTimeout(function () { button.textContent = 'Copy'; }, 1600);
+        });
+      });
+    });
+  </script>
+
+</body>
+</html>

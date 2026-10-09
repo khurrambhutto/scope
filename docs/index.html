@@ -3,515 +3,398 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Scope: Unified Linux Package Manager</title>
+  <title>Scope, a Linux app manager for APT, Snap, Flatpak and AppImage</title>
   <meta name="google-site-verification" content="msIjf5-oHmJg_58yKXFLPUWxh03z06n0ON6FUat3KZ4" />
-  <meta name="description" content="Scope is a Linux desktop app for package visibility, cleanup planning, and safe maintenance workflows across APT, Snap, Flatpak, and AppImage.">
-  <meta name="robots" content="index, follow, max-snippet:150, max-image-preview:large">
+  <meta name="description" content="Scope is a free, open-source Linux app manager. See, update, and uninstall apps from APT, Snap, Flatpak, and AppImage in one list, and preview the exact commands before anything runs.">
+  <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
+  <meta name="author" content="Khurram Bhutto">
+  <meta name="application-name" content="Scope">
+  <meta name="theme-color" content="#211719">
   <link rel="canonical" href="https://khurrambhutto.github.io/scope/">
+  <link rel="icon" href="favicon.png" type="image/png" sizes="256x256">
+  <link rel="apple-touch-icon" href="favicon.png">
+  <link rel="alternate" type="text/plain" href="llms-full.txt" title="Scope, full documentation for AI tools">
 
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://khurrambhutto.github.io/scope/">
-  <meta property="og:title" content="Scope: Unified Linux Package Manager">
-  <meta property="og:description" content="A Linux desktop app for package visibility, cleanup planning, and safe maintenance workflows.">
+  <meta property="og:title" content="Scope, a Linux app manager for APT, Snap, Flatpak and AppImage">
+  <meta property="og:description" content="One list for every app on your Linux system. Preview every update or uninstall before it runs. Free and open source.">
   <meta property="og:image" content="https://khurrambhutto.github.io/scope/image.png">
-  <meta property="og:image:width" content="1200">
-  <meta property="og:image:height" content="630">
+  <meta property="og:image:width" content="1262">
+  <meta property="og:image:height" content="875">
+  <meta property="og:image:alt" content="Scope showing installed APT, Snap, Flatpak and AppImage apps in one searchable list">
   <meta property="og:site_name" content="Scope">
+  <meta property="og:locale" content="en_US">
 
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Scope: Unified Linux Package Manager">
-  <meta name="twitter:description" content="A Linux desktop app for package visibility, cleanup planning, and safe maintenance workflows.">
+  <meta name="twitter:title" content="Scope, a Linux app manager for APT, Snap, Flatpak and AppImage">
+  <meta name="twitter:description" content="One list for every app on your Linux system, with a preview before every update or uninstall.">
   <meta name="twitter:image" content="https://khurrambhutto.github.io/scope/image.png">
+  <meta name="twitter:image:alt" content="Scope showing installed APT, Snap, Flatpak and AppImage apps in one searchable list">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
 
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": "Scope",
-    "description": "A Linux desktop app for package visibility, cleanup planning, and safe maintenance workflows.",
-    "url": "https://khurrambhutto.github.io/scope/",
-    "image": "https://khurrambhutto.github.io/scope/image.png",
-    "applicationCategory": "DeveloperApplication",
-    "operatingSystem": "Linux",
-    "softwareVersion": "0.3.4",
-    "license": "https://opensource.org/licenses/MIT",
-    "author": {
-      "@type": "Person",
-      "name": "Khurram Bhutto",
-      "url": "https://khurrambhutto.tech/",
-      "sameAs": [
-        "https://pk.linkedin.com/in/khurram-bhutto",
-        "https://github.com/khurrambhutto"
-      ]
-    },
-    "codeRepository": "https://github.com/khurrambhutto/scope",
-    "downloadUrl": "https://github.com/khurrambhutto/scope/releases",
-    "offers": {
-      "@type": "Offer",
-      "price": "0",
-      "priceCurrency": "USD"
-    },
-    "featureList": [
-      "Multi-package manager support (APT, Snap, Flatpak, AppImage)",
-      "Searchable package table",
-      "Built with Rust and Zed's GPUI"
-    ]
-  }
-  </script>
-
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    "mainEntity": [
+    "@graph": [
       {
-        "@type": "Question",
-        "name": "What is Scope?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Scope is a Linux desktop app that scans APT, Snap, Flatpak, and AppImage into one searchable list."
-        }
+        "@type": "WebSite",
+        "@id": "https://khurrambhutto.github.io/scope/#website",
+        "url": "https://khurrambhutto.github.io/scope/",
+        "name": "Scope",
+        "description": "Scope is a free, open-source Linux app manager for APT, Snap, Flatpak, and AppImage.",
+        "inLanguage": "en"
       },
       {
-        "@type": "Question",
-        "name": "Which package managers does Scope support?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Scope supports APT (Debian/Ubuntu), Snap, Flatpak, and AppImage. You can filter packages by source in the desktop app."
-        }
+        "@type": "SoftwareApplication",
+        "@id": "https://khurrambhutto.github.io/scope/#software",
+        "name": "Scope",
+        "alternateName": ["Scope Linux app manager"],
+        "description": "Scope is a Linux app manager that lists APT, Snap, Flatpak, and AppImage apps in one searchable list. Update or uninstall apps after reviewing a preview of the exact commands.",
+        "url": "https://khurrambhutto.github.io/scope/",
+        "image": "https://khurrambhutto.github.io/scope/image.png",
+        "screenshot": "https://khurrambhutto.github.io/scope/image.png",
+        "applicationCategory": "UtilitiesApplication",
+        "applicationSubCategory": "Package manager",
+        "operatingSystem": "Linux",
+        "softwareVersion": "0.3.4",
+        "license": "https://opensource.org/licenses/MIT",
+        "codeRepository": "https://github.com/khurrambhutto/scope",
+        "downloadUrl": "https://github.com/khurrambhutto/scope/releases",
+        "installUrl": "https://github.com/khurrambhutto/scope/releases/tag/v0.3.4",
+        "availableOnDevice": "Desktop",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "author": {
+          "@type": "Person",
+          "name": "Khurram Bhutto",
+          "url": "https://khurrambhutto.tech/",
+          "sameAs": [
+            "https://pk.linkedin.com/in/khurram-bhutto",
+            "https://github.com/khurrambhutto"
+          ]
+        },
+        "featureList": [
+          "One list for APT, Snap, Flatpak, and AppImage apps",
+          "Preview of the exact commands before every update or uninstall",
+          "Polkit authentication, so the app never handles your password",
+          "Update APT, Snap, and Flatpak apps",
+          "Deny-list that protects critical system packages",
+          "Native Rust app built with Zed's GPUI, no webview"
+        ]
       },
       {
-        "@type": "Question",
-        "name": "Is Scope free and open source?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Yes. Scope is free and open source software released under the MIT License. The source code is available on GitHub."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "How do I install Scope?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Install the .deb from GitHub Releases. To build from source, install libxkbcommon-x11-dev and run cargo run."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "What are the system requirements for Scope?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Scope runs on Linux. It is a native Rust app built with Zed's GPUI, no webview."
-        }
+        "@type": "FAQPage",
+        "@id": "https://khurrambhutto.github.io/scope/#faq",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What is Scope?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Scope is a free, open-source Linux app manager. It lists apps from APT, Snap, Flatpak, and AppImage in one searchable list, so you can see, update, and uninstall them from one place."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Which Linux apps can Scope manage?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Scope shows APT manual installs, Snap apps, Flatpak apps (user and system scope), AppImages, and desktop launchers that no package manager owns. Update and uninstall work for APT, Snap, and Flatpak. AppImages and desktop launchers are listed for discovery, and their actions are disabled."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Does Scope ask for my password?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. Commands that need root use the standard Polkit dialog through pkexec. Scope never sees or stores your password."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Does Scope show what will change before it runs?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. Every update or uninstall builds a plan with the exact commands. Scope checks the package against the live system before it runs anything, and APT actions are simulated first."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can Scope remove critical system packages by accident?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. A backend deny-list protects critical APT packages, kernel images, Snap runtimes, and related system libraries. The check runs at preview and again before apply, and protected rows have a disabled uninstall action."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Which Linux distributions does Scope support?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Ubuntu is the primary target, with a .deb package for x86-64. Other Debian-based systems can build from source with Rust. .rpm packages, and Fedora and Arch package-manager support, are not available yet."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How do I install Scope?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Download scope_0.3.4_amd64.deb from GitHub Releases, then run sudo apt install ./scope_0.3.4_amd64.deb. To build from source, install Rust and the Linux dependencies listed in the README, then run cargo run."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is Scope free and open source?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. Scope is free and released under the MIT License. The source code is on GitHub."
+            }
+          }
+        ]
       }
     ]
   }
   </script>
-
-  <style>
-    *, *::before, *::after {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    :root {
-      --bg: #fafaf8;
-      --text: #1a1a1a;
-      --text-secondary: #6b7280;
-      --accent: #1a1a1a;
-      --border: #e5e5e0;
-      --code-bg: #f4f4f0;
-      --green: #22c55e;
-      --orange: #f59e0b;
-      --blue: #3b82f6;
-      --purple: #8b5cf6;
-    }
-
-    html {
-      scroll-behavior: smooth;
-    }
-
-    body {
-      font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
-      background-color: var(--bg);
-      color: var(--text);
-      line-height: 1.7;
-      -webkit-font-smoothing: antialiased;
-    }
-
-    a {
-      color: inherit;
-      text-decoration: none;
-    }
-
-    nav {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 1.5rem 2rem;
-      max-width: 800px;
-      margin: 0 auto;
-    }
-
-    .logo {
-      font-weight: 700;
-      font-size: 1.4rem;
-      letter-spacing: -0.02em;
-    }
-
-    .logo span {
-      color: var(--text-secondary);
-    }
-
-    .nav-links {
-      display: flex;
-      gap: 1.5rem;
-      align-items: center;
-      font-size: 0.85rem;
-      color: var(--text-secondary);
-    }
-
-    .nav-links a:hover {
-      color: var(--text);
-    }
-
-    .hero {
-      max-width: 800px;
-      margin: 0 auto;
-      padding: 6rem 2rem 4rem;
-    }
-
-    .hero h1 {
-      font-size: clamp(2rem, 5vw, 3rem);
-      font-weight: 700;
-      line-height: 1.2;
-      letter-spacing: -0.03em;
-      margin-bottom: 1.5rem;
-    }
-
-    .hero p {
-      color: var(--text-secondary);
-      font-size: 0.95rem;
-      max-width: 520px;
-      margin-bottom: 2rem;
-      line-height: 1.8;
-    }
-
-    .hero-buttons {
-      display: flex;
-      gap: 0.75rem;
-      flex-wrap: wrap;
-    }
-
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.7rem 1.25rem;
-      font-family: inherit;
-      font-size: 0.85rem;
-      font-weight: 500;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      border: none;
-    }
-
-    .btn-primary {
-      background: var(--accent);
-      color: #fff;
-    }
-
-    .btn-primary:hover {
-      background: #333;
-      transform: translateY(-1px);
-    }
-
-    .btn-secondary {
-      background: transparent;
-      color: var(--text);
-      border: 1px solid var(--border);
-    }
-
-    .btn-secondary:hover {
-      border-color: var(--text);
-      transform: translateY(-1px);
-    }
-
-    .features {
-      max-width: 800px;
-      margin: 0 auto;
-      padding: 4rem 2rem;
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 3rem;
-    }
-
-    .feature h3 {
-      font-size: 0.85rem;
-      font-weight: 600;
-      margin-bottom: 0.5rem;
-      letter-spacing: -0.01em;
-    }
-
-    .feature p {
-      font-size: 0.8rem;
-      color: var(--text-secondary);
-      line-height: 1.7;
-    }
-
-    .divider {
-      max-width: 800px;
-      margin: 0 auto;
-      padding: 0 2rem;
-    }
-
-    .divider hr {
-      border: none;
-      border-top: 1px solid var(--border);
-    }
-
-    .screenshot {
-      max-width: 800px;
-      margin: 0 auto;
-      padding: 0 2rem 4rem;
-    }
-
-    .screenshot figure {
-      margin: 0;
-    }
-
-    .screenshot img {
-      display: block;
-      width: 100%;
-      height: auto;
-      border-radius: 10px;
-      border: 1px solid var(--border);
-      box-shadow: 0 4px 24px rgba(0,0,0,0.06);
-    }
-
-    .faq {
-      max-width: 800px;
-      margin: 0 auto;
-      padding: 0 2rem 4rem;
-    }
-
-    .faq h2 {
-      font-size: 1.1rem;
-      font-weight: 600;
-      margin-bottom: 1.5rem;
-      letter-spacing: -0.02em;
-    }
-
-    .faq-item {
-      border-bottom: 1px solid var(--border);
-    }
-
-    .faq-question {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 1rem 0;
-      cursor: pointer;
-      user-select: none;
-    }
-
-    .faq-question h3 {
-      font-size: 0.85rem;
-      font-weight: 600;
-      margin: 0;
-    }
-
-    .faq-icon {
-      font-size: 1.2rem;
-      color: var(--text-secondary);
-      transition: transform 0.2s ease;
-      flex-shrink: 0;
-      margin-left: 1rem;
-    }
-
-    .faq-item.active .faq-icon {
-      transform: rotate(45deg);
-    }
-
-    .faq-answer {
-      max-height: 0;
-      overflow: hidden;
-      transition: max-height 0.3s ease, padding 0.3s ease;
-    }
-
-    .faq-item.active .faq-answer {
-      max-height: 200px;
-      padding-bottom: 1rem;
-    }
-
-    .faq-answer p {
-      font-size: 0.8rem;
-      color: var(--text-secondary);
-      line-height: 1.7;
-      margin: 0;
-    }
-
-    .faq-answer code {
-      background: var(--code-bg);
-      padding: 0.1rem 0.3rem;
-      border-radius: 3px;
-      font-size: 0.75rem;
-    }
-
-    footer {
-      max-width: 800px;
-      margin: 0 auto;
-      padding: 2rem;
-      border-top: 1px solid var(--border);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 0.75rem;
-      color: var(--text-secondary);
-    }
-
-    footer a:hover {
-      color: var(--text);
-    }
-
-    @media (max-width: 600px) {
-      .hero {
-        padding: 4rem 1.5rem 3rem;
-      }
-
-      .features {
-        grid-template-columns: 1fr;
-        gap: 2rem;
-        padding: 3rem 1.5rem;
-      }
-
-      footer {
-        flex-direction: column;
-        gap: 0.5rem;
-        text-align: center;
-      }
-    }
-  </style>
 </head>
 <body>
 
-  <nav>
-    <div class="logo">scope<span> 🔭</span></div>
-    <div class="nav-links">
-      <a href="https://github.com/khurrambhutto/scope" target="_blank" rel="noopener noreferrer">GitHub →</a>
+  <header class="site-header">
+    <div class="page">
+      <a class="wordmark" href="#top">
+        <img src="scope-logo.svg" width="26" height="26" alt="">
+        Scope
+      </a>
+      <nav class="site-nav" aria-label="Primary">
+        <a href="#sources">Sources</a>
+        <a href="#how">How it works</a>
+        <a href="install.html">Install</a>
+        <a href="safety.html">Safety</a>
+        <a href="#faq">FAQ</a>
+        <a class="nav-github" href="https://github.com/khurrambhutto/scope" target="_blank" rel="noopener noreferrer">GitHub</a>
+      </nav>
     </div>
-  </nav>
+  </header>
 
-  <main>
-    <section class="hero">
-      <h1>One interface for<br>all your packages.</h1>
-      <p>Scope scans APT, Snap, Flatpak, and AppImage into one list. Update or uninstall anything, with a preview before every change.</p>
-      <div class="hero-buttons">
-        <a href="https://github.com/khurrambhutto/scope/releases" target="_blank" rel="noopener noreferrer" class="btn btn-primary">Download</a>
-        <a href="https://github.com/khurrambhutto/scope" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">View source</a>
-      </div>
-    </section>
+  <main id="top">
 
-    <section class="features" id="features">
-      <div class="feature">
-        <h3>Multi-source</h3>
-        <p>APT, Snap, Flatpak, and AppImage, all in one place. Filter by source.</p>
+    <section class="page hero" aria-labelledby="hero-title">
+      <div class="hero-top">
+        <h1 id="hero-title">Every app on your Linux machine, in one list.</h1>
+        <div class="hero-side">
+          <p class="lead">Scope brings APT, Snap, Flatpak, and AppImage apps into one searchable list. Update or uninstall any of them, and read the exact command before it runs.</p>
+          <div class="button-row">
+            <a class="button button-primary" href="https://github.com/khurrambhutto/scope/releases/download/v0.3.4/scope_0.3.4_amd64.deb" rel="noopener noreferrer">Download the .deb</a>
+            <a class="button button-ghost" href="https://github.com/khurrambhutto/scope" target="_blank" rel="noopener noreferrer">Read the source</a>
+          </div>
+          <p class="hero-facts">Version 0.3.4 for Ubuntu on x86-64. Free under the MIT License.</p>
+        </div>
       </div>
-      <div class="feature">
-        <h3>Real-time search</h3>
-        <p>Search across installed packages, descriptions, versions, paths, and common aliases.</p>
-      </div>
-      <div class="feature">
-        <h3>Built with GPUI</h3>
-        <p>A native Rust app with Zed's GPUI shell. No webview, no Electron.</p>
-      </div>
-    </section>
 
-    <div class="divider"><hr></div>
-
-    <section class="screenshot">
-      <figure>
-        <img src="image.png" alt="Scope package list preview with APT, Snap, Flatpak, and AppImage sources" loading="eager">
+      <figure class="shot">
+        <img src="image.png" width="1262" height="875" alt="Scope app window with a list of installed apps from APT, Snap, Flatpak and AppImage, a search field, a source filter, and a Show all control in the footer" fetchpriority="high">
+        <figcaption>Scope 0.3.4 on Ubuntu. Apps from every source sit in one list.</figcaption>
       </figure>
     </section>
 
-    <div class="divider"><hr></div>
+    <section class="section" id="sources" aria-labelledby="sources-title">
+      <div class="page">
+        <h2 class="section-title" id="sources-title">Four package systems, one list</h2>
+        <p class="section-lead">Each source keeps its own commands. Scope runs those commands and never edits the package databases directly.</p>
 
-    <section class="faq" id="faq">
-      <h2>Frequently asked questions</h2>
-      <div class="faq-item">
-        <div class="faq-question" onclick="toggleFaq(this)">
-          <h3>What is Scope?</h3>
-          <span class="faq-icon">+</span>
+        <div class="sources">
+          <div class="source">
+            <h3 class="source-name"><span class="source-mark" style="background:var(--apt)"></span>APT</h3>
+            <p>Packages you installed by hand. Dependencies stay out of the list.</p>
+            <span class="command-line"><span>apt remove -y</span> and <span>apt install -y</span></span>
+          </div>
+          <div class="source">
+            <h3 class="source-name"><span class="source-mark" style="background:var(--snap)"></span>Snap</h3>
+            <p>Apps and tools from the Snap Store. Runtimes and bases are hidden.</p>
+            <span class="command-line"><span>snap remove</span> and <span>snap refresh</span></span>
+          </div>
+          <div class="source">
+            <h3 class="source-name"><span class="source-mark" style="background:var(--flatpak)"></span>Flatpak</h3>
+            <p>User and system installs. Each one keeps its own scope, so nothing is guessed.</p>
+            <span class="command-line"><span>flatpak uninstall -y --user</span></span>
+          </div>
+          <div class="source">
+            <h3 class="source-name"><span class="source-mark" style="background:var(--appimage)"></span>AppImage</h3>
+            <p>AppImages in common folders. Listed for now. Uninstall and update are not supported yet.</p>
+            <span class="command-line"><span>listed only</span></span>
+          </div>
         </div>
-        <div class="faq-answer">
-          <p>Scope is a Linux desktop app that scans APT, Snap, Flatpak, and AppImage into one searchable list.</p>
-        </div>
+        <p class="source-note">Desktop launchers that no package manager owns also appear, for discovery only. Their actions are disabled.</p>
       </div>
-      <div class="faq-item">
-        <div class="faq-question" onclick="toggleFaq(this)">
-          <h3>Which package managers does Scope support?</h3>
-          <span class="faq-icon">+</span>
-        </div>
-        <div class="faq-answer">
-          <p>Scope supports APT (Debian/Ubuntu), Snap, Flatpak, and AppImage. You can filter packages by source in the desktop app.</p>
-        </div>
+    </section>
+
+    <section class="section" id="how" aria-labelledby="how-title">
+      <div class="page">
+        <h2 class="section-title" id="how-title">Every change goes through a plan</h2>
+        <p class="section-lead">Scope never runs an update or uninstall the moment you click. Four steps stand between your click and the command, and the last two catch anything that changed since you reviewed the plan.</p>
+
+        <ol class="steps">
+          <li>
+            <h3>Plan</h3>
+            <p>Scope lists the exact commands for the app you picked, such as <code>apt remove -y cap</code>. Nothing runs yet.</p>
+          </li>
+          <li>
+            <h3>Confirm</h3>
+            <p>You read the plan and choose Run plan, or cancel. A plan works once and expires after five minutes.</p>
+          </li>
+          <li>
+            <h3>Revalidate</h3>
+            <p>Scope checks that the package is still installed, that an update's version has not moved, and that the deny-list still allows it. If it cannot confirm these, it stops.</p>
+          </li>
+          <li>
+            <h3>Run</h3>
+            <p>The command runs through the standard Polkit dialog, and the log streams into the footer. One package operation runs at a time.</p>
+          </li>
+        </ol>
       </div>
-      <div class="faq-item">
-        <div class="faq-question" onclick="toggleFaq(this)">
-          <h3>Is Scope free and open source?</h3>
-          <span class="faq-icon">+</span>
+    </section>
+
+    <section class="section" aria-labelledby="about-title">
+      <div class="page split">
+        <div>
+          <h2 id="about-title">What Scope is</h2>
         </div>
-        <div class="faq-answer">
-          <p>Yes. Scope is free and open source software released under the MIT License. The source code is available on GitHub.</p>
-        </div>
-      </div>
-      <div class="faq-item">
-        <div class="faq-question" onclick="toggleFaq(this)">
-          <h3>How do I install Scope?</h3>
-          <span class="faq-icon">+</span>
-        </div>
-        <div class="faq-answer">
-          <p>Install the <code>.deb</code> from GitHub Releases. To build from source, install <code>libxkbcommon-x11-dev</code> and run <code>cargo run</code>.</p>
-        </div>
-      </div>
-      <div class="faq-item">
-        <div class="faq-question" onclick="toggleFaq(this)">
-          <h3>What are the system requirements?</h3>
-          <span class="faq-icon">+</span>
-        </div>
-        <div class="faq-answer">
-          <p>Scope runs on Linux. It is a native Rust app built with Zed's GPUI, no webview.</p>
+        <div>
+          <p><strong>Scope is a free, open-source Linux app manager.</strong> It shows the apps installed through APT, Snap, Flatpak, and AppImage in one searchable list. You can update or uninstall supported apps, and every change begins with a plan that lists the exact commands.</p>
+          <p>Most people install software from several places at once. An app can come from the Ubuntu archive, the Snap Store, Flathub, or a download folder, and each source has its own tool. Scope reads all four and shows them side by side.</p>
+          <p>Synaptic manages APT packages only. Software centers such as GNOME Software and KDE Discover show what their own catalogs offer. Scope starts from what is already on your machine. It is written in Rust with Zed's GPUI toolkit, with no webview.</p>
+
+          <dl class="facts">
+            <dt>Platform</dt>
+            <dd>Linux, Ubuntu first, x86-64</dd>
+            <dt>Actions</dt>
+            <dd>Uninstall and update for APT, Snap, and Flatpak</dd>
+            <dt>Admin rights</dt>
+            <dd>Standard Polkit dialog through pkexec. Scope never sees your password.</dd>
+            <dt>Version</dt>
+            <dd>0.3.4</dd>
+            <dt>License</dt>
+            <dd>MIT</dd>
+            <dt>Source</dt>
+            <dd><a class="text-link" href="https://github.com/khurrambhutto/scope">github.com/khurrambhutto/scope</a></dd>
+          </dl>
         </div>
       </div>
     </section>
+
+    <section class="section" aria-labelledby="status-title">
+      <div class="page">
+        <h2 class="section-title" id="status-title">What works today</h2>
+        <p class="section-lead">Scope is early. This list matches the current release.</p>
+        <div class="status-lists">
+          <div class="done">
+            <h3>Working</h3>
+            <ul>
+              <li>One list across APT, Snap, Flatpak, AppImage, and unmanaged desktop launchers</li>
+              <li>Display names, categories, and icons from desktop entries and the icon theme</li>
+              <li>Uninstall with a preview, Polkit authentication, and a deny-list</li>
+              <li>Update with a preview for APT, Snap, and Flatpak</li>
+              <li>Self-updater that checks a signed SHA-256 manifest for official .deb builds</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Not yet</h3>
+            <ul>
+              <li>AppImage uninstall and update</li>
+              <li>.rpm release packages</li>
+              <li>Snap target version in the update preview</li>
+              <li>Whole-system cleanup and disk usage views</li>
+              <li>Fedora and Arch package-manager support</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="install" aria-labelledby="install-title">
+      <div class="page">
+        <div class="install-band">
+          <div>
+            <h2 id="install-title">Install in one command</h2>
+            <p>Download the .deb from GitHub Releases, then run this from the folder you saved it to. The <a class="text-link" href="install.html">install guide</a> covers building from source and removing Scope.</p>
+          </div>
+          <div class="command">
+            <button class="copy-button" type="button" data-copy="sudo apt install ./scope_0.3.4_amd64.deb">Copy</button>
+            <span class="line"><span class="prompt">$ </span>sudo apt install ./scope_0.3.4_amd64.deb</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section faq" id="faq" aria-labelledby="faq-title">
+      <div class="page split">
+        <div>
+          <h2 id="faq-title">Questions</h2>
+          <p>Short answers. The <a class="text-link" href="safety.html">safety page</a> explains the checks in detail.</p>
+        </div>
+        <div>
+          <details>
+            <summary>What is Scope?</summary>
+            <p>Scope is a free, open-source Linux app manager. It lists apps from APT, Snap, Flatpak, and AppImage in one searchable list, so you can see, update, and uninstall them from one place.</p>
+          </details>
+          <details>
+            <summary>Which Linux apps can Scope manage?</summary>
+            <p>Scope shows APT manual installs, Snap apps, Flatpak apps (user and system scope), AppImages, and desktop launchers that no package manager owns. Update and uninstall work for APT, Snap, and Flatpak. AppImages and desktop launchers are listed for discovery, and their actions are disabled.</p>
+          </details>
+          <details>
+            <summary>Does Scope ask for my password?</summary>
+            <p>No. Commands that need root use the standard Polkit dialog through <code>pkexec</code>. Scope never sees or stores your password.</p>
+          </details>
+          <details>
+            <summary>Can Scope remove critical system packages by accident?</summary>
+            <p>No. A backend deny-list protects critical APT packages, kernel images, Snap runtimes, and related system libraries. The check runs when you build a plan and again before it runs. Protected rows have a disabled uninstall action.</p>
+          </details>
+          <details>
+            <summary>Which Linux distributions does Scope support?</summary>
+            <p>Ubuntu is the primary target, with a <code>.deb</code> package for x86-64. Other Debian-based systems can build from source with Rust. <code>.rpm</code> packages, and Fedora and Arch package-manager support, are not available yet.</p>
+          </details>
+          <details>
+            <summary>Is Scope free and open source?</summary>
+            <p>Yes. Scope is released under the MIT License, and the source is on <a class="text-link" href="https://github.com/khurrambhutto/scope" target="_blank" rel="noopener noreferrer">GitHub</a>.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
   </main>
 
-  <footer>
-    <span>MIT License · <a href="https://khurrambhutto.tech/" target="_blank" rel="noopener noreferrer">Khurram Bhutto</a></span>
-    <div style="display:flex;gap:1rem;">
-      <a href="https://github.com/khurrambhutto/scope" target="_blank" rel="noopener noreferrer">GitHub →</a>
-      <a href="https://pk.linkedin.com/in/khurram-bhutto" target="_blank" rel="noopener noreferrer">LinkedIn →</a>
+  <footer class="site-footer">
+    <div class="page footer-grid">
+      <div>
+        <span class="wordmark">Scope</span>
+        <p class="footer-note">Free and open source under the MIT License. Built by <a href="https://khurrambhutto.tech/" target="_blank" rel="noopener noreferrer" style="color:inherit">Khurram Bhutto</a>.</p>
+      </div>
+      <nav class="footer-links" aria-label="Footer">
+        <a href="install.html">Install</a>
+        <a href="safety.html">Safety</a>
+        <a href="https://github.com/khurrambhutto/scope">GitHub</a>
+        <a href="https://github.com/khurrambhutto/scope/releases">Releases</a>
+        <a href="https://github.com/khurrambhutto/scope/issues">Issues</a>
+        <a href="llms-full.txt">Full text for AI tools</a>
+      </nav>
     </div>
   </footer>
 
   <script>
-    function toggleFaq(el) {
-      const item = el.parentElement;
-      const isActive = item.classList.contains('active');
-      
-      document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('active'));
-      
-      if (!isActive) {
-        item.classList.add('active');
-      }
-    }
+    document.querySelectorAll('.copy-button').forEach(function (button) {
+      button.addEventListener('click', function () {
+        navigator.clipboard.writeText(button.dataset.copy).then(function () {
+          button.textContent = 'Copied';
+          setTimeout(function () { button.textContent = 'Copy'; }, 1600);
+        });
+      });
+    });
   </script>
 
 </body>
