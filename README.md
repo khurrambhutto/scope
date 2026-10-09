@@ -24,6 +24,14 @@ Download [scope_0.3.3_amd64.deb](https://github.com/khurrambhutto/scope/releases
 sudo apt install ./scope_0.3.3_amd64.deb
 ```
 
+New releases include an x86-64 AppImage. Download it from the [releases page](https://github.com/khurrambhutto/scope/releases), make it executable, and launch it directly. Replace `VERSION` with the release version:
+
+```bash
+APPIMAGE=Scope-VERSION-x86_64.AppImage
+chmod +x "$APPIMAGE"
+"./$APPIMAGE"
+```
+
 Scope checks GitHub Releases on startup. Official `.deb` builds from v0.3.3 can install updates after verifying the signed checksum manifest. Install v0.3.3 manually when upgrading from an earlier version without an embedded verification key. Other install types open the Releases page when a compatible verified package is unavailable.
 
 To build from source, install Rust stable and the Linux dependencies, then clone the repository:
@@ -55,10 +63,11 @@ Works today:
 - Rounded window with a centered Apps / Updates toggle and consistent dark red controls
 - Self-updater with signed checksum verification for official `.deb` builds
 - `.deb` releases with a signed SHA-256 manifest, targeting Ubuntu first
+- signed x86-64 AppImage releases with bundled dependencies and desktop metadata
 
 Not yet:
 
-- `.rpm` and `.AppImage` release artifacts (installs of those kinds fall back to manual download)
+- `.rpm` releases (installs of that kind fall back to manual download)
 - AppImage uninstall and update
 - Snap target version in the update preview
 - Whole-system cleanup and disk usage views
@@ -75,7 +84,7 @@ cargo clippy
 
 Run all three checks before submitting. Safety-sensitive backend changes need targeted Rust tests first.
 
-Good first contributions are AppImage auto-update (`src/domain/operations/update.rs`), Snap target versions (`src/domain/scanner/snap.rs`), `.rpm`/AppImage release artifacts (`.github/workflows/release.yml`), and new scanners through the `Scanner` trait (`src/domain/scanner/`).
+Good first contributions are AppImage auto-update (`src/domain/operations/update.rs`), Snap target versions (`src/domain/scanner/snap.rs`), `.rpm` release artifacts (`.github/workflows/release.yml`), and new scanners through the `Scanner` trait (`src/domain/scanner/`).
 
 ## Release signing
 
