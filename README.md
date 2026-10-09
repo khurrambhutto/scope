@@ -9,22 +9,22 @@
 Scope brings APT, Snap, Flatpak, AppImages, and user-local desktop apps into one searchable list. Update or uninstall supported apps after reviewing a preview of the operation. Privileged actions use the standard Polkit dialog, so Scope never handles your password.
 
 <p align="center">
-  <img src="docs/image.png" alt="Scope v0.3.3 showing the Apps and Updates toggle, installed apps, search, source filter, and Show all control in its dark red interface" width="960" />
+  <img src="docs/image.png" alt="Scope v0.3.4 showing the Apps and Updates toggle, installed apps, search, source filter, and Show all control in its dark red interface" width="960" />
 </p>
 
 Built with Zed's GPUI (Rust binary in `src/`, no webview). Architecture and module rules live in [AGENTS.md](AGENTS.md).
 
 ## Install
 
-Current release: [v0.3.3](https://github.com/khurrambhutto/scope/releases/tag/v0.3.3).
+Current release: [v0.3.4](https://github.com/khurrambhutto/scope/releases/tag/v0.3.4).
 
-Download [scope_0.3.3_amd64.deb](https://github.com/khurrambhutto/scope/releases/download/v0.3.3/scope_0.3.3_amd64.deb) for Ubuntu on x86-64, then run this command from the download directory:
+Download [scope_0.3.4_amd64.deb](https://github.com/khurrambhutto/scope/releases/download/v0.3.4/scope_0.3.4_amd64.deb) for Ubuntu on x86-64, then run this command from the download directory:
 
 ```bash
-sudo apt install ./scope_0.3.3_amd64.deb
+sudo apt install ./scope_0.3.4_amd64.deb
 ```
 
-Scope checks GitHub Releases on startup. Official `.deb` builds from v0.3.3 can install updates after verifying the signed checksum manifest. Install v0.3.3 manually when upgrading from an earlier version without an embedded verification key. Other install types open the Releases page when a compatible verified package is unavailable.
+Scope checks GitHub Releases on startup. Official `.deb` builds from v0.3.4 can install updates after verifying the signed checksum manifest. Install v0.3.4 manually when upgrading from an earlier version without an embedded verification key. Other install types open the Releases page when a compatible verified package is unavailable.
 
 To build from source, install Rust stable and the Linux dependencies, then clone the repository:
 
