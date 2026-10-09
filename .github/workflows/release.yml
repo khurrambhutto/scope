@@ -8,7 +8,9 @@ on:
 jobs:
   build:
     name: Build & Release (.deb and AppImage)
-    runs-on: ubuntu-latest
+    # Build against an older glibc so the AppImage runs on the catalog's test
+    # environment and older Ubuntu releases.
+    runs-on: ubuntu-22.04
     permissions:
       contents: write
 
