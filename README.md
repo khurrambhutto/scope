@@ -48,6 +48,8 @@ cargo run
 
 Use the **Apps / Updates** toggle at the top to switch between installed apps and available updates. Search by app or package name, filter by source, or refresh to rescan. Select a row to see its details and the actions it supports.
 
+The GitHub icon beside the window controls opens [Scope's upstream repository](https://github.com/khurrambhutto/scope) in your default browser.
+
 The default list shows GUI apps and command-line tools that you would expect to manage. AppImages and user-local desktop launchers appear for discovery only, and their update and uninstall actions are disabled.
 
 Turn on **Show all** in the footer to see every row the scanners return, including libraries and system components. Show all does not bypass safety checks. Protected packages stay locked even when it is on.

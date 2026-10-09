@@ -1,6 +1,8 @@
 //! Client-side title bar. GNOME on Wayland ships no server-side decorations, so
 //! the app draws its own controls; GPUI drives them through `Window` methods.
 
+use gpui_kit::assets::IconName;
+use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::prelude::*;
 use gpui_kit::{
     div, img, px, rgb, svg, FontWeight, ImageSource, MouseButton, Pixels, Resource, Window,
@@ -15,6 +17,8 @@ const LOGO: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/scope-logo.svg")
 const ICON_MIN: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/win-min.svg");
 const ICON_MAX: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/win-max.svg");
 const ICON_CLOSE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/win-close.svg");
+
+const UPSTREAM_URL: &str = "https://github.com/khurrambhutto/scope";
 
 pub(super) fn title_bar(navigation: impl IntoElement, corner_radius: Pixels) -> impl IntoElement {
     div()
@@ -82,6 +86,34 @@ pub(super) fn title_bar(navigation: impl IntoElement, corner_radius: Pixels) -> 
                 .right_0()
                 .flex()
                 .items_center()
+                .child(
+                    // The kit button provides keyboard activation, focus treatment, and
+                    // an accessible name. Keep its presses within this wrapper so they
+                    // never reach the title bar's drag/double-click handler.
+                    div()
+                        .on_mouse_down(MouseButton::Left, |_event, _window, cx| {
+                            cx.stop_propagation();
+                        })
+                        .child(
+                            Button::new("github")
+                                .icon(IconName::Github)
+                                .accessibility_label("Open Scope on GitHub")
+                                .tooltip("Open Scope on GitHub")
+                                // Set the icon size independently from its compact
+                                // 40x36px pointer target.
+                                .size(px(24.))
+                                .w(px(40.))
+                                .h(px(36.))
+                                .rounded(px(0.))
+                                .ghost()
+                                .text_color(text_dim())
+                                .cursor_pointer()
+                                .on_click(|_event, _window, cx| {
+                                    cx.stop_propagation();
+                                    cx.open_url(UPSTREAM_URL);
+                                }),
+                        ),
+                )
                 .child(window_control_button(
                     "win-min",
                     ICON_MIN,
