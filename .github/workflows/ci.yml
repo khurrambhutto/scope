@@ -25,7 +25,11 @@ jobs:
             libxkbcommon-dev \
             libxkbcommon-x11-dev \
             libwayland-dev \
-            wayland-protocols
+            wayland-protocols \
+            squashfs-tools \
+            file \
+            curl \
+            jq
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -45,3 +49,33 @@ jobs:
 
       - name: Clippy (warnings are errors)
         run: cargo clippy --all-targets --all-features --locked -- -D warnings
+
+      - name: Build release binary for AppImage
+        run: cargo build --release --locked
+
+      - name: Download linuxdeploy
+        run: |
+          curl -fsSL \
+            https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage \
+            -o "$RUNNER_TEMP/linuxdeploy-x86_64.AppImage"
+          chmod +x "$RUNNER_TEMP/linuxdeploy-x86_64.AppImage"
+
+      - name: Build AppImage
+        run: |
+          VERSION="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "scope-gpui") | .version')"
+          .github/scripts/build-appimage.sh "$VERSION" "$GITHUB_WORKSPACE" "$RUNNER_TEMP/linuxdeploy-x86_64.AppImage"
+
+      - name: Validate AppImage contents
+        run: |
+          APPIMAGE="Scope-$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "scope-gpui") | .version')-x86_64.AppImage"
+          mkdir -p "$RUNNER_TEMP/appimage-check"
+          (
+            cd "$RUNNER_TEMP/appimage-check"
+            "$GITHUB_WORKSPACE/$APPIMAGE" --appimage-extract
+          )
+          APPDIR="$RUNNER_TEMP/appimage-check/squashfs-root"
+          test -x "$APPDIR/AppRun"
+          test -f "$APPDIR/.DirIcon"
+          test -f "$APPDIR/scope.desktop"
+          test -x "$APPDIR/usr/bin/scope-gpui"
+          file "$APPDIR/.DirIcon" | grep -F 'PNG image data, 256 x 256'

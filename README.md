@@ -58,7 +58,7 @@ Works today:
 
 Not yet:
 
-- `.rpm` and `.AppImage` release artifacts (installs of those kinds fall back to manual download)
+- `.rpm` releases (installs of that kind fall back to manual download)
 - AppImage uninstall and update
 - Snap target version in the update preview
 - Whole-system cleanup and disk usage views
@@ -75,7 +75,7 @@ cargo clippy
 
 Run all three checks before submitting. Safety-sensitive backend changes need targeted Rust tests first.
 
-Good first contributions are AppImage auto-update (`src/domain/operations/update.rs`), Snap target versions (`src/domain/scanner/snap.rs`), `.rpm`/AppImage release artifacts (`.github/workflows/release.yml`), and new scanners through the `Scanner` trait (`src/domain/scanner/`).
+Good first contributions are AppImage auto-update (`src/domain/operations/update.rs`), Snap target versions (`src/domain/scanner/snap.rs`), `.rpm` release artifacts (`.github/workflows/release.yml`), and new scanners through the `Scanner` trait (`src/domain/scanner/`).
 
 ## Release signing
 
