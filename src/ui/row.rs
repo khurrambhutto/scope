@@ -20,6 +20,7 @@ pub(super) fn row_element(
     view_mode: ViewMode,
     operation_busy: bool,
     index: usize,
+    hover: bool,
 ) -> AnyElement {
     let title = display_title(pkg);
     let key = pkg.key.clone();
@@ -87,7 +88,9 @@ pub(super) fn row_element(
         } else {
             rgba(0x00000000).into()
         })
-        .hover(|this| this.bg(theme::hover_surface()))
+        .when(hover, |this| {
+            this.hover(|this| this.bg(theme::hover_surface()))
+        })
         .on_click(act(entity, move |this, cx| this.toggle_select(&key, cx)))
         .child(package_icon(pkg, 40.))
         .child(
@@ -131,7 +134,9 @@ pub(super) fn row_element(
                     .flex()
                     .items_center()
                     .opacity(if selected { 1.0 } else { 0.0 })
-                    .group_hover("row", |this| this.opacity(1.0))
+                    .when(hover, |this| {
+                        this.group_hover("row", |this| this.opacity(1.0))
+                    })
                     .child(action),
             )
         });

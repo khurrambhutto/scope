@@ -5,6 +5,7 @@
 
 use std::cell::Cell;
 use std::rc::Rc;
+use std::time::{Duration, Instant};
 
 use gpui_kit::{
     canvas, point, px, AnyElement, DispatchPhase, HitboxBehavior, IntoElement, ListState, Pixels,
@@ -15,6 +16,8 @@ use gpui_kit::{
 const EASE: f32 = 0.2;
 /// Distance under which the animation snaps onto its target.
 const SETTLED: Pixels = px(0.5);
+/// How long after the last wheel event the list still counts as scrolling.
+const IDLE: Duration = Duration::from_millis(200);
 /// Pixels per wheel line. Trackpad deltas already arrive in pixels.
 const LINE_HEIGHT: Pixels = px(40.);
 
@@ -23,6 +26,8 @@ pub(super) struct SmoothScroll {
     list: ListState,
     /// Where the wheel is taking the list; `None` when no animation is running.
     target: Rc<Cell<Option<Pixels>>>,
+    /// When the wheel last moved the list.
+    last_wheel: Rc<Cell<Option<Instant>>>,
 }
 
 impl SmoothScroll {
@@ -30,6 +35,7 @@ impl SmoothScroll {
         Self {
             list,
             target: Rc::new(Cell::new(None)),
+            last_wheel: Rc::new(Cell::new(None)),
         }
     }
 
@@ -58,6 +64,12 @@ impl SmoothScroll {
         .into_any_element()
     }
 
+    /// True while the wheel is moving the list, so rows can skip hover styling
+    /// and stop flickering as they slide under the pointer.
+    pub(super) fn is_scrolling(&self) -> bool {
+        self.target.get().is_some() || self.last_wheel.get().is_some_and(|at| at.elapsed() < IDLE)
+    }
+
     /// Current top of the list in pixels.
     fn position(&self) -> Pixels {
         -self.list.scroll_px_offset_for_scrollbar().y
@@ -72,27 +84,30 @@ impl SmoothScroll {
         let base = self.target.get().unwrap_or_else(|| self.position());
         let target = (base - dy).max(px(0.)).min(self.max_position());
         self.target.set(Some(target));
+        self.last_wheel.set(Some(Instant::now()));
         window.refresh();
     }
 
     fn step(&self, window: &mut Window) {
-        let Some(target) = self.target.get() else {
-            return;
-        };
-        if self.list.is_scrollbar_dragging() {
-            self.target.set(None);
-            return;
+        if let Some(target) = self.target.get() {
+            if self.list.is_scrollbar_dragging() {
+                self.target.set(None);
+            } else {
+                let current = self.position();
+                let target = target.max(px(0.)).min(self.max_position());
+                let remaining = target - current;
+                if remaining.abs() <= SETTLED {
+                    self.list.set_offset_from_scrollbar(point(px(0.), -target));
+                    self.target.set(None);
+                } else {
+                    self.list
+                        .set_offset_from_scrollbar(point(px(0.), -(current + remaining * EASE)));
+                }
+            }
         }
-        let current = self.position();
-        let target = target.max(px(0.)).min(self.max_position());
-        let remaining = target - current;
-        if remaining.abs() <= SETTLED {
-            self.list.set_offset_from_scrollbar(point(px(0.), -target));
-            self.target.set(None);
-            return;
+        // Keep frames coming through the idle window so rows re-enable hover once it ends.
+        if self.is_scrolling() {
+            window.request_animation_frame();
         }
-        self.list
-            .set_offset_from_scrollbar(point(px(0.), -(current + remaining * EASE)));
-        window.request_animation_frame();
     }
 }

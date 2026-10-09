@@ -572,6 +572,7 @@ impl ScopeApp {
                             this.view_mode,
                             this.operation.is_applying(),
                             index,
+                            !this.smooth_scroll.is_scrolling(),
                         ));
                         if selected {
                             column = column.child(detail_element(pkg, this.snap_details.get(pkg)));
