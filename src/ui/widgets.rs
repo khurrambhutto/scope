@@ -234,8 +234,24 @@ pub(super) fn plan_rows(rows: Vec<(&'static str, String)>) -> impl IntoElement {
     div()
         .flex()
         .flex_col()
-        .mb(px(14.))
-        .children(rows.into_iter().map(|(label, value)| kv_row(label, value)))
+        .gap(px(3.))
+        .children(rows.into_iter().map(|(label, value)| {
+            div()
+                .flex()
+                .items_start()
+                .gap(px(12.))
+                .py(px(8.))
+                .text_size(px(12.))
+                .line_height(px(16.))
+                .child(
+                    div()
+                        .flex_none()
+                        .w(px(120.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .child(label),
+                )
+                .child(div().flex_1().min_w(px(0.)).child(value))
+        }))
 }
 
 pub(super) fn dialog_actions(children: Vec<AnyElement>) -> impl IntoElement {

@@ -5,6 +5,7 @@
 //! the title bar, the search input, and shared widgets.
 pub mod app_view;
 pub mod detail;
+mod detail_transition;
 pub mod dialog;
 pub mod filters;
 mod operation_controller;

@@ -69,7 +69,7 @@ pub(super) fn breakdown(details: Option<&SnapDetails>) -> AnyElement {
     let mut content = div().flex().flex_col().gap(px(12.));
     if let Some(details) = details {
         for (effect, heading) in [
-            (RemovalEffect::RemovedBySnap, "Ready to remove"),
+            (RemovalEffect::RemovedBySnap, ""),
             (RemovalEffect::Kept, "Kept after uninstall"),
             (RemovalEffect::Unverified, "Needs review"),
         ] {
@@ -79,23 +79,17 @@ pub(super) fn breakdown(details: Option<&SnapDetails>) -> AnyElement {
                         .flex()
                         .flex_col()
                         .gap(px(3.))
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .justify_between()
-                                .pb(px(4.))
-                                .text_size(px(12.))
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .child(heading)
-                                .child(
-                                    div()
-                                        .text_size(px(11.))
-                                        .font_weight(FontWeight::NORMAL)
-                                        .text_color(theme::text_faint())
-                                        .child("Stored size"),
-                                ),
-                        )
+                        .when(!heading.is_empty(), |this| {
+                            this.child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .pb(px(4.))
+                                    .text_size(px(12.))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .child(heading),
+                            )
+                        })
                         .children(
                             details
                                 .items
@@ -107,6 +101,9 @@ pub(super) fn breakdown(details: Option<&SnapDetails>) -> AnyElement {
             }
         }
         for warning in &details.warnings {
+            if warning == "No existing recovery snapshots were reported for this app." {
+                continue;
+            }
             content = content.child(
                 div()
                     .text_size(px(11.))
@@ -123,14 +120,7 @@ pub(super) fn breakdown(details: Option<&SnapDetails>) -> AnyElement {
                 .child("Reading revisions, data and recovery snapshots…"),
         );
     }
-    content.child(
-        div().pt(px(10.)).border_t_1().border_color(theme::border())
-            .flex().flex_col().gap(px(4.)).text_size(px(11.)).line_height(px(16.))
-            .text_color(theme::text_dim())
-            .child("Snap may back up managed data before removal. Default retention: 31 days; system settings may differ.")
-            .child(div().text_color(theme::text_faint())
-                .child("Stored sizes are not space freed. Other users' data and files outside these paths are not measured."))
-    ).into_any_element()
+    content.into_any_element()
 }
 
 fn detail_row(item: &DetailItem) -> AnyElement {
@@ -140,9 +130,9 @@ fn detail_row(item: &DetailItem) -> AnyElement {
         None => "Unknown".into(),
     };
     let icon = match item.effect {
-        RemovalEffect::RemovedBySnap => IconName::Check,
-        RemovalEffect::Kept => IconName::Minus,
-        RemovalEffect::Unverified => IconName::CircleAlert,
+        RemovalEffect::RemovedBySnap => None,
+        RemovalEffect::Kept => Some(IconName::Minus),
+        RemovalEffect::Unverified => Some(IconName::CircleAlert),
     };
     let location = item.location.as_deref().unwrap_or(&item.label);
     let location = if item.label.starts_with("Recovery snapshot") {
@@ -178,24 +168,21 @@ fn detail_row(item: &DetailItem) -> AnyElement {
         .flex()
         .items_start()
         .gap(px(12.))
-        .px(px(4.))
-        .py(px(6.))
+        .py(px(8.))
         .text_size(px(12.))
         .line_height(px(16.))
         .child(
             div()
                 .flex_none()
-                .w(px(142.))
+                .w(px(120.))
                 .flex()
                 .items_center()
                 .gap(px(9.))
-                .child(Icon::new(icon).size(px(12.)).text_color(
-                    if item.effect == RemovalEffect::RemovedBySnap {
-                        theme::accent_text()
-                    } else {
-                        theme::text_faint()
-                    },
-                ))
+                .children(icon.map(|icon| {
+                    Icon::new(icon)
+                        .size(px(12.))
+                        .text_color(theme::text_faint())
+                }))
                 .child(
                     div()
                         .flex_1()
@@ -208,7 +195,7 @@ fn detail_row(item: &DetailItem) -> AnyElement {
         .child(
             div()
                 .flex_none()
-                .w(px(85.))
+                .w(px(64.))
                 .text_right()
                 .text_size(px(11.))
                 .text_color(theme::text_dim())
