@@ -1,6 +1,6 @@
 [package]
 name = "scope-gpui"
-version = "0.3.3"
+version = "0.3.4"
 edition = "2021"
 description = "See, update, and uninstall Linux apps in one place"
 
