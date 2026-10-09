@@ -33,12 +33,15 @@ src/                      GPUI app
     operations/           preview/apply flows, APT simulation, PlanStore
     safety/               deny-lists for packages and paths
     system/               command execution, timeouts, pkexec
+    snap_details/         read-only Snap revisions, snapshots and bounded data sizes
     package.rs            InstalledPackage plus source/scope enums
   theme.rs                palette and formatting helpers
   ui/                     screen state and composition
     app_view.rs           header, filters, virtualized list, inline detail, dialogs
     filters.rs            search, view toggle, selects, rescan
     row.rs / detail.rs    list row + inline detail panel
+    snap_details.rs       lazy Snap breakdown shared with uninstall previews
+    snap_detail_state.rs  inspection cancellation, request identity and short cache
     dialog.rs             uninstall/update preview and confirmation
     operation_footer.rs   inline footer progress and dismissible results
     title_bar.rs          client-side title bar
@@ -90,6 +93,8 @@ Commands that previews display and apply runs:
 | Flatpak user | `flatpak uninstall -y --user <id>` | `flatpak update -y --user <id>` |
 | Flatpak system | `pkexec flatpak uninstall -y --system <id>` | `pkexec flatpak update -y --system <id>` |
 | AppImage | not supported yet — protected plan, no command runs | not supported yet — protected plan, no command runs |
+
+Snap removal details use compact type/path/size rows grouped by removal effect inside the expanded app row and preview modal. Markers describe effects and are not file-selection controls. Snap removal details are informational. Load them lazily from the local snapd API, measure only managed data directories with bounded workers, and refresh them at uninstall preview. Show incomplete or unavailable sizes explicitly. Never sum them into guaranteed freed space, treat paths as deletion targets, or enable purge/snapshot deletion. Normal `snap remove` may create a recovery snapshot; existing snapshots remain.
 
 Icon contract: icons load only from `scope-icon://localhost/<path>` URLs produced by `icons::icon_url`, decoded by `backend::icon_path` into on-disk paths GPUI renders directly.
 

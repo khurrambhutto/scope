@@ -53,6 +53,7 @@ pub async fn preview(pkg: &InstalledPackage) -> Result<OperationPlan> {
         steps,
         created_at_ms: now_ms(),
         apt_transaction_fingerprint: fingerprint,
+        snap_details: None,
     })
 }
 
@@ -226,6 +227,7 @@ mod tests {
             steps: vec![],
             created_at_ms: 0,
             apt_transaction_fingerprint: Some("fingerprint".into()),
+            snap_details: None,
         }
     }
 

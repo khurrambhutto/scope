@@ -80,6 +80,7 @@ What works today:
 - One list across APT, Snap, Flatpak, AppImages, and unmanaged desktop launchers
 - Display names, categories, and icons from desktop entries and the freedesktop icon theme
 - Uninstall with a preview, Polkit authentication, and a deny-list for protected packages
+- Snap removal details showing installed revisions, managed data sizes, and retained recovery snapshots
 - Update with a preview for APT, Snap, and Flatpak
 - A self-updater that verifies signed checksums for official `.deb` builds
 

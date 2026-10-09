@@ -129,6 +129,9 @@ pub struct OperationPlan {
     pub steps: Vec<PlanStep>,
     pub created_at_ms: u64,
     pub apt_transaction_fingerprint: Option<String>,
+    /// Informational Snap breakdown captured at preview; never executed as paths.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub snap_details: Option<Box<crate::domain::snap_details::SnapDetails>>,
 }
 
 /// Outcome of applying a plan.
@@ -285,6 +288,7 @@ mod tests {
             steps: vec![],
             created_at_ms: 0,
             apt_transaction_fingerprint: None,
+            snap_details: None,
         }
     }
 

@@ -6,7 +6,7 @@ use gpui_kit::{div, img, px, rgb, rgba, AnyElement, FontWeight, WeakEntity};
 
 use crate::backend::{self, OpKind};
 use crate::domain::listing;
-use crate::domain::package::InstalledPackage;
+use crate::domain::package::{InstalledPackage, PackageSource};
 use crate::theme::{self, display_title, text_dim};
 
 use super::app_view::{act, ScopeApp};
@@ -70,6 +70,12 @@ pub(super) fn row_element(
         .my(px(2.))
         .rounded(px(12.))
         .border_1()
+        .when(selected && pkg.source == PackageSource::Snap, |this| {
+            this.my(px(0.))
+                .rounded(px(0.))
+                .rounded_t(px(12.))
+                .border_0()
+        })
         .cursor_pointer()
         .border_color(if selected {
             theme::border_hover()

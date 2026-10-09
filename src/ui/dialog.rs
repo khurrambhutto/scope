@@ -9,7 +9,7 @@ use gpui_kit::{
 
 use crate::backend::OpKind;
 use crate::domain::operations::OperationPlan;
-use crate::domain::package::InstalledPackage;
+use crate::domain::package::{InstalledPackage, PackageSource};
 use crate::theme::{self, border, display_title, elev, text_dim};
 
 use super::app_view::{act, ScopeApp};
@@ -229,7 +229,9 @@ fn confirm_body(
             ));
         }
     }
-    rows.push(("Size", theme::format_size(pkg.size_bytes)));
+    if pkg.source != PackageSource::Snap {
+        rows.push(("Size", theme::format_size(pkg.size_bytes)));
+    }
 
     let confirm_style = match kind {
         OpKind::Uninstall => ButtonStyle::Danger,
@@ -239,6 +241,9 @@ fn confirm_body(
     div()
         .p(px(20.))
         .child(plan_rows(rows))
+        .when_some(plan.snap_details.as_ref(), |this, details| {
+            this.child(super::snap_details::breakdown(Some(details)))
+        })
         .child(dialog_actions(vec![
             button(
                 "dlg-cancel",

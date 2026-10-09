@@ -81,6 +81,7 @@ pub struct ScopeApp {
     pub(super) view_mode: ViewMode,
     pub(super) show_all: bool,
     pub(super) selected_key: Option<String>,
+    pub(super) snap_details: super::snap_detail_state::SnapDetailState,
     pub(super) open_select: Option<OpenSelect>,
     pub(super) dialog: Option<Dialog>,
     operation: OperationController,
@@ -132,6 +133,7 @@ impl ScopeApp {
             view_mode: ViewMode::Uninstall,
             show_all: false,
             selected_key: None,
+            snap_details: super::snap_detail_state::SnapDetailState::default(),
             open_select: None,
             dialog: None,
             operation: OperationController::default(),
@@ -179,6 +181,8 @@ impl ScopeApp {
                     backend::write_cache(&scan);
                     this.scan = Some(scan);
                     this.scan_gen += 1;
+                    this.snap_details.clear();
+                    this.load_snap_details(cx);
                 }
                 this.loading = false;
                 this.refreshing = false;
@@ -211,6 +215,7 @@ impl ScopeApp {
             }
         }
         self.selected_key = next;
+        self.load_snap_details(cx);
         cx.notify();
     }
 
@@ -544,7 +549,15 @@ impl ScopeApp {
                 match this.packages.entries.get(index) {
                     Some(pkg) => {
                         let selected = this.selected_key.as_deref() == Some(pkg.key.as_str());
-                        let mut column = div().flex().flex_col().w_full();
+                        let mut column = div().flex().flex_col().w_full().when(
+                            selected && pkg.source == crate::domain::package::PackageSource::Snap,
+                            |this| {
+                                this.my(px(2.))
+                                    .rounded(px(12.))
+                                    .overflow_hidden()
+                                    .bg(theme::selected_surface())
+                            },
+                        );
                         column = column.child(row_element(
                             &list_entity.downgrade(),
                             pkg,
@@ -554,7 +567,7 @@ impl ScopeApp {
                             index,
                         ));
                         if selected {
-                            column = column.child(detail_element(pkg));
+                            column = column.child(detail_element(pkg, this.snap_details.get(pkg)));
                         }
                         column.into_any_element()
                     }

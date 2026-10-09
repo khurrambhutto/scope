@@ -102,6 +102,18 @@ pub fn write_cache(scan: &Scan) {
     }
 }
 
+/// Load informational Snap details off the UI thread.
+pub fn spawn_snap_details(
+    name: String,
+    cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    tx: oneshot::Sender<crate::domain::snap_details::SnapDetails>,
+) {
+    std::thread::spawn(move || {
+        let details = block_on(crate::domain::snap_details::inspect(&name, cancel));
+        let _ = tx.send(details);
+    });
+}
+
 /// Which destructive operation a dialog is previewing.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum OpKind {
@@ -397,6 +409,7 @@ mod tests {
         pkg.source = PackageSource::Snap;
         spawn_preview(store.clone(), OpKind::Uninstall, pkg, tx);
         let plan = block_on(rx).unwrap().unwrap();
+        assert!(plan.snap_details.is_some());
         assert!(store.take(&plan.plan_id).is_some());
     }
 

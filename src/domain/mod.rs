@@ -12,5 +12,6 @@ pub mod package;
 pub mod package_files;
 pub mod safety;
 pub mod scanner;
+pub mod snap_details;
 pub mod system;
 pub mod updater;

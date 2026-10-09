@@ -32,6 +32,17 @@ pub async fn preview(pkg: &InstalledPackage) -> Result<OperationPlan> {
     } else {
         None
     };
+    let snap_details = if matches!(target, OperationTarget::Snap { .. }) && !protection.protected {
+        Some(Box::new(
+            crate::domain::snap_details::inspect(
+                target.id(),
+                std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            )
+            .await,
+        ))
+    } else {
+        None
+    };
     Ok(OperationPlan {
         plan_id: new_plan_id(),
         operation: Operation::Uninstall,
@@ -46,6 +57,7 @@ pub async fn preview(pkg: &InstalledPackage) -> Result<OperationPlan> {
         steps,
         created_at_ms: now_ms(),
         apt_transaction_fingerprint: fingerprint,
+        snap_details,
     })
 }
 
@@ -188,6 +200,7 @@ mod tests {
             steps: vec![],
             created_at_ms: 0,
             apt_transaction_fingerprint: None,
+            snap_details: None,
         }
     }
 
@@ -197,6 +210,16 @@ mod tests {
             version: Some("1.0".into()),
             has_update: None,
         }
+    }
+
+    #[test]
+    fn snap_removal_preserves_normal_snapshot_behavior() {
+        let target = OperationTarget::Snap {
+            package_id: "code".into(),
+        };
+        let (auth, steps) = build_steps(&target, false);
+        assert_eq!(auth, AuthMethod::Pkexec);
+        assert_eq!(steps[0].command_summary, "pkexec snap remove code");
     }
 
     #[test]

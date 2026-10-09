@@ -4,13 +4,25 @@ use gpui_kit::prelude::*;
 use gpui_kit::{div, px, AnyElement, FontWeight};
 
 use crate::domain::listing;
-use crate::domain::package::InstalledPackage;
+use crate::domain::package::{InstalledPackage, PackageSource};
+use crate::domain::snap_details::SnapDetails;
 use crate::theme::{self, display_title, text_dim};
 
 use super::row::package_icon;
 use super::widgets::{kv_row, tag};
 
-pub(super) fn detail_element(pkg: &InstalledPackage) -> AnyElement {
+pub(super) fn detail_element(
+    pkg: &InstalledPackage,
+    snap_details: Option<&SnapDetails>,
+) -> AnyElement {
+    if pkg.source == PackageSource::Snap {
+        return div()
+            .px(px(16.))
+            .pb(px(14.))
+            .pt(px(6.))
+            .child(super::snap_details::breakdown(snap_details))
+            .into_any_element();
+    }
     let title = display_title(pkg);
 
     let mut rows: Vec<(String, String)> = vec![
@@ -43,7 +55,11 @@ pub(super) fn detail_element(pkg: &InstalledPackage) -> AnyElement {
     if let Some(reason) = listing::uninstall_block_reason(pkg) {
         rows.push(("Uninstall".to_string(), reason));
     }
-    rows.retain(|(_, value)| !value.is_empty() && value != "—");
+    rows.retain(|(label, value)| {
+        !value.is_empty()
+            && value != "—"
+            && !(pkg.source == PackageSource::Snap && label == "Installed size")
+    });
 
     div()
         .mx(px(8.))
@@ -90,15 +106,20 @@ pub(super) fn detail_element(pkg: &InstalledPackage) -> AnyElement {
                         ),
                 ),
         )
-        .when_some(pkg.description.clone(), |this, description| {
-            this.child(
-                div()
-                    .text_size(px(14.))
-                    .line_height(px(22.))
-                    .text_color(text_dim())
-                    .child(description),
-            )
-        })
+        .when_some(
+            pkg.description
+                .clone()
+                .or_else(|| snap_details.and_then(|details| details.summary.clone())),
+            |this, description| {
+                this.child(
+                    div()
+                        .text_size(px(14.))
+                        .line_height(px(22.))
+                        .text_color(text_dim())
+                        .child(description),
+                )
+            },
+        )
         .child(
             div()
                 .flex()
