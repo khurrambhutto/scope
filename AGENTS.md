@@ -45,6 +45,7 @@ src/                      GPUI app
     dialog.rs             uninstall/update preview and confirmation
     operation_footer.rs   inline footer progress and dismissible results
     title_bar.rs          client-side title bar
+    resize_zones.rs       invisible window edge/corner bands that start resizing
     text_input.rs         search field
     widgets.rs            banners, empty/loading states
     package_list_model.rs scan replacement and stable-key list behavior

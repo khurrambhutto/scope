@@ -29,6 +29,7 @@ use super::filters::{OpenSelect, SourceFilter, ViewMode};
 use super::operation_controller::OperationController;
 use super::operation_footer::{operation_footer, OperationStatus};
 use super::package_list_model::PackageListModel;
+use super::resize_zones::resize_zones;
 use super::row::row_element;
 use super::title_bar::title_bar;
 use super::updater::{updater_banner, UpdaterStatus, UpdaterUi};
@@ -604,13 +605,8 @@ impl Render for ScopeApp {
             window.window_decorations(),
             gpui_kit::Decorations::Client { tiling } if tiling.is_tiled()
         );
-        let corner_radius = px(
-            if window.is_maximized() || window.is_fullscreen() || tiled {
-                0.
-            } else {
-                12.
-            },
-        );
+        let floating = !(window.is_maximized() || window.is_fullscreen() || tiled);
+        let corner_radius = px(if floating { 12. } else { 0. });
         let entity = cx.entity().downgrade();
         let list_entity = cx.entity();
         let total = self
@@ -758,5 +754,6 @@ impl Render for ScopeApp {
             )
             .when_some(dropdown_backdrop, |this, backdrop| this.child(backdrop))
             .when_some(dialog_el, |this, dialog| this.child(dialog))
+            .when(floating, |this| this.children(resize_zones()))
     }
 }
