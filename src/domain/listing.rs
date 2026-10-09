@@ -10,6 +10,9 @@ use crate::domain::safety;
 
 /// True when `pkg` is a user-facing app/tool that belongs in Scope's main list.
 pub fn is_listable(pkg: &InstalledPackage) -> bool {
+    if pkg.source == PackageSource::Steam {
+        return matches!(pkg.app_kind, AppKind::Game | AppKind::Gui);
+    }
     if !matches!(pkg.app_kind, AppKind::Gui | AppKind::Cli) {
         return false;
     }
@@ -93,6 +96,19 @@ mod tests {
         );
         assert!(is_listable(&app));
         assert!(!can_uninstall(&app));
+    }
+
+    #[test]
+    fn lists_steam_games_and_applications_but_keeps_unknown_items_out() {
+        let game = package(PackageSource::Steam, "570", AppKind::Game);
+        let application = package(PackageSource::Steam, "250820", AppKind::Gui);
+        let unknown = package(PackageSource::Steam, "12345", AppKind::Unknown);
+
+        assert!(is_listable(&game));
+        assert!(is_listable(&application));
+        assert!(!is_listable(&unknown));
+        assert!(is_visible(&unknown, true));
+        assert!(!can_uninstall(&game));
     }
 
     #[test]

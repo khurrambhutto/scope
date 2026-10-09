@@ -4,7 +4,9 @@
 
 use gpui_kit::{rgb, App, Hsla};
 
-use crate::domain::package::{AppKind, InstalledPackage, PackageSource};
+use crate::domain::package::{
+    AppKind, InstalledPackage, PackageSource, SteamUpdateStatus,
+};
 
 pub fn source_color(source: PackageSource) -> Hsla {
     match source {
@@ -13,6 +15,7 @@ pub fn source_color(source: PackageSource) -> Hsla {
         PackageSource::Flatpak => rgb(0x4a154b),
         PackageSource::AppImage => rgb(0x0b8a4f),
         PackageSource::Desktop => rgb(0x7569d2),
+        PackageSource::Steam => rgb(0x1b5c8c),
     }
     .into()
 }
@@ -21,6 +24,7 @@ pub fn kind_color(kind: AppKind) -> Hsla {
     match kind {
         AppKind::Gui => rgb(0x2f8fa3),
         AppKind::Cli => rgb(0xa97b2e),
+        AppKind::Game => rgb(0x5a7dc7),
         AppKind::Unknown => rgb(0x6b625e),
     }
     .into()
@@ -33,6 +37,7 @@ pub fn source_label(source: PackageSource) -> &'static str {
         PackageSource::Flatpak => "Flatpak",
         PackageSource::AppImage => "AppImage",
         PackageSource::Desktop => "Desktop",
+        PackageSource::Steam => "Steam",
     }
 }
 
@@ -40,7 +45,28 @@ pub fn kind_label(kind: AppKind) -> &'static str {
     match kind {
         AppKind::Gui => "GUI",
         AppKind::Cli => "CLI",
+        AppKind::Game => "Game",
         AppKind::Unknown => "Unknown",
+    }
+}
+
+/// Package-specific source text for rows and detail classifications.
+pub fn package_source_label(pkg: &InstalledPackage) -> &'static str {
+    if pkg.source == PackageSource::Steam && pkg.app_kind == AppKind::Game {
+        "Steam Game"
+    } else {
+        source_label(pkg.source)
+    }
+}
+
+/// Steam's locally recorded update state. This does not check Steam's live state.
+pub fn steam_update_status_label(status: Option<SteamUpdateStatus>) -> &'static str {
+    match status {
+        Some(SteamUpdateStatus::Pending) => "Update pending in Steam",
+        Some(SteamUpdateStatus::Paused) => "Update paused in Steam",
+        Some(SteamUpdateStatus::InProgress) => "Update in progress in Steam",
+        Some(SteamUpdateStatus::NoUpdateRecorded) => "No update recorded",
+        Some(SteamUpdateStatus::Unknown) | None => "Status unknown",
     }
 }
 
@@ -326,6 +352,7 @@ mod tests {
         assert_eq!(source_label(PackageSource::AppImage), "AppImage");
         assert_eq!(source_label(PackageSource::Desktop), "Desktop");
     }
+
 
     #[test]
     fn kind_label_covers_every_kind() {

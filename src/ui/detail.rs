@@ -1,7 +1,7 @@
 //! Inline detail panel shown beneath the selected row.
 
 use gpui_kit::prelude::*;
-use gpui_kit::{div, px, AnyElement, FontWeight};
+use gpui_kit::{div, px, AnyElement, FontWeight, SharedString};
 
 use crate::domain::listing;
 use crate::domain::package::{InstalledPackage, PackageSource};
@@ -9,7 +9,7 @@ use crate::domain::snap_details::SnapDetails;
 use crate::theme::{self, display_title, text_dim};
 
 use super::row::package_icon;
-use super::widgets::{kv_row, tag};
+use super::widgets::{button, kv_row, tag, ButtonStyle};
 
 pub(super) fn detail_element(
     pkg: &InstalledPackage,
@@ -43,15 +43,24 @@ pub(super) fn detail_element(
             "Categories".to_string(),
             pkg.categories.clone().unwrap_or_else(|| "—".to_string()),
         ),
-        (
+    ];
+    let steam_status_note = (pkg.source == PackageSource::Steam)
+        .then_some("Steam's last recorded status; open Steam to check for newer updates.");
+    if pkg.source == PackageSource::Steam {
+        rows.push((
+            "Steam update".to_string(),
+            theme::steam_update_status_label(pkg.steam_update_status).to_string(),
+        ));
+    } else {
+        rows.push((
             "Update available".to_string(),
             if pkg.has_update {
                 "Yes".to_string()
             } else {
                 "—".to_string()
             },
-        ),
-    ];
+        ));
+    }
     if let Some(reason) = listing::uninstall_block_reason(pkg) {
         rows.push(("Uninstall".to_string(), reason));
     }
@@ -62,6 +71,7 @@ pub(super) fn detail_element(
     });
 
     div()
+        .id(SharedString::from(format!("package-detail:{}", pkg.key)))
         .mx(px(8.))
         .mb(px(8.))
         .ml(px(12.))
@@ -96,7 +106,7 @@ pub(super) fn detail_element(
                                 .flex_wrap()
                                 .gap(px(6.))
                                 .child(tag(
-                                    theme::source_label(pkg.source),
+                                    theme::package_source_label(pkg),
                                     theme::source_color(pkg.source),
                                 ))
                                 .child(tag(
@@ -120,11 +130,37 @@ pub(super) fn detail_element(
                 )
             },
         )
+        .when_some(steam_status_note, |this, note| {
+            this.child(
+                div()
+                    .text_size(px(12.))
+                    .line_height(px(18.))
+                    .text_color(text_dim())
+                    .child(note),
+            )
+        })
         .child(
             div()
                 .flex()
                 .flex_col()
                 .children(rows.into_iter().map(|(label, value)| kv_row(label, value))),
         )
+        .when_some(pkg.steam_library_url(), |this, url| {
+            this.child(
+                div().flex().justify_end().child(
+                    button(
+                        "detail-open-steam",
+                        "Open in Steam",
+                        ButtonStyle::Neutral,
+                        move |_ev, _window, cx| {
+                            cx.stop_propagation();
+                            cx.open_url(&url);
+                        },
+                    )
+                    .tooltip("Manage updates in Steam")
+                    .accessibility_label("Open this item in Steam"),
+                ),
+            )
+        })
         .into_any_element()
 }

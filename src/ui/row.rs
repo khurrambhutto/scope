@@ -6,7 +6,7 @@ use gpui_kit::{div, img, px, rgb, rgba, AnyElement, FontWeight, WeakEntity};
 
 use crate::backend::{self, OpKind};
 use crate::domain::listing;
-use crate::domain::package::{InstalledPackage, PackageSource};
+use crate::domain::package::{InstalledPackage, PackageSource, SteamUpdateStatus};
 use crate::theme::{self, display_title, text_dim};
 
 use super::app_view::{act, ScopeApp};
@@ -30,7 +30,21 @@ pub(super) fn row_element(
         pkg.version.clone()
     };
 
-    let action: Option<AnyElement> = if view_mode == ViewMode::Updates && pkg.has_update {
+    let steam_update_status = (pkg.source == PackageSource::Steam
+        && matches!(
+            pkg.steam_update_status,
+            Some(
+                SteamUpdateStatus::Pending
+                    | SteamUpdateStatus::Paused
+                    | SteamUpdateStatus::InProgress
+            )
+        ))
+    .then(|| theme::steam_update_status_label(pkg.steam_update_status));
+
+    let action: Option<AnyElement> = if pkg.source == PackageSource::Steam {
+        pkg.steam_library_url()
+            .map(|url| steam_action_button(url, selected))
+    } else if view_mode == ViewMode::Updates && pkg.has_update {
         Some(action_button(
             entity,
             pkg.key.clone(),
@@ -121,7 +135,10 @@ pub(super) fn row_element(
                         .child("·")
                         .child(theme::format_size(pkg.size_bytes))
                         .child("·")
-                        .child(theme::source_label(pkg.source)),
+                        .child(theme::package_source_label(pkg))
+                        .when_some(steam_update_status, |this, status| {
+                            this.child("·").child(status)
+                        }),
                 ),
         )
         .when_some(action, |this, action| {
@@ -174,6 +191,22 @@ fn action_button(
     )
     .disabled(operation_busy)
     .tab_stop(selected && !operation_busy)
+    .into_any_element()
+}
+
+fn steam_action_button(url: String, selected: bool) -> AnyElement {
+    button(
+        "action-open-steam",
+        "Open in Steam",
+        ButtonStyle::Neutral,
+        move |_ev, _window, cx| {
+            cx.stop_propagation();
+            cx.open_url(&url);
+        },
+    )
+    .tooltip("Manage updates in Steam")
+    .accessibility_label("Open this item in Steam")
+    .tab_stop(selected)
     .into_any_element()
 }
 

@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 
-use crate::domain::package::{InstallScope, InstalledPackage};
+use crate::domain::package::{InstallScope, InstalledPackage, PackageSource};
 use crate::domain::safety;
 use crate::domain::system::run_elevated;
 
@@ -16,7 +16,9 @@ use super::{
 const UPDATE_TIMEOUT: Duration = Duration::from_secs(300);
 
 pub async fn preview(pkg: &InstalledPackage) -> Result<OperationPlan> {
-    if pkg.version.trim().is_empty() || pkg.version.eq_ignore_ascii_case("unknown") {
+    if pkg.source != PackageSource::Steam
+        && (pkg.version.trim().is_empty() || pkg.version.eq_ignore_ascii_case("unknown"))
+    {
         anyhow::bail!("Installed version is unknown. Rescan before updating.")
     }
     let target = OperationTarget::from_package(pkg)?;
@@ -108,6 +110,9 @@ fn build_steps(
         OperationTarget::AppImage { .. } => blocked("AppImage updates are not supported yet."),
         OperationTarget::Desktop { .. } => {
             blocked("This app is not managed by a supported package manager.")
+        },
+        OperationTarget::Steam { .. } => {
+            blocked("Steam items are read-only in Scope. Manage updates in Steam.")
         }
     }
 }
@@ -201,6 +206,12 @@ pub async fn apply(
             logs: String::new(),
             exit_code: None,
         },
+        OperationTarget::Steam { .. } => OperationResult {
+            success: false,
+            message: "Steam items are read-only in Scope. Manage updates in Steam.".into(),
+            logs: String::new(),
+            exit_code: None,
+        },
     }
 }
 
@@ -261,5 +272,26 @@ mod tests {
         package.name = "GIMP".into();
         package.version = "1.0".into();
         assert!(futures::executor::block_on(preview(&package)).is_err());
+    }
+
+    #[test]
+    fn steam_preview_is_protected() {
+        let package = InstalledPackage::new(PackageSource::Steam, "570");
+        let plan = futures::executor::block_on(preview(&package)).unwrap();
+
+        assert!(plan.protected);
+        assert!(matches!(plan.target, OperationTarget::Steam { .. }));
+    }
+
+    #[test]
+    fn steam_revalidation_and_apply_fail_closed() {
+        let mut plan = plan("1");
+        plan.target = OperationTarget::Steam {
+            app_id: "570".into(),
+        };
+
+        assert!(revalidate(&plan, &present(Some("1"), Some(true))).is_err());
+        let result = futures::executor::block_on(apply(&plan, &|_| {}));
+        assert!(!result.success);
     }
 }

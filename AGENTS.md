@@ -1,6 +1,6 @@
 # Scope
 
-Linux desktop app that unifies installed packages and apps across APT, Snap, Flatpak, and AppImage into one list with preview-first uninstall and update. Product story and install steps are in [README.md](README.md). Primary target is Ubuntu (`.deb` first).
+Linux desktop app that unifies installed packages and apps across APT, Snap, Flatpak, AppImage, and locally discovered Steam games into one list with preview-first uninstall and update for supported package-manager sources. Product story and install steps are in [README.md](README.md). Primary target is Ubuntu (`.deb` first).
 
 ## Stack
 
@@ -27,7 +27,7 @@ src/                      GPUI app
                           plan preview/apply with streamed logs,
                           scope-icon:// URL decoding
   domain/                 backend domain (vendored from old src-tauri/src/)
-    scanner/              per-source scanners (apt.rs, snap.rs, flatpak.rs, appimage.rs)
+    scanner/              per-source scanners (apt.rs, snap.rs, flatpak.rs, appimage.rs, steam.rs)
     desktop_entries/      .desktop discovery and parsing
     icons/                icon theme resolution and scope-icon:// URLs
     operations/           preview/apply flows, APT simulation, PlanStore
@@ -63,6 +63,7 @@ docs/                     GitHub Pages site
 - Keep screens operational and app-like, never marketing pages.
 - Uninstall/update previews use a modal. Applying and results live between the app count and Show all control in the bottom footer so browsing stays available; only one package operation may apply at a time.
 - UI colors come from `theme.rs`: dark red surfaces, burgundy borders, coral emphasis. Kit-owned controls use `theme::init`; actions share the pill button in `ui/widgets.rs`. Keep source colors confined to app icons and source indicators.
+- Package sources are exhaustive contracts: a `PackageSource` addition updates scanner registration, source availability/cache defaults, desktop ownership lookup, listing/filter/theme matches, safety, operation targets, probes, and update/uninstall handlers. Read-only sources must reject both operations in every route.
 
 ## GPUI notes
 
@@ -83,6 +84,7 @@ Scanner and list filters are deliberate product choices:
 - Missing Flatpak scope is an error at preview, probe, and apply. Never default it to system scope.
 - AppImage scans `/opt`, `/usr/local/bin`, `~/Applications`, `~/apps`, `~/AppImages`, `~/Downloads`, `~/.local/bin` for ELF+`AI` magic files. Valid AppImages appear in the main list, but uninstall and update actions remain unsupported; `safety::check_appimage` denies every AppImage path, so preview yields a protected plan and apply-time revalidation fails closed.
 - Visible launchers in the user's applications directory that no APT/Snap/Flatpak/AppImage scanner owns appear as `Desktop` apps. They are discovery-only and protected from uninstall/update. APT package file lists associate `.desktop` launchers and icons with package IDs when their names differ.
+- Steam reads installed manifests from native Steam aliases/XDG roots and Flatpak Steam roots, including every reachable `libraryfolders.vdf` library. It uses binary `appinfo` `common.type`: `game`/`demo` are `Game`, `application` is `Gui`, and `tool` or missing/unknown metadata stays out of the default list until **Show all**. Exact Steam desktop launchers are owned by Steam to prevent duplicate Desktop rows. Steam derives update state locally from a valid, nonzero numeric manifest `StateFlags`: `UpdateRequired` is mask `0x2` (decimal 2, bit offset 1); with that mask, paused takes precedence, then running, downloading, staging, or committing means in progress, while started alone remains pending. Missing, malformed, or zero flags are `Unknown`; valid flags without `UpdateRequired` are `NoUpdateRecorded`, not confirmation that a game is up to date. Do not infer a target build or fabricate `update_version`. `steam_update_status` must retain its serde default so cached packages without that field remain unknown. It refreshes only on a normal scan or rescan and never checks Steam online. Steam remains read-only: Scope never updates or uninstalls it, and **Open in Steam** opens `steam://nav/games/details/<appid>`.
 
 Enrichment is a layer on top of package data, not a replacement: visible `.desktop` entries supply display names, categories, and icons for GUI apps. CLI tools use a source-colored initials icon; packages with no reliable app/tool classification stay out of the main list.
 
@@ -95,7 +97,7 @@ Commands that previews display and apply runs:
 | Flatpak user | `flatpak uninstall -y --user <id>` | `flatpak update -y --user <id>` |
 | Flatpak system | `pkexec flatpak uninstall -y --system <id>` | `pkexec flatpak update -y --system <id>` |
 | AppImage | not supported yet — protected plan, no command runs | not supported yet — protected plan, no command runs |
-
+| Steam | none — read-only | none — use Open in Steam |
 Snap removal details use compact type/path/size rows grouped by removal effect inside the expanded app row and preview modal. Removed rows have no tick marks or "Ready to remove" heading. Inline details ease their measured height when opening and closing, including after lazy Snap inspection finishes, and respect reduced-motion settings. Other markers describe effects and are not file-selection controls. Snap details have no size-column header or empty heading row. Confirmation metadata and Snap details share label-column widths, row padding, and spacing, without per-row dividers. Omit the empty recovery-snapshot message and the generic backup and size footnotes; keep inspection warnings and incomplete-size notes. Snap removal details are informational. Load them lazily from the local snapd API, measure only managed data directories with bounded workers, and refresh them at uninstall preview. Show incomplete or unavailable sizes explicitly. Never sum them into guaranteed freed space, treat paths as deletion targets, or enable purge/snapshot deletion. Normal `snap remove` may create a recovery snapshot; existing snapshots remain.
 
 Icon contract: icons load only from `scope-icon://localhost/<path>` URLs produced by `icons::icon_url`, decoded by `backend::icon_path` into on-disk paths GPUI renders directly.

@@ -42,6 +42,7 @@ pub fn check_package(source: PackageSource, package_id: &str) -> Protection {
         PackageSource::Flatpak => check_flatpak(package_id),
         PackageSource::AppImage => check_appimage(package_id),
         PackageSource::Desktop => check_desktop(package_id),
+        PackageSource::Steam => check_steam(package_id),
     }
 }
 
@@ -169,6 +170,10 @@ fn check_desktop(_desktop_file: &str) -> Protection {
     Protection::denied("This app is not managed by a supported package manager.")
 }
 
+fn check_steam(_app_id: &str) -> Protection {
+    Protection::denied("Steam items are read-only in Scope. Manage updates in Steam.")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -251,6 +256,17 @@ mod tests {
                 "/home/user/.local/share/applications/zed.desktop"
             )
             .protected
+        );
+    }
+
+    #[test]
+    fn steam_items_are_read_only() {
+        let protection = check_package(PackageSource::Steam, "570");
+
+        assert!(protection.protected);
+        assert_eq!(
+            protection.reason.as_deref(),
+            Some("Steam items are read-only in Scope. Manage updates in Steam.")
         );
     }
 }

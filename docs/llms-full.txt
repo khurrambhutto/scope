@@ -1,14 +1,14 @@
 # Scope: Linux app manager, full text
 
-Scope is a free, open-source Linux app manager. It lists apps installed through APT, Snap, Flatpak, and AppImage in one searchable list. Every update or uninstall starts with a plan that shows the exact commands. Scope runs them only after the user confirms. Written in Rust with Zed's GPUI, no webview. Ubuntu is the first target. Current version: 0.3.4. License: MIT. Source: https://github.com/khurrambhutto/scope
+Scope is a free, open-source Linux app manager. It lists apps installed through APT, Snap, Flatpak, and AppImage plus locally installed Steam games in one searchable list. Every supported update or uninstall starts with a plan that shows the exact commands. Scope runs them only after the user confirms. Known pending Steam updates appear in Updates from the last local scan, but Steam remains read-only and opens in Steam for management. Written in Rust with Zed's GPUI, no webview. Ubuntu is the first target. Current version: 0.3.4. License: MIT. Source: https://github.com/khurrambhutto/scope
 
 ## What Scope does
 
-Most Linux users install software from several places. A package can come from the Ubuntu archive, a Snap from the Snap Store, a Flatpak from Flathub, or an AppImage from a download folder. Each source has its own list and its own command, so a user rarely knows everything that is installed.
+Most Linux users install software from several places. A package can come from the Ubuntu archive, a Snap from the Snap Store, a Flatpak from Flathub, an AppImage from a download folder, or a Steam library. Each source has its own list and its own command, so a user rarely knows everything that is installed.
 
-Scope reads all four sources and shows them side by side. The default list shows recognizable GUI apps and command-line tools. Show all reveals every row the scanners return, including libraries and system components. Protected packages stay locked even with Show all on.
+Scope reads the four package sources and locally installed Steam games side by side. The default list shows recognizable GUI apps, command-line tools, and Steam games. Show all reveals every row the scanners return, including libraries, system components, Steam tools, and Steam entries with an unknown type. Protected packages stay locked even with Show all on.
 
-Users can switch between installed apps and available updates, search by app or package name, filter by source, and rescan the system.
+Users can switch between installed apps and available updates, search by app or package name, filter by source, and rescan the system. Known pending Steam updates appear in Updates. Steam records their status as pending, paused, or in progress in the last local manifest scan; a rescan is the only refresh, and Scope makes no online Steam check. An unknown status has no usable recorded state, while No update recorded does not confirm that a game is up to date. Use Open in Steam to hand a game to Steam's library page.
 
 ## How a change works
 
@@ -24,6 +24,7 @@ Users can switch between installed apps and available updates, search by app or 
 - Flatpak: lists user and system installs separately. Each app keeps the scope it was found in. Uninstall runs `flatpak uninstall -y --user` or `--system`. Update runs `flatpak update -y` with the same scope. A missing scope is an error, never a default.
 - AppImage: lists valid AppImages in /opt, /usr/local/bin, ~/Applications, ~/apps, ~/AppImages, ~/Downloads, and ~/.local/bin. Uninstall and update are not supported yet, so the plan is a protected plan and no command runs.
 - Desktop launchers: lists visible launchers in the user's applications folder that no scanner owns. These are for discovery only, and their actions are disabled.
+- Steam: discovers installed games from native Steam aliases/XDG roots and Flatpak Steam libraries, including configured libraries. `appinfo` types `game` and `demo` appear as games; `application` appears as a GUI app; tools and missing or unknown types appear only with Show all. Valid local manifest state can show a known update as pending, paused, or in progress; unavailable or unusable state is unknown, and no update recorded is not an up-to-date check. Steam is read-only in Scope: update and uninstall are blocked, and Open in Steam opens the game's Steam library page for Steam to manage it.
 
 Scope never edits the dpkg or apt databases directly. It always uses the package manager's own command.
 
@@ -54,10 +55,10 @@ Build from source needs Rust stable and these packages: build-essential, pkg-con
 
 Working today:
 
-- One list across APT, Snap, Flatpak, AppImage, and unmanaged desktop launchers
+- One list across APT, Snap, Flatpak, AppImage, unmanaged desktop launchers, and locally discovered Steam games
 - Display names, categories, and icons from desktop entries and the icon theme
 - Uninstall with a preview, Polkit authentication, and a deny-list
-- Update with a preview for APT, Snap, and Flatpak
+- Update with a preview for APT, Snap, and Flatpak; known pending Steam updates in Updates
 - Self-updater that checks a signed SHA-256 manifest for official .deb builds
 
 Not yet:
@@ -70,7 +71,7 @@ Not yet:
 
 ## Comparison
 
-Synaptic manages APT packages only. GNOME Software and KDE Discover are app stores that show what their catalogs offer. Scope starts from what is already installed, across APT, Snap, Flatpak, and AppImage, and makes the plan the thing the user approves.
+Synaptic manages APT packages only. GNOME Software and KDE Discover are app stores that show what their catalogs offer. Scope starts from what is already installed, across APT, Snap, Flatpak, AppImage, and locally discovered Steam games; known pending Steam updates use the last local scan and entries open in Steam for management, while Scope makes the plan the thing the user approves for supported package-manager actions.
 
 ## Who made it
 
@@ -79,7 +80,7 @@ Scope is built by Khurram Bhutto (https://khurrambhutto.tech/). Source and issue
 ## FAQ
 
 Q: What is Scope?
-A: A free, open-source Linux app manager that lists APT, Snap, Flatpak, and AppImage apps in one list, with a preview before every update or uninstall.
+A: A free, open-source Linux app manager that lists APT, Snap, Flatpak, AppImage, and locally installed Steam games in one list, with a preview before every supported update or uninstall. Known pending Steam updates appear in Updates from the last local scan; Steam is read-only in Scope and opens in Steam for management.
 
 Q: Does Scope ask for my password?
 A: No. Admin actions use the standard Polkit dialog through pkexec. Scope never sees or stores the password.

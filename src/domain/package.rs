@@ -14,6 +14,8 @@ pub enum PackageSource {
     Snap,
     Flatpak,
     AppImage,
+    /// A locally discovered Steam application. Steam content is read-only in Scope.
+    Steam,
     /// A user-visible desktop launcher not owned by a supported package manager.
     Desktop,
 }
@@ -26,6 +28,7 @@ impl PackageSource {
             PackageSource::Snap => "snap",
             PackageSource::Flatpak => "flatpak",
             PackageSource::AppImage => "appimage",
+            PackageSource::Steam => "steam",
             PackageSource::Desktop => "desktop",
         }
     }
@@ -37,8 +40,26 @@ impl PackageSource {
 pub enum AppKind {
     Gui,
     Cli,
+    Game,
     #[default]
     Unknown,
+}
+
+/// The locally recorded state of a Steam update, if Steam supplied valid
+/// manifest flags during the scan.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SteamUpdateStatus {
+    /// Steam did not record usable state flags for this installed application.
+    Unknown,
+    /// Steam recorded state flags but did not mark an update as required.
+    NoUpdateRecorded,
+    /// Steam recorded an update requirement that is neither paused nor active.
+    Pending,
+    /// Steam recorded an update requirement that is paused.
+    Paused,
+    /// Steam recorded an update requirement with active transfer or processing.
+    InProgress,
 }
 
 /// Where a package is installed when the package manager has multiple scopes.
@@ -60,10 +81,10 @@ impl InstallScope {
 
 /// A unified view of one installed package/app regardless of its source.
 ///
-/// GUI metadata (`display_name`, `icon`, `categories`, `terminal`) is an
+/// Desktop metadata (`display_name`, `icon`, `categories`, `terminal`) is an
 /// enrichment layer filled in by the desktop-entry merge step. Packages with
-/// no reliable GUI or CLI classification remain `Unknown` and are omitted from
-/// the app-facing main list.
+/// no reliable GUI, CLI, or game classification remain `Unknown` and are
+/// omitted from the app-facing main list by default.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstalledPackage {
     /// Backend-side stable key: `<source>:<package id>`.
@@ -71,7 +92,8 @@ pub struct InstalledPackage {
     /// Package manager or local desktop-launcher source.
     pub source: PackageSource,
     /// Package id as the package manager knows it (dpkg name, snap name,
-    /// flatpak application id, AppImage absolute path, or desktop-entry path.
+    /// Flatpak application id, AppImage absolute path, Steam AppID, or
+    /// desktop-entry path.
     pub package_id: String,
     /// Install scope for package managers that can install the same id in more
     /// than one place, such as Flatpak user/system installations.
@@ -107,6 +129,9 @@ pub struct InstalledPackage {
     /// The version string of the available update, if known.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub update_version: Option<String>,
+    /// Locally recorded Steam update state, when this package came from Steam.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub steam_update_status: Option<SteamUpdateStatus>,
 }
 
 impl InstalledPackage {
@@ -129,6 +154,7 @@ impl InstalledPackage {
             terminal: false,
             has_update: false,
             update_version: None,
+            steam_update_status: None,
         }
     }
 
@@ -155,7 +181,26 @@ impl InstalledPackage {
             terminal: false,
             has_update: false,
             update_version: None,
+            steam_update_status: None,
         }
+    }
+
+    /// Open the Steam library details page for this package when it has a
+    /// canonical, positive 32-bit Steam AppID.
+    pub fn steam_library_url(&self) -> Option<String> {
+        if self.source != PackageSource::Steam {
+            return None;
+        }
+        let bytes = self.package_id.as_bytes();
+        if bytes.is_empty()
+            || bytes.len() > 10
+            || (bytes.len() > 1 && bytes[0] == b'0')
+            || !bytes.iter().all(u8::is_ascii_digit)
+        {
+            return None;
+        }
+        let app_id = self.package_id.parse::<u32>().ok().filter(|id| *id != 0)?;
+        Some(format!("steam://nav/games/details/{app_id}"))
     }
 }
 
@@ -175,6 +220,23 @@ mod tests {
     fn new_records_no_install_scope() {
         assert_eq!(
             InstalledPackage::new(PackageSource::Snap, "code").install_scope,
+            None
+        );
+    }
+
+    #[test]
+    fn constructors_leave_steam_update_status_unset() {
+        assert_eq!(
+            InstalledPackage::new(PackageSource::Steam, "42").steam_update_status,
+            None
+        );
+        assert_eq!(
+            InstalledPackage::new_scoped(
+                PackageSource::Flatpak,
+                "org.gimp.GIMP",
+                InstallScope::User
+            )
+            .steam_update_status,
             None
         );
     }
@@ -217,6 +279,42 @@ mod tests {
             )
             .install_scope,
             Some(InstallScope::System)
+        );
+    }
+
+    #[test]
+    fn cached_package_without_steam_update_status_deserializes() {
+        let old_cache = serde_json::to_string(&InstalledPackage::new(PackageSource::Steam, "42"))
+            .unwrap();
+        assert!(!old_cache.contains("steam_update_status"));
+
+        let package: InstalledPackage = serde_json::from_str(&old_cache).unwrap();
+        assert_eq!(package.steam_update_status, None);
+    }
+
+    #[test]
+    fn steam_update_status_serializes_with_snake_case_names() {
+        assert_eq!(
+            serde_json::to_string(&SteamUpdateStatus::NoUpdateRecorded).unwrap(),
+            "\"no_update_recorded\""
+        );
+    }
+
+    #[test]
+    fn steam_library_url_requires_a_canonical_positive_app_id() {
+        let valid = InstalledPackage::new(PackageSource::Steam, "1062520");
+        assert_eq!(
+            valid.steam_library_url().as_deref(),
+            Some("steam://nav/games/details/1062520")
+        );
+
+        for invalid in ["0", "001", "+42", "42 ", "4294967296", "not-an-app-id"] {
+            let pkg = InstalledPackage::new(PackageSource::Steam, invalid);
+            assert_eq!(pkg.steam_library_url(), None, "{invalid}");
+        }
+        assert_eq!(
+            InstalledPackage::new(PackageSource::Apt, "42").steam_library_url(),
+            None
         );
     }
 }

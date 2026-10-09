@@ -29,6 +29,8 @@ pub enum OperationTarget {
     Flatpak { app_id: String, scope: InstallScope },
     AppImage { path: PathBuf },
     Desktop { desktop_file: PathBuf },
+    /// Steam discovery is read-only; every operation phase rejects this target.
+    Steam { app_id: String },
 }
 
 impl OperationTarget {
@@ -52,6 +54,9 @@ impl OperationTarget {
             PackageSource::Desktop => Ok(Self::Desktop {
                 desktop_file: PathBuf::from(&package.package_id),
             }),
+            PackageSource::Steam => Ok(Self::Steam {
+                app_id: package.package_id.clone(),
+            }),
         }
     }
 
@@ -62,13 +67,14 @@ impl OperationTarget {
             Self::Flatpak { .. } => PackageSource::Flatpak,
             Self::AppImage { .. } => PackageSource::AppImage,
             Self::Desktop { .. } => PackageSource::Desktop,
+            Self::Steam { .. } => PackageSource::Steam,
         }
     }
 
     pub fn id(&self) -> &str {
         match self {
             Self::Apt { package_id } | Self::Snap { package_id } => package_id,
-            Self::Flatpak { app_id, .. } => app_id,
+            Self::Flatpak { app_id, .. } | Self::Steam { app_id } => app_id,
             Self::AppImage { path } => path.to_str().unwrap_or(""),
             Self::Desktop { desktop_file } => desktop_file.to_str().unwrap_or(""),
         }
@@ -351,5 +357,14 @@ mod tests {
     #[test]
     fn new_plan_ids_are_unique() {
         assert_ne!(new_plan_id(), new_plan_id());
+    }
+
+    #[test]
+    fn steam_targets_preserve_the_app_id_for_read_only_rejection() {
+        let package = InstalledPackage::new(PackageSource::Steam, "570");
+        let target = OperationTarget::from_package(&package).unwrap();
+
+        assert_eq!(target.source(), PackageSource::Steam);
+        assert_eq!(target.id(), "570");
     }
 }
