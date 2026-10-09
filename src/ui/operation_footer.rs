@@ -168,7 +168,7 @@ pub(super) fn operation_footer(
         .id("operation-footer")
         .flex_1()
         .min_w(px(0.))
-        .min_h(px(48.))
+        .min_h(px(28.))
         .bg(theme::elev())
         .rounded(px(18.))
         .pl(px(16.))
