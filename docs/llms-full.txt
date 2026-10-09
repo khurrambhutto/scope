@@ -1,0 +1,94 @@
+# Scope: Linux app manager, full text
+
+Scope is a free, open-source Linux app manager. It lists apps installed through APT, Snap, Flatpak, and AppImage in one searchable list. Every update or uninstall starts with a plan that shows the exact commands. Scope runs them only after the user confirms. Written in Rust with Zed's GPUI, no webview. Ubuntu is the first target. Current version: 0.3.4. License: MIT. Source: https://github.com/khurrambhutto/scope
+
+## What Scope does
+
+Most Linux users install software from several places. A package can come from the Ubuntu archive, a Snap from the Snap Store, a Flatpak from Flathub, or an AppImage from a download folder. Each source has its own list and its own command, so a user rarely knows everything that is installed.
+
+Scope reads all four sources and shows them side by side. The default list shows recognizable GUI apps and command-line tools. Show all reveals every row the scanners return, including libraries and system components. Protected packages stay locked even with Show all on.
+
+Users can switch between installed apps and available updates, search by app or package name, filter by source, and rescan the system.
+
+## How a change works
+
+1. Plan. Scope builds a preview with the exact commands, for example `pkexec env DEBIAN_FRONTEND=noninteractive apt remove -y <package>`. Nothing runs yet.
+2. Confirm. The user reads the plan and runs it or cancels. A plan works once and expires after five minutes.
+3. Revalidate. Right before it runs, Scope checks that the package is still installed, that an update's version has not changed, and that the deny-list still allows the action. If it cannot confirm the state, it stops.
+4. Run. Scope runs the command through the Polkit dialog for admin rights and streams the log into the footer. Only one package operation runs at a time.
+
+## Supported sources and actions
+
+- APT: lists manual installs only. Uninstall runs `apt remove -y`. Update runs `apt install -y` for the package. Every APT transaction is simulated with `LC_ALL=C` before the preview, and again right before apply. The plan stores a fingerprint of the simulation.
+- Snap: lists apps and tools. Runtimes and bases such as core, snapd, bare, and the GTK and GNOME content snaps are hidden. Uninstall runs `snap remove`. Update runs `snap refresh`.
+- Flatpak: lists user and system installs separately. Each app keeps the scope it was found in. Uninstall runs `flatpak uninstall -y --user` or `--system`. Update runs `flatpak update -y` with the same scope. A missing scope is an error, never a default.
+- AppImage: lists valid AppImages in /opt, /usr/local/bin, ~/Applications, ~/apps, ~/AppImages, ~/Downloads, and ~/.local/bin. Uninstall and update are not supported yet, so the plan is a protected plan and no command runs.
+- Desktop launchers: lists visible launchers in the user's applications folder that no scanner owns. These are for discovery only, and their actions are disabled.
+
+Scope never edits the dpkg or apt databases directly. It always uses the package manager's own command.
+
+## Safety
+
+- Preview first. Every destructive action builds a plan. Scope applies a plan only when the user confirms it, and only once.
+- Revalidate before running. Scope checks the package, the version for updates, and the deny-list. It fails closed when it cannot verify the state.
+- Simulate APT. Scope rejects any removal that would take a protected package with it.
+- Deny-list. Critical APT packages, kernel images, lib* packages matched by a heuristic, Snap runtimes, and AppImage paths outside the allow-list are protected.
+- No passwords in the app. Commands that need root run through pkexec and the standard Polkit dialog.
+- No shell. Commands are fixed argument lists. Text from the interface never reaches sh -c.
+- Trash. Scope moves files to the Trash with gio trash, with a manual fallback to ~/.local/share/Trash.
+- Verified updates. Official .deb builds check a minisign-signed SHA-256 manifest before they install a new version. The public key is compiled into the app.
+
+## Install
+
+Ubuntu, x86-64:
+
+```bash
+sudo apt install ./scope_0.3.4_amd64.deb
+```
+
+The package is named scope and installs the scope command. Remove it with `sudo apt remove scope`. Removing Scope does not remove the apps it lists.
+
+Build from source needs Rust stable and these packages: build-essential, pkg-config, libfontconfig1-dev, libx11-dev, libx11-xcb-dev, libxcb1-dev, libxkbcommon-dev, libxkbcommon-x11-dev, libwayland-dev, and wayland-protocols. Then run `cargo run`. libxkbcommon-x11-dev is required even on Wayland-only sessions.
+
+## Status
+
+Working today:
+
+- One list across APT, Snap, Flatpak, AppImage, and unmanaged desktop launchers
+- Display names, categories, and icons from desktop entries and the icon theme
+- Uninstall with a preview, Polkit authentication, and a deny-list
+- Update with a preview for APT, Snap, and Flatpak
+- Self-updater that checks a signed SHA-256 manifest for official .deb builds
+
+Not yet:
+
+- AppImage uninstall and update
+- .rpm release packages
+- Snap target version in the update preview
+- Whole-system cleanup and disk usage views
+- Fedora and Arch package-manager support
+
+## Comparison
+
+Synaptic manages APT packages only. GNOME Software and KDE Discover are app stores that show what their catalogs offer. Scope starts from what is already installed, across APT, Snap, Flatpak, and AppImage, and makes the plan the thing the user approves.
+
+## Who made it
+
+Scope is built by Khurram Bhutto (https://khurrambhutto.tech/). Source and issues: https://github.com/khurrambhutto/scope.
+
+## FAQ
+
+Q: What is Scope?
+A: A free, open-source Linux app manager that lists APT, Snap, Flatpak, and AppImage apps in one list, with a preview before every update or uninstall.
+
+Q: Does Scope ask for my password?
+A: No. Admin actions use the standard Polkit dialog through pkexec. Scope never sees or stores the password.
+
+Q: Can Scope remove critical system packages by accident?
+A: No. The deny-list protects critical packages. It is checked at preview and again before apply.
+
+Q: Which distributions are supported?
+A: Ubuntu first, with a .deb for x86-64. Other Debian-based systems can build from source. Fedora and Arch package-manager support, and .rpm packages, are not available yet.
+
+Q: Is Scope free?
+A: Yes. It is released under the MIT License.

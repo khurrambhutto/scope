@@ -11,4 +11,16 @@
       <image:caption>Scope showing APT, Snap, Flatpak and AppImage apps in one list</image:caption>
     </image:image>
   </url>
+  <url>
+    <loc>https://khurrambhutto.github.io/scope/install.html</loc>
+    <lastmod>2026-10-09</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://khurrambhutto.github.io/scope/safety.html</loc>
+    <lastmod>2026-10-09</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
 </urlset>
