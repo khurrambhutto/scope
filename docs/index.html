@@ -172,8 +172,8 @@
         Scope
       </a>
       <nav class="site-nav" aria-label="Primary">
-        <a href="#how">How it works</a>
         <a href="#sources">Sources</a>
+        <a href="#how">How it works</a>
         <a href="install.html">Install</a>
         <a href="safety.html">Safety</a>
         <a href="#faq">FAQ</a>
@@ -184,197 +184,114 @@
 
   <main id="top">
 
-    <section class="page hero">
-      <div>
-        <h1>See every app you installed, in one list.</h1>
-        <p class="lead">Scope lists apps from APT, Snap, Flatpak, and AppImage together. Update or uninstall any of them, and read the exact command before it runs.</p>
-        <div class="button-row">
-          <a class="button button-primary" href="https://github.com/khurrambhutto/scope/releases/download/v0.3.4/scope_0.3.4_amd64.deb" rel="noopener noreferrer">Download the .deb</a>
-          <a class="button button-ghost" href="https://github.com/khurrambhutto/scope" target="_blank" rel="noopener noreferrer">Read the source</a>
+    <section class="page hero" aria-labelledby="hero-title">
+      <div class="hero-top">
+        <h1 id="hero-title">Every app on your Linux machine, in one list.</h1>
+        <div class="hero-side">
+          <p class="lead">Scope brings APT, Snap, Flatpak, and AppImage apps into one searchable list. Update or uninstall any of them, and read the exact command before it runs.</p>
+          <div class="button-row">
+            <a class="button button-primary" href="https://github.com/khurrambhutto/scope/releases/download/v0.3.4/scope_0.3.4_amd64.deb" rel="noopener noreferrer">Download the .deb</a>
+            <a class="button button-ghost" href="https://github.com/khurrambhutto/scope" target="_blank" rel="noopener noreferrer">Read the source</a>
+          </div>
+          <p class="hero-facts">Version 0.3.4 for Ubuntu on x86-64. Free under the MIT License.</p>
         </div>
-        <p class="hero-facts">Version 0.3.4 for Ubuntu on x86-64. Free under the MIT License.</p>
       </div>
 
-      <figure>
-        <div class="sheet" role="img" aria-label="Scope list showing Antigravity, App Center, Bitwarden, Cap, ChatGPT, Cursor, diary and Firefox from different sources. The Cap row is open and shows the APT command for its uninstall preview.">
-          <div class="sheet-head">
-            <strong>Apps</strong>
-            <span>48 results</span>
-          </div>
-          <div class="sheet-row" style="--i:0">
-            <span class="sheet-initial">A</span>
-            <div><span class="sheet-name">Antigravity</span><span class="sheet-meta">Desktop launcher</span></div>
-            <span class="tag tag-desktop">Desktop</span>
-          </div>
-          <div class="sheet-row" style="--i:1">
-            <span class="sheet-initial">A</span>
-            <div><span class="sheet-name">App Center</span><span class="sheet-meta">0+git.d402afd5, 12 MB</span></div>
-            <span class="tag tag-snap">Snap</span>
-          </div>
-          <div class="sheet-row" style="--i:2">
-            <span class="sheet-initial">B</span>
-            <div><span class="sheet-name">Bitwarden</span><span class="sheet-meta">2026.9.1, 160 MB</span></div>
-            <span class="tag tag-snap">Snap</span>
-          </div>
-          <div class="sheet-row is-open" style="--i:3">
-            <span class="sheet-initial">C</span>
-            <div><span class="sheet-name">Cap</span><span class="sheet-meta">0.6.0, 442 MB</span></div>
-            <span class="tag tag-apt">APT</span>
-          </div>
-          <div class="preview">
-            <p class="preview-title">Uninstall Cap?</p>
-            <pre>pkexec env DEBIAN_FRONTEND=noninteractive apt remove -y cap</pre>
-            <p class="preview-note">Scope asks for your password through the system dialog. It does not see the password.</p>
-            <div class="preview-actions">
-              <span class="button button-primary">Run plan</span>
-              <span class="button button-ghost">Cancel</span>
-            </div>
-          </div>
-          <div class="sheet-row" style="--i:4">
-            <span class="sheet-initial">C</span>
-            <div><span class="sheet-name">ChatGPT</span><span class="sheet-meta">26.908.70816, 1.3 GB</span></div>
-            <span class="tag tag-apt">APT</span>
-          </div>
-          <div class="sheet-row" style="--i:5">
-            <span class="sheet-initial">C</span>
-            <div><span class="sheet-name">Cursor</span><span class="sheet-meta">3.21.9, 938 MB</span></div>
-            <span class="tag tag-apt">APT</span>
-          </div>
-          <div class="sheet-row" style="--i:6">
-            <span class="sheet-initial">F</span>
-            <div><span class="sheet-name">Firefox</span><span class="sheet-meta">157.0-1, 262 MB</span></div>
-            <span class="tag tag-snap">Snap</span>
-          </div>
-          <div class="sheet-foot">
-            <span>Showing 48 apps</span>
-            <span>Show all</span>
-          </div>
-        </div>
+      <figure class="shot">
+        <img src="image.png" width="1262" height="875" alt="Scope app window with a list of installed apps from APT, Snap, Flatpak and AppImage, a search field, a source filter, and a Show all control in the footer" fetchpriority="high">
+        <figcaption>Scope 0.3.4 on Ubuntu. Apps from every source sit in one list.</figcaption>
       </figure>
     </section>
 
-    <section class="section" aria-labelledby="about">
-      <div class="page section-grid">
-        <div>
-          <h2 id="about">What Scope is</h2>
-        </div>
-        <div>
-          <p><strong>Scope is a free, open-source Linux app manager.</strong> It shows the apps installed through APT, Snap, Flatpak, and AppImage in one searchable list. You can update or uninstall supported apps, and every change starts with a plan that lists the exact commands. Scope runs those commands only after you confirm.</p>
-          <p>Most Linux users install software from several places at once. A package from the Ubuntu archive, a Snap from the store, a Flatpak from Flathub, and an AppImage from a download folder can each carry an app the user has forgotten about. Scope reads all four sources and shows them side by side, so you can see what is installed without opening four tools.</p>
-          <p>Scope is written in Rust with Zed's GPUI toolkit. It has no webview and no embedded browser. Ubuntu is the first target.</p>
+    <section class="section" id="sources" aria-labelledby="sources-title">
+      <div class="page">
+        <h2 class="section-title" id="sources-title">Four package systems, one list</h2>
+        <p class="section-lead">Each source keeps its own commands. Scope runs those commands and never edits the package databases directly.</p>
 
-          <dl class="facts">
-            <dt>Platform</dt>
-            <dd>Linux, Ubuntu first, x86-64</dd>
-            <dt>Sources</dt>
-            <dd>APT, Snap, Flatpak (user and system), AppImage, desktop launchers</dd>
-            <dt>Actions</dt>
-            <dd>Uninstall for APT, Snap, Flatpak. Update for APT, Snap, Flatpak.</dd>
-            <dt>Admin rights</dt>
-            <dd>Standard Polkit dialog through pkexec</dd>
-            <dt>Version</dt>
-            <dd>0.3.4</dd>
-            <dt>License</dt>
-            <dd>MIT</dd>
-            <dt>Source</dt>
-            <dd><a href="https://github.com/khurrambhutto/scope">github.com/khurrambhutto/scope</a></dd>
-          </dl>
+        <div class="sources">
+          <div class="source">
+            <h3 class="source-name"><span class="source-mark" style="background:var(--apt)"></span>APT</h3>
+            <p>Packages you installed by hand. Dependencies stay out of the list.</p>
+            <span class="command-line"><span>apt remove -y</span> and <span>apt install -y</span></span>
+          </div>
+          <div class="source">
+            <h3 class="source-name"><span class="source-mark" style="background:var(--snap)"></span>Snap</h3>
+            <p>Apps and tools from the Snap Store. Runtimes and bases are hidden.</p>
+            <span class="command-line"><span>snap remove</span> and <span>snap refresh</span></span>
+          </div>
+          <div class="source">
+            <h3 class="source-name"><span class="source-mark" style="background:var(--flatpak)"></span>Flatpak</h3>
+            <p>User and system installs. Each one keeps its own scope, so nothing is guessed.</p>
+            <span class="command-line"><span>flatpak uninstall -y --user</span></span>
+          </div>
+          <div class="source">
+            <h3 class="source-name"><span class="source-mark" style="background:var(--appimage)"></span>AppImage</h3>
+            <p>AppImages in common folders. Listed for now. Uninstall and update are not supported yet.</p>
+            <span class="command-line"><span>listed only</span></span>
+          </div>
         </div>
+        <p class="source-note">Desktop launchers that no package manager owns also appear, for discovery only. Their actions are disabled.</p>
       </div>
     </section>
 
     <section class="section" id="how" aria-labelledby="how-title">
-      <div class="page section-grid">
-        <div>
-          <h2 id="how-title">Every change goes through a plan</h2>
-          <p>Scope does not run an update or uninstall the moment you click. Each action passes four steps, and the last two protect you from changes that have shifted since you reviewed the plan.</p>
-        </div>
-        <ol class="sequence">
+      <div class="page">
+        <h2 class="section-title" id="how-title">Every change goes through a plan</h2>
+        <p class="section-lead">Scope never runs an update or uninstall the moment you click. Four steps stand between your click and the command, and the last two catch anything that changed since you reviewed the plan.</p>
+
+        <ol class="steps">
           <li>
             <h3>Plan</h3>
-            <p>Scope builds a preview with the exact commands for the selected app, such as <code>apt remove -y cap</code>. Nothing runs yet.</p>
+            <p>Scope lists the exact commands for the app you picked, such as <code>apt remove -y cap</code>. Nothing runs yet.</p>
           </li>
           <li>
             <h3>Confirm</h3>
-            <p>You read the plan and choose Run plan, or you cancel. Each plan works once and expires after five minutes.</p>
+            <p>You read the plan and choose Run plan, or cancel. A plan works once and expires after five minutes.</p>
           </li>
           <li>
             <h3>Revalidate</h3>
-            <p>Right before running, Scope checks that the package is still installed, that an update's version has not changed, and that the deny-list still allows the action. If it cannot confirm the state, it stops.</p>
+            <p>Scope checks that the package is still installed, that an update's version has not moved, and that the deny-list still allows it. If it cannot confirm these, it stops.</p>
           </li>
           <li>
             <h3>Run</h3>
-            <p>Scope runs the command through the system dialog for admin rights and streams the log into the footer. Only one package operation can run at a time.</p>
+            <p>The command runs through the standard Polkit dialog, and the log streams into the footer. One package operation runs at a time.</p>
           </li>
         </ol>
       </div>
     </section>
 
-    <section class="section" id="sources" aria-labelledby="sources-title">
-      <div class="page">
-        <h2 id="sources-title">What Scope can change, source by source</h2>
-        <p class="section-intro">Each action runs the package manager's own command. Scope never edits the dpkg or apt databases directly.</p>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">Source</th>
-                <th scope="col">What Scope lists</th>
-                <th scope="col">Uninstall</th>
-                <th scope="col">Update</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>APT</td>
-                <td>Manual installs only, so dependencies stay out of the list</td>
-                <td><code>apt remove -y</code></td>
-                <td><code>apt install -y</code></td>
-              </tr>
-              <tr>
-                <td>Snap</td>
-                <td>Apps and tools, with runtimes and bases hidden</td>
-                <td><code>snap remove</code></td>
-                <td><code>snap refresh</code></td>
-              </tr>
-              <tr>
-                <td>Flatpak</td>
-                <td>User and system installs, each kept in its own scope</td>
-                <td><code>flatpak uninstall -y</code></td>
-                <td><code>flatpak update -y</code></td>
-              </tr>
-              <tr>
-                <td>AppImage</td>
-                <td>Valid AppImages in common locations</td>
-                <td colspan="2" class="unsupported">Listed only. Uninstall and update are not supported yet.</td>
-              </tr>
-              <tr>
-                <td>Desktop launchers</td>
-                <td>Launchers that no package manager owns</td>
-                <td colspan="2" class="unsupported">Listed only. Actions are disabled.</td>
-              </tr>
-            </tbody>
-          </table>
+    <section class="section" aria-labelledby="about-title">
+      <div class="page split">
+        <div>
+          <h2 id="about-title">What Scope is</h2>
         </div>
-      </div>
-    </section>
+        <div>
+          <p><strong>Scope is a free, open-source Linux app manager.</strong> It shows the apps installed through APT, Snap, Flatpak, and AppImage in one searchable list. You can update or uninstall supported apps, and every change begins with a plan that lists the exact commands.</p>
+          <p>Most people install software from several places at once. An app can come from the Ubuntu archive, the Snap Store, Flathub, or a download folder, and each source has its own tool. Scope reads all four and shows them side by side.</p>
+          <p>Synaptic manages APT packages only. Software centers such as GNOME Software and KDE Discover show what their own catalogs offer. Scope starts from what is already on your machine. It is written in Rust with Zed's GPUI toolkit, with no webview.</p>
 
-    <section class="section" aria-labelledby="compare-title">
-      <div class="page section-grid">
-        <div>
-          <h2 id="compare-title">How Scope differs from other tools</h2>
-        </div>
-        <div>
-          <p>Synaptic manages APT packages only. GNOME Software and KDE Discover are app stores. They show what you can install from their own catalogs, and they report on the packages they manage. Scope starts from what is already on your machine, across APT, Snap, Flatpak, and AppImage, and treats the plan as the thing you approve.</p>
-          <p>Scope does less than a full package manager on purpose. It does not install new software, clean the system, or analyze disk use. Those features are planned, but they wait until updates are complete and tested.</p>
+          <dl class="facts">
+            <dt>Platform</dt>
+            <dd>Linux, Ubuntu first, x86-64</dd>
+            <dt>Actions</dt>
+            <dd>Uninstall and update for APT, Snap, and Flatpak</dd>
+            <dt>Admin rights</dt>
+            <dd>Standard Polkit dialog through pkexec. Scope never sees your password.</dd>
+            <dt>Version</dt>
+            <dd>0.3.4</dd>
+            <dt>License</dt>
+            <dd>MIT</dd>
+            <dt>Source</dt>
+            <dd><a class="text-link" href="https://github.com/khurrambhutto/scope">github.com/khurrambhutto/scope</a></dd>
+          </dl>
         </div>
       </div>
     </section>
 
     <section class="section" aria-labelledby="status-title">
       <div class="page">
-        <h2 id="status-title">What works today</h2>
-        <p class="section-intro">Scope is early. This list matches the current release, and the README tracks the same status.</p>
+        <h2 class="section-title" id="status-title">What works today</h2>
+        <p class="section-lead">Scope is early. This list matches the current release.</p>
         <div class="status-lists">
           <div class="done">
             <h3>Working</h3>
@@ -400,24 +317,26 @@
       </div>
     </section>
 
-    <section class="section" aria-labelledby="install-title">
-      <div class="page section-grid">
-        <div>
-          <h2 id="install-title">Install in one command</h2>
-          <p>Download the .deb from GitHub Releases, then install it from the folder you saved it to. The <a href="install.html" style="color:var(--coral)">install guide</a> covers building from source and removing Scope.</p>
-        </div>
-        <div class="command">
-          <button class="copy-button" type="button" data-copy="sudo apt install ./scope_0.3.4_amd64.deb">Copy</button>
-          <span class="prompt">$ </span>sudo apt install ./scope_0.3.4_amd64.deb
+    <section class="section" id="install" aria-labelledby="install-title">
+      <div class="page">
+        <div class="install-band">
+          <div>
+            <h2 id="install-title">Install in one command</h2>
+            <p>Download the .deb from GitHub Releases, then run this from the folder you saved it to. The <a class="text-link" href="install.html">install guide</a> covers building from source and removing Scope.</p>
+          </div>
+          <div class="command">
+            <button class="copy-button" type="button" data-copy="sudo apt install ./scope_0.3.4_amd64.deb">Copy</button>
+            <span class="line"><span class="prompt">$ </span>sudo apt install ./scope_0.3.4_amd64.deb</span>
+          </div>
         </div>
       </div>
     </section>
 
     <section class="section faq" id="faq" aria-labelledby="faq-title">
-      <div class="page section-grid">
+      <div class="page split">
         <div>
           <h2 id="faq-title">Questions</h2>
-          <p>Short answers. The <a href="safety.html" style="color:var(--coral)">safety page</a> explains the checks in detail.</p>
+          <p>Short answers. The <a class="text-link" href="safety.html">safety page</a> explains the checks in detail.</p>
         </div>
         <div>
           <details>
@@ -442,7 +361,7 @@
           </details>
           <details>
             <summary>Is Scope free and open source?</summary>
-            <p>Yes. Scope is released under the MIT License, and the source is on <a href="https://github.com/khurrambhutto/scope" target="_blank" rel="noopener noreferrer" style="color:var(--coral)">GitHub</a>.</p>
+            <p>Yes. Scope is released under the MIT License, and the source is on <a class="text-link" href="https://github.com/khurrambhutto/scope" target="_blank" rel="noopener noreferrer">GitHub</a>.</p>
           </details>
         </div>
       </div>
