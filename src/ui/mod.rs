@@ -12,6 +12,7 @@ mod operation_footer;
 mod package_list_model;
 pub mod resize_zones;
 pub mod row;
+mod smooth_scroll;
 pub mod title_bar;
 pub mod updater;
 pub mod widgets;

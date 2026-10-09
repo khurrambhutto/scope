@@ -11,11 +11,12 @@ use std::time::Duration;
 use futures::channel::{mpsc, oneshot};
 use futures::StreamExt;
 use gpui_kit::component::input::{InputEvent, InputState};
+use gpui_kit::component::scroll::Scrollbar;
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    actions, div, linear_color_stop, linear_gradient, list, px, AnyElement, App, ClickEvent,
-    Context, Entity, IntoElement, KeyBinding, ListAlignment, ListState, Render, Subscription,
-    WeakEntity, Window,
+    actions, div, linear_color_stop, linear_gradient, list, px, transparent_black, AnyElement, App,
+    ClickEvent, Context, Entity, IntoElement, KeyBinding, ListAlignment, ListState, Render,
+    Subscription, WeakEntity, Window,
 };
 
 use crate::backend::{self, OpKind, OpMsg};
@@ -31,6 +32,7 @@ use super::operation_footer::{operation_footer, OperationStatus};
 use super::package_list_model::PackageListModel;
 use super::resize_zones::resize_zones;
 use super::row::row_element;
+use super::smooth_scroll::SmoothScroll;
 use super::title_bar::title_bar;
 use super::updater::{updater_banner, UpdaterStatus, UpdaterUi};
 use super::widgets::{banner, empty_state, loading_state, BannerKind};
@@ -92,6 +94,8 @@ pub struct ScopeApp {
     pub(super) updater_busy: bool,
     /// Virtualized list state; scroll position lives here, not in the element.
     pub(super) list_state: ListState,
+    /// Eases wheel scrolling of `list_state`.
+    smooth_scroll: SmoothScroll,
     /// The currently visible rows, owned so the list's render closure can read
     /// them without cloning the whole filtered set every frame.
     pub(super) packages: PackageListModel,
@@ -112,6 +116,7 @@ pub struct ScopeApp {
 impl ScopeApp {
     /// Create the app state and kick off the first scan and updater check.
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let list_state = ListState::new(0, ListAlignment::Top, px(1000.));
         let search_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Search apps or packages"));
         let search_change = cx.subscribe(&search_input, |_this, _input, event: &InputEvent, cx| {
@@ -145,7 +150,8 @@ impl ScopeApp {
             // A non-zero overdraw is required: the list measures rows lazily,
             // and unmeasured rows count as zero height, so without look-ahead
             // the scrollable extent would equal only the visible rows.
-            list_state: ListState::new(0, ListAlignment::Top, px(1000.)),
+            smooth_scroll: SmoothScroll::new(list_state.clone()),
+            list_state,
             packages: PackageListModel::default(),
             filter_inputs: None,
             search_blobs: Vec::new(),
@@ -545,7 +551,7 @@ impl ScopeApp {
         } else {
             let state = self.list_state.clone();
             let list_entity = list_entity.clone();
-            list(state, move |index, _window, cx| {
+            let list_el = list(state, move |index, _window, cx| {
                 let this = list_entity.read(cx);
                 match this.packages.entries.get(index) {
                     Some(pkg) => {
@@ -575,8 +581,27 @@ impl ScopeApp {
                     None => div().into_any_element(),
                 }
             })
-            .size_full()
-            .into_any_element()
+            .size_full();
+            div()
+                .relative()
+                .size_full()
+                .child(self.smooth_scroll.layer())
+                .child(list_el)
+                .child(Scrollbar::vertical(&self.list_state).styles(|styles| {
+                    styles
+                        .track(|track| track.bg(transparent_black()).width(px(10.)))
+                        .thumb(|thumb| {
+                            thumb
+                                .bg(theme::border_hover())
+                                .width(px(6.))
+                                .inset(px(2.))
+                                .radius(px(3.))
+                                .min_length(px(36.))
+                        })
+                        .thumb_hover(|thumb| thumb.bg(theme::text_faint()))
+                        .thumb_active(|thumb| thumb.bg(theme::text_faint()))
+                }))
+                .into_any_element()
         }
     }
 
