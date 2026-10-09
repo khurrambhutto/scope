@@ -3,6 +3,7 @@
 .commandcode/
 .pi/
 skills-lock.json
+/research/
 
 # Build artifacts
 /target/
