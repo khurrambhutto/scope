@@ -25,6 +25,7 @@ pub enum UpdaterStatus {
     Idle,
     Checking,
     Dismissed,
+    UpToDate,
     /// A newer release is available and can be acted on.
     Available(UpdateCheck),
     /// Download/install in progress, with the tail of live output.
@@ -45,6 +46,7 @@ pub enum UpdaterStatus {
 #[derive(Debug, Default)]
 pub struct UpdaterUi {
     pub status: UpdaterStatus,
+    pub confirming: bool,
 }
 
 impl UpdaterUi {
@@ -100,7 +102,14 @@ impl UpdaterUi {
 
     /// Transition into the installing phase, returning the check to install.
     pub fn begin_install(&mut self) -> Option<UpdateCheck> {
+        if !self.confirming {
+            return None;
+        }
         let check = self.available()?.clone();
+        if !check.can_self_update {
+            return None;
+        }
+        self.confirming = false;
         self.status = UpdaterStatus::Installing {
             check: check.clone(),
             lines: Vec::new(),
@@ -291,6 +300,7 @@ mod tests {
     fn available_status_shows_a_banner() {
         let ui = UpdaterUi {
             status: UpdaterStatus::Available(check()),
+            confirming: true,
         };
         assert!(ui.show_banner());
     }
@@ -300,6 +310,7 @@ mod tests {
         assert!(!UpdaterUi::default().show_banner());
         let ui = UpdaterUi {
             status: UpdaterStatus::Checking,
+            confirming: false,
         };
         assert!(!ui.show_banner());
     }
@@ -308,14 +319,48 @@ mod tests {
     fn available_returns_the_check_to_install() {
         let ui = UpdaterUi {
             status: UpdaterStatus::Available(check()),
+            confirming: true,
         };
         assert_eq!(ui.available().map(|c| c.latest.as_str()), Some("0.4.0"));
+    }
+
+    #[test]
+    fn available_update_cannot_install_without_confirmation() {
+        let mut ui = UpdaterUi {
+            status: UpdaterStatus::Available(check()),
+            confirming: false,
+        };
+        assert!(ui.begin_install().is_none());
+        assert!(ui.available().is_some());
+    }
+
+    #[test]
+    fn confirmation_is_consumed_and_cannot_start_a_second_install() {
+        let mut ui = UpdaterUi {
+            status: UpdaterStatus::Available(check()),
+            confirming: true,
+        };
+        assert!(ui.begin_install().is_some());
+        assert!(!ui.confirming);
+        assert!(ui.begin_install().is_none());
+    }
+
+    #[test]
+    fn unsupported_installation_cannot_install_even_with_confirmation() {
+        let mut check = check();
+        check.can_self_update = false;
+        let mut ui = UpdaterUi {
+            status: UpdaterStatus::Available(check),
+            confirming: true,
+        };
+        assert!(ui.begin_install().is_none());
     }
 
     #[test]
     fn begin_install_moves_into_installing_with_the_check() {
         let mut ui = UpdaterUi {
             status: UpdaterStatus::Available(check()),
+            confirming: true,
         };
         assert_eq!(ui.begin_install().map(|c| c.latest), Some("0.4.0".into()));
     }
@@ -324,6 +369,7 @@ mod tests {
     fn push_line_keeps_only_the_last_five() {
         let mut ui = UpdaterUi {
             status: UpdaterStatus::Available(check()),
+            confirming: true,
         };
         let _ = ui.begin_install();
         for i in 0..8 {
@@ -365,6 +411,7 @@ mod tests {
     fn installing_keeps_command_output_out_of_the_notice() {
         let mut ui = UpdaterUi {
             status: UpdaterStatus::Available(check()),
+            confirming: true,
         };
         ui.begin_install();
         ui.push_line("[scope] Running: pkexec dpkg -i /tmp/update.deb".into());

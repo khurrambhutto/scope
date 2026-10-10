@@ -13,6 +13,7 @@ mod operation_footer;
 mod package_list_model;
 pub mod resize_zones;
 pub mod row;
+mod settings;
 mod smooth_scroll;
 pub mod title_bar;
 pub mod updater;

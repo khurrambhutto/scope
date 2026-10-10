@@ -16,7 +16,11 @@ const ICON_MIN: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/win-min.svg"
 const ICON_MAX: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/win-max.svg");
 const ICON_CLOSE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/win-close.svg");
 
-pub(super) fn title_bar(navigation: impl IntoElement, corner_radius: Pixels) -> impl IntoElement {
+pub(super) fn title_bar(
+    navigation: impl IntoElement,
+    corner_radius: Pixels,
+    on_settings: impl Fn(&gpui_kit::ClickEvent, &mut Window, &mut gpui_kit::App) + 'static,
+) -> impl IntoElement {
     div()
         .id("titlebar")
         .relative()
@@ -82,6 +86,25 @@ pub(super) fn title_bar(navigation: impl IntoElement, corner_radius: Pixels) -> 
                 .right_0()
                 .flex()
                 .items_center()
+                .child(
+                    div()
+                        .id("settings-menu")
+                        .mr(px(16.))
+                        .w(px(40.))
+                        .h(px(36.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .cursor_pointer()
+                        .text_color(text_dim())
+                        .hover(|this| this.text_color(text()))
+                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                        .on_click(on_settings)
+                        .child(
+                            gpui_kit::component::Icon::new(gpui_kit::assets::IconName::Menu)
+                                .size(px(16.)),
+                        ),
+                )
                 .child(window_control_button(
                     "win-min",
                     ICON_MIN,

@@ -94,6 +94,8 @@ pub struct ScopeApp {
     pub(super) plans: PlanStore,
     pub(super) updater: UpdaterUi,
     pub(super) updater_busy: bool,
+    pub(super) settings_open: bool,
+    pub(super) settings_checked: bool,
     /// Virtualized list state; scroll position lives here, not in the element.
     pub(super) list_state: ListState,
     /// Eases wheel scrolling of `list_state`.
@@ -150,6 +152,8 @@ impl ScopeApp {
             plans: PlanStore::default(),
             updater: UpdaterUi::default(),
             updater_busy: false,
+            settings_open: false,
+            settings_checked: false,
             // A non-zero overdraw is required: the list measures rows lazily,
             // and unmeasured rows count as zero height, so without look-ahead
             // the scrollable extent would equal only the visible rows.
@@ -420,12 +424,38 @@ impl ScopeApp {
             self.operation.cancel_preview();
         }
         self.dialog = None;
+        self.settings_open = false;
+        self.updater.confirming = false;
         cx.notify();
     }
 
+    /// Shows the check result in Settings briefly, then returns the button to "Check for updates".
+    fn revert_settings_check_label_later(&mut self, cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(Duration::from_secs(3)).await;
+            this.update(cx, |this, cx| {
+                if matches!(
+                    this.updater.status,
+                    UpdaterStatus::UpToDate | UpdaterStatus::Error { .. }
+                ) {
+                    this.settings_checked = false;
+                    cx.notify();
+                }
+            })
+            .ok();
+        })
+        .detach();
+    }
+
     pub(super) fn check_updater(&mut self, cx: &mut Context<Self>) {
+        if self.updater_busy || matches!(self.updater.status, UpdaterStatus::Checking) {
+            return;
+        }
+        self.updater.confirming = false;
         self.updater.status = UpdaterStatus::Checking;
-        let (tx, rx) = oneshot::channel::<Option<crate::domain::updater::UpdateCheck>>();
+        cx.notify();
+        let (tx, rx) =
+            oneshot::channel::<Result<Option<crate::domain::updater::UpdateCheck>, String>>();
         std::thread::spawn(move || {
             // Small delay so the list paints first, like the old shell.
             std::thread::sleep(Duration::from_millis(1000));
@@ -437,8 +467,19 @@ impl ScopeApp {
             entity
                 .update(cx, |this, cx| {
                     match result {
-                        Ok(Some(check)) => this.updater.status = UpdaterStatus::Available(check),
-                        _ => this.updater.status = UpdaterStatus::Dismissed,
+                        Ok(Ok(Some(check))) => {
+                            this.updater.status = UpdaterStatus::Available(check)
+                        }
+                        Ok(Ok(None)) => this.updater.status = UpdaterStatus::UpToDate,
+                        Ok(Err(message)) => this.updater.status = UpdaterStatus::Error { message },
+                        Err(_) => {
+                            this.updater.status = UpdaterStatus::Error {
+                                message: "Update check stopped. Please try again.".into(),
+                            }
+                        }
+                    }
+                    if this.settings_checked {
+                        this.revert_settings_check_label_later(cx);
                     }
                     cx.notify();
                 })
@@ -524,7 +565,7 @@ impl ScopeApp {
             banners.push(updater_banner(
                 &self.updater,
                 !busy,
-                act(entity, |this, cx| this.start_update(cx)),
+                act(entity, |this, cx| this.request_self_update(cx)),
                 act(entity, |this, cx| this.dismiss_updater(cx)),
             ));
         }
@@ -696,6 +737,8 @@ impl Render for ScopeApp {
 
         let dialog_el: Option<AnyElement> = if self.dialog.is_some() {
             Some(self.dialog_element(&entity, corner_radius))
+        } else if self.settings_open {
+            Some(self.settings_element(&entity, corner_radius))
         } else {
             None
         };
@@ -737,7 +780,7 @@ impl Render for ScopeApp {
             // Standard search behavior: Escape closes the dialog first,
             // otherwise clears the query if one is present.
             .on_action(cx.listener(|this, _: &CloseDialog, window, cx| {
-                if this.dialog.is_some() {
+                if this.dialog.is_some() || this.settings_open {
                     this.close_dialog(cx);
                 } else if this.open_select.is_some() {
                     this.open_select = None;
@@ -758,7 +801,11 @@ impl Render for ScopeApp {
                     this.start_scan(cx);
                 }
             }))
-            .child(title_bar(self.view_navigation(cx), corner_radius))
+            .child(title_bar(
+                self.view_navigation(cx),
+                corner_radius,
+                act(&entity, |this, cx| this.open_settings(cx)),
+            ))
             .child(self.filters(cx))
             .children(banner_children)
             .child(

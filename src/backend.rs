@@ -254,14 +254,18 @@ pub fn spawn_apply(plans: PlanStore, plan_id: String, tx: mpsc::UnboundedSender<
 }
 
 /// Check for a self-update off the UI thread.
-pub fn spawn_updater_check(tx: oneshot::Sender<Option<crate::domain::updater::UpdateCheck>>) {
+pub fn spawn_updater_check(
+    tx: oneshot::Sender<Result<Option<crate::domain::updater::UpdateCheck>, String>>,
+) {
     std::thread::spawn(move || {
         let result = block_on(async {
             let kind = crate::domain::updater::detect();
             let current = env!("CARGO_PKG_VERSION").to_string();
             match crate::domain::updater::fetch_latest().await {
-                Ok(release) => crate::domain::updater::check_update(&current, &release, kind),
-                Err(_) => None,
+                Ok(release) => Ok(crate::domain::updater::check_update(
+                    &current, &release, kind,
+                )),
+                Err(error) => Err(format!("Could not check for updates: {error}")),
             }
         });
         let _ = tx.send(result);

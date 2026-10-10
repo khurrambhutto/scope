@@ -45,6 +45,8 @@ src/                      GPUI app
     snap_detail_state.rs  inspection cancellation, request identity and short cache
     dialog.rs             uninstall/update preview and confirmation
     operation_footer.rs   inline footer progress and dismissible results
+    settings.rs           app information, project links, self-update confirmation
+    updater.rs            self-update notice and lifecycle
     title_bar.rs          client-side title bar
     resize_zones.rs       invisible window edge/corner bands that start resizing
     text_input.rs         search field
@@ -62,6 +64,7 @@ docs/                     GitHub Pages site
 - A feature that fits no existing module gets a new small module instead of growing a file past a few hundred lines.
 - Keep screens operational and app-like, never marketing pages.
 - Uninstall/update previews use a modal. Applying and results live between the app count and Show all control in the bottom footer so browsing stays available; only one package operation may apply at a time.
+- The title-bar hamburger opens Settings with app/version information, project links, issue reporting, and an explicit update check. Self-updates from Settings or the update notice require confirmation before installation; unsupported installations link to a download. Check failures stay distinct from an up-to-date result.
 - UI colors come from `theme.rs`: dark red surfaces, burgundy borders, coral emphasis. Kit-owned controls use `theme::init`; actions share the pill button in `ui/widgets.rs`. Keep source colors confined to app icons and source indicators.
 
 ## GPUI notes

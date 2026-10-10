@@ -47,6 +47,7 @@ fn embedded_asset(path: &str) -> Option<&'static [u8]> {
         "refresh.svg" => Some(include_bytes!("../assets/refresh.svg")),
         "search.svg" => Some(include_bytes!("../assets/search.svg")),
         "clear.svg" => Some(include_bytes!("../assets/clear.svg")),
+        "bug.svg" => Some(include_bytes!("../assets/bug.svg")),
         _ => None,
     }
 }
