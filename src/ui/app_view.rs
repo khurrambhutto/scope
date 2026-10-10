@@ -432,9 +432,7 @@ impl ScopeApp {
     /// Shows the check result in Settings briefly, then returns the button to "Check for updates".
     fn revert_settings_check_label_later(&mut self, cx: &mut Context<Self>) {
         cx.spawn(async move |this, cx| {
-            cx.background_executor()
-                .timer(Duration::from_secs(3))
-                .await;
+            cx.background_executor().timer(Duration::from_secs(3)).await;
             this.update(cx, |this, cx| {
                 if matches!(
                     this.updater.status,

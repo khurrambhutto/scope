@@ -172,7 +172,9 @@ fn modal_shell_styled(
                         .justify_between()
                         .px(px(20.))
                         .py(px(16.))
-                        .when(settings, |this| this.pl(px(20.)).pr(px(16.)).pt(px(18.)).pb(px(14.)))
+                        .when(settings, |this| {
+                            this.pl(px(20.)).pr(px(16.)).pt(px(18.)).pb(px(14.))
+                        })
                         .when(!settings, |this| this.border_b_1().border_color(border()))
                         .child(
                             div()
@@ -188,7 +190,6 @@ fn modal_shell_styled(
                                 .accessibility_label("Close dialog")
                                 .size(px(30.))
                                 .rounded(px(16.))
-
                                 .on_click(act(entity, |this, cx| this.close_dialog(cx))),
                         ),
                 )

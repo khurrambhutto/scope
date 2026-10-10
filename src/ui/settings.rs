@@ -154,10 +154,7 @@ impl ScopeApp {
                         .on_click(|_, _, cx| cx.open_url(PROJECT_URL))
                         .into_any_element(),
                 ))
-                .child(settings_row(
-                    "Report issue",
-                    bug_button(),
-                ))
+                .child(settings_row("Report issue", bug_button()))
                 .into_any_element()
         };
         settings_modal_shell(body, entity, corner_radius)
@@ -224,5 +221,12 @@ fn settings_row(label: &'static str, value: AnyElement) -> impl IntoElement {
                 .text_color(theme::text())
                 .child(label),
         )
-        .child(div().flex().items_center().justify_end().min_w(px(0.)).child(value))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .justify_end()
+                .min_w(px(0.))
+                .child(value),
+        )
 }
