@@ -4,7 +4,8 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    div, px, rgba, AnyElement, App, ClickEvent, FontWeight, Pixels, WeakEntity, Window,
+    div, linear_color_stop, linear_gradient, px, rgba, AnyElement, App, ClickEvent, FontWeight,
+    Pixels, WeakEntity, Window,
 };
 
 use crate::backend::OpKind;
@@ -100,11 +101,29 @@ impl ScopeApp {
 }
 
 /// The modal overlay and card chrome shared by every dialog phase.
-fn modal_shell(
+pub(super) fn modal_shell(
     heading: String,
     body: AnyElement,
     entity: &WeakEntity<ScopeApp>,
     corner_radius: Pixels,
+) -> AnyElement {
+    modal_shell_styled(heading, body, entity, corner_radius, false)
+}
+
+pub(super) fn settings_modal_shell(
+    body: AnyElement,
+    entity: &WeakEntity<ScopeApp>,
+    corner_radius: Pixels,
+) -> AnyElement {
+    modal_shell_styled("Settings".into(), body, entity, corner_radius, true)
+}
+
+fn modal_shell_styled(
+    heading: String,
+    body: AnyElement,
+    entity: &WeakEntity<ScopeApp>,
+    corner_radius: Pixels,
+    settings: bool,
 ) -> AnyElement {
     div()
         .id("modal-overlay")
@@ -133,23 +152,33 @@ fn modal_shell(
                 .max_h(px(600.))
                 .overflow_y_scroll()
                 .rounded(px(16.))
+                .when(settings, |this| this.w(px(420.)).rounded(px(12.)))
                 .border_1()
                 .border_color(border())
                 .bg(elev())
+                .when(settings, |this| {
+                    this.bg(linear_gradient(
+                        180.,
+                        linear_color_stop(theme::background_top(), 0.),
+                        linear_color_stop(theme::background_bottom(), 1.),
+                    ))
+                })
                 .shadow_lg()
                 .child(
                     div()
+                        .relative()
                         .flex()
                         .items_center()
                         .justify_between()
                         .px(px(20.))
                         .py(px(16.))
-                        .border_b_1()
-                        .border_color(border())
+                        .when(settings, |this| this.pl(px(20.)).pr(px(16.)).pt(px(18.)).pb(px(14.)))
+                        .when(!settings, |this| this.border_b_1().border_color(border()))
                         .child(
                             div()
                                 .text_size(px(17.))
                                 .font_weight(FontWeight::SEMIBOLD)
+                                .when(settings, |this| this.text_size(px(16.)))
                                 .child(heading),
                         )
                         .child(
@@ -159,6 +188,7 @@ fn modal_shell(
                                 .accessibility_label("Close dialog")
                                 .size(px(30.))
                                 .rounded(px(16.))
+
                                 .on_click(act(entity, |this, cx| this.close_dialog(cx))),
                         ),
                 )
