@@ -33,6 +33,7 @@ pub(super) enum SourceFilter {
     Flatpak,
     AppImage,
     Desktop,
+    Steam,
 }
 
 impl SourceFilter {
@@ -44,6 +45,7 @@ impl SourceFilter {
             SourceFilter::Flatpak => "Flatpak",
             SourceFilter::AppImage => "AppImage",
             SourceFilter::Desktop => "Desktop",
+            SourceFilter::Steam => "Steam",
         }
     }
 
@@ -55,6 +57,7 @@ impl SourceFilter {
             SourceFilter::Flatpak => source == PackageSource::Flatpak,
             SourceFilter::AppImage => source == PackageSource::AppImage,
             SourceFilter::Desktop => source == PackageSource::Desktop,
+            SourceFilter::Steam => source == PackageSource::Steam,
         }
     }
 }
@@ -187,6 +190,7 @@ impl ScopeApp {
                         (SourceFilter::Flatpak, "Flatpak"),
                         (SourceFilter::AppImage, "AppImage"),
                         (SourceFilter::Desktop, "Desktop"),
+                        (SourceFilter::Steam, "Steam"),
                     ];
                     options
                         .into_iter()

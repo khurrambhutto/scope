@@ -147,6 +147,10 @@ pub struct DesktopIndex {
     /// Snap desktop ids are `<snap>_<app>`; keyed by the leading segment so Snap
     /// lookups are O(1) instead of a linear scan of every entry.
     by_snap_prefix: HashMap<String, Arc<DesktopApp>>,
+    /// Steam launchers by exact `steam://rungameid/<appid>` token.  The
+    /// vector retains every duplicate launcher so they can all be suppressed
+    /// once their installed Steam app is discovered.
+    by_steam_app_id: HashMap<String, Vec<Arc<DesktopApp>>>,
     by_path: HashMap<PathBuf, Arc<DesktopApp>>,
     apps: Vec<Arc<DesktopApp>>,
 }
@@ -157,6 +161,7 @@ impl DesktopIndex {
         let mut by_exec = HashMap::new();
         let mut by_name_lower = HashMap::new();
         let mut by_snap_prefix = HashMap::new();
+        let mut by_steam_app_id = HashMap::new();
         let mut by_path = HashMap::new();
         let mut indexed_apps = Vec::new();
         for app in apps {
@@ -175,6 +180,12 @@ impl DesktopIndex {
                     .entry(prefix.to_string())
                     .or_insert_with(|| Arc::clone(&app));
             }
+            if let Some(app_id) = steam_app_id_from_exec(&app.exec) {
+                by_steam_app_id
+                    .entry(app_id.to_owned())
+                    .or_insert_with(Vec::new)
+                    .push(Arc::clone(&app));
+            }
             by_path.insert(app.file_path.clone(), Arc::clone(&app));
             by_id.insert(app.id.clone(), Arc::clone(&app));
             indexed_apps.push(app);
@@ -184,17 +195,18 @@ impl DesktopIndex {
             by_exec,
             by_name_lower,
             by_snap_prefix,
+            by_steam_app_id,
             by_path,
             apps: indexed_apps,
         }
     }
-
     pub fn empty() -> Self {
         Self {
             by_id: HashMap::new(),
             by_exec: HashMap::new(),
             by_name_lower: HashMap::new(),
             by_snap_prefix: HashMap::new(),
+            by_steam_app_id: HashMap::new(),
             by_path: HashMap::new(),
             apps: Vec::new(),
         }
@@ -218,6 +230,11 @@ impl DesktopIndex {
                 .or_else(|| self.by_exec.get(&package_id.to_lowercase()))
                 .map(Arc::as_ref),
             crate::domain::package::PackageSource::Apt => self.lookup_apt(package_id, name),
+            crate::domain::package::PackageSource::Steam => self
+                .by_steam_app_id
+                .get(package_id)
+                .and_then(|apps| apps.first())
+                .map(Arc::as_ref),
             crate::domain::package::PackageSource::AppImage => {
                 let lc = package_id.to_lowercase();
                 let appimage_executable = Path::new(package_id)
@@ -290,11 +307,19 @@ impl DesktopIndex {
         packages: &[crate::domain::package::InstalledPackage],
         user_applications: &Path,
     ) -> Vec<crate::domain::package::InstalledPackage> {
-        let matched: HashSet<&str> = packages
+        let mut matched: HashSet<&str> = packages
             .iter()
             .filter_map(|pkg| self.lookup(pkg.source, &pkg.package_id, &pkg.name))
             .map(|app| app.id.as_str())
             .collect();
+        for package in packages
+            .iter()
+            .filter(|package| package.source == crate::domain::package::PackageSource::Steam)
+        {
+            if let Some(apps) = self.by_steam_app_id.get(&package.package_id) {
+                matched.extend(apps.iter().map(|app| app.id.as_str()));
+            }
+        }
 
         self.apps
             .iter()
@@ -384,6 +409,39 @@ fn exec_binary(exec: &str) -> Option<String> {
     };
     let path = Path::new(first);
     Some(path.file_name()?.to_string_lossy().to_string())
+}
+
+/// Extract the AppID from an exact Steam game-launch URI token in a desktop
+/// `Exec=` value.  This only parses text; it never evaluates shell syntax or
+/// executes launcher content.
+fn steam_app_id_from_exec(exec: &str) -> Option<&str> {
+    let mut app_id = None;
+    for token in exec.split_ascii_whitespace() {
+        let token = token.trim_matches('"');
+        let Some(candidate) = token.strip_prefix("steam://rungameid/") else {
+            continue;
+        };
+        let bytes = candidate.as_bytes();
+        if bytes.is_empty()
+            || bytes.len() > 10
+            || (bytes.len() > 1 && bytes[0] == b'0')
+            || !bytes.iter().all(u8::is_ascii_digit)
+        {
+            continue;
+        }
+        let Ok(parsed) = candidate.parse::<u32>() else {
+            continue;
+        };
+        if parsed == 0 {
+            continue;
+        }
+        match app_id {
+            Some(existing) if existing != candidate => return None,
+            Some(_) => {}
+            None => app_id = Some(candidate),
+        }
+    }
+    app_id
 }
 
 #[cfg(test)]
@@ -526,5 +584,53 @@ mod tests {
         assert!(index
             .lookup(PackageSource::Apt, "ncurses-bin", "ncurses-bin")
             .is_none());
+    }
+
+    #[test]
+    fn steam_lookup_matches_flatpak_wrapped_exact_uri() {
+        let index = DesktopIndex::from_apps(vec![app(
+            "steam-game",
+            "A Game",
+            "flatpak run com.valvesoftware.Steam steam://rungameid/42",
+        )]);
+        let found = index.lookup(PackageSource::Steam, "42", "A Game");
+        assert_eq!(found.map(|app| app.id.as_str()), Some("steam-game"));
+    }
+
+    #[test]
+    fn steam_discovery_suppresses_every_matching_user_launcher_only() {
+        let user_apps = Path::new("/home/user/.local/share/applications");
+        let mut first = app("steam-first", "Game", "steam steam://rungameid/42");
+        first.file_path = user_apps.join("steam-first.desktop");
+        let mut second = app(
+            "steam-second",
+            "Game (alternate)",
+            "flatpak run com.valvesoftware.Steam steam://rungameid/42",
+        );
+        second.file_path = user_apps.join("steam-second.desktop");
+        let mut false_positive = app(
+            "not-steam-game",
+            "Not a Steam game",
+            "steam steam://rungameid/42-not-an-app-id",
+        );
+        false_positive.file_path = user_apps.join("not-steam-game.desktop");
+        let index = DesktopIndex::from_apps(vec![first, second, false_positive]);
+        let mut game = crate::domain::package::InstalledPackage::new(PackageSource::Steam, "42");
+        game.name = "Game".to_string();
+
+        let unmanaged = index.unmanaged_apps_in(&[game], user_apps);
+        assert_eq!(unmanaged.len(), 1);
+        assert_eq!(unmanaged[0].display_name.as_deref(), Some("Not a Steam game"));
+    }
+
+    #[test]
+    fn steam_uri_parser_rejects_noncanonical_or_ambiguous_ids() {
+        assert_eq!(steam_app_id_from_exec("steam steam://rungameid/42"), Some("42"));
+        assert_eq!(steam_app_id_from_exec("steam steam://rungameid/0042"), None);
+        assert_eq!(steam_app_id_from_exec("steam steam://rungameid/42-extra"), None);
+        assert_eq!(
+            steam_app_id_from_exec("steam steam://rungameid/42 steam://rungameid/43"),
+            None
+        );
     }
 }

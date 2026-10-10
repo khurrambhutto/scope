@@ -28,6 +28,7 @@ semver = "1"
 sha2 = "0.10"
 tempfile = "3"
 minisign-verify = "0.3"
+steam-vdf-parser = "0.1.2"
 
 [lints.rust]
 # The shell is safe, idiomatic Rust; shared backend modules included.

@@ -632,6 +632,7 @@ impl ScopeApp {
             ("APT", availability.apt_error.as_ref()),
             ("Snap", availability.snap_error.as_ref()),
             ("Flatpak", availability.flatpak_error.as_ref()),
+            ("Steam", availability.steam_error.as_ref()),
         ]
         .into_iter()
         .filter_map(|(label, message)| message.map(|m| (label.to_string(), m.clone())))

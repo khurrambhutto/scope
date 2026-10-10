@@ -100,6 +100,9 @@ fn build_steps(target: &OperationTarget, protected: bool) -> (AuthMethod, Vec<Pl
         OperationTarget::AppImage { .. } => blocked("AppImage uninstall is not supported yet."),
         OperationTarget::Desktop { .. } => {
             blocked("This app is not managed by a supported package manager.")
+        },
+        OperationTarget::Steam { .. } => {
+            blocked("Steam items are read-only in Scope. Manage updates in Steam.")
         }
     }
 }
@@ -176,6 +179,12 @@ pub async fn apply(
             logs: String::new(),
             exit_code: None,
         },
+        OperationTarget::Steam { .. } => OperationResult {
+            success: false,
+            message: "Steam items are read-only in Scope. Manage updates in Steam.".into(),
+            logs: String::new(),
+            exit_code: None,
+        },
     }
 }
 
@@ -248,5 +257,25 @@ mod tests {
             steps[0].command_summary,
             "flatpak uninstall -y --user org.gimp.GIMP"
         );
+    }
+
+    #[test]
+    fn steam_preview_is_protected() {
+        let package = InstalledPackage::new(PackageSource::Steam, "570");
+        let plan = futures::executor::block_on(preview(&package)).unwrap();
+
+        assert!(plan.protected);
+        assert!(matches!(plan.target, OperationTarget::Steam { .. }));
+    }
+
+    #[test]
+    fn steam_revalidation_and_apply_fail_closed() {
+        let plan = plan(OperationTarget::Steam {
+            app_id: "570".into(),
+        });
+
+        assert!(revalidate(&plan, &present()).is_err());
+        let result = futures::executor::block_on(apply(&plan, &|_| {}));
+        assert!(!result.success);
     }
 }

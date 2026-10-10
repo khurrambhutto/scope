@@ -8,6 +8,7 @@ pub mod appimage;
 pub mod apt;
 pub mod flatpak;
 pub mod snap;
+pub mod steam;
 
 use std::future::Future;
 
@@ -55,17 +56,17 @@ mod tests {
                 .count();
             assert!(fp > 0, "Flatpak available but no packages returned");
         }
-
         // Enrichment smoke: at least some packages should carry display names.
         let enriched = pkgs.iter().filter(|p| p.display_name.is_some()).count();
         println!(
-            "scan_all: {} packages, enriched={}, avail apt={}/snap={}/flatpak={}/appimage={}",
+            "scan_all: {} packages, enriched={}, avail apt={}/snap={}/flatpak={}/appimage={}/steam={}",
             pkgs.len(),
             enriched,
             avail.apt,
             avail.snap,
             avail.flatpak,
-            avail.appimage
+            avail.appimage,
+            avail.steam
         );
         let _ = AppKind::Gui;
     }
@@ -103,6 +104,19 @@ mod tests {
         assert_eq!(pkg.app_kind, AppKind::Gui);
     }
 
+    #[test]
+    fn enrich_preserves_steam_appinfo_classification() {
+        let index = DesktopIndex::from_apps(vec![desktop_app(
+            "steam-game",
+            "SteamVR",
+            "steam steam://rungameid/250820",
+        )]);
+        let mut pkg = InstalledPackage::new(PackageSource::Steam, "250820");
+        pkg.name = "SteamVR".into();
+        pkg.app_kind = AppKind::Unknown;
+        enrich(&mut pkg, &index);
+        assert_eq!(pkg.app_kind, AppKind::Unknown);
+    }
     #[test]
     fn enrich_leaves_an_unmatched_package_alone() {
         let mut pkg = InstalledPackage::new(PackageSource::Apt, "htop");
@@ -158,6 +172,7 @@ fn scanners() -> Vec<Box<dyn Scanner>> {
         Box::new(snap::SnapScanner),
         Box::new(flatpak::FlatpakScanner),
         Box::new(appimage::AppImageScanner::new()),
+        Box::new(steam::SteamScanner::new()),
     ]
 }
 
@@ -233,6 +248,10 @@ pub async fn scan_all() -> (Vec<InstalledPackage>, ScanAvailability) {
                 availability.appimage = outcome.available;
                 availability.appimage_dirs = appimage::search_directories();
             }
+            PackageSource::Steam => {
+                availability.steam = outcome.available;
+                availability.steam_error = outcome.error;
+            }
             PackageSource::Desktop => {
                 // Unmanaged desktop apps are synthesized from visible launchers
                 // below, not reported by a package-manager scanner.
@@ -270,7 +289,7 @@ pub async fn scan_all() -> (Vec<InstalledPackage>, ScanAvailability) {
 
 fn kind_rank(k: AppKind) -> u8 {
     match k {
-        AppKind::Gui => 0,
+        AppKind::Game | AppKind::Gui => 0,
         AppKind::Cli => 1,
         AppKind::Unknown => 2,
     }
@@ -325,13 +344,16 @@ fn enrich(pkg: &mut InstalledPackage, desktop: &DesktopIndex) {
             pkg.categories = Some(app.categories.join(", "));
         }
         pkg.terminal = app.terminal;
-        // Classify visible desktop launchers by how they start: regular entries
-        // are GUI apps; Terminal=true entries are CLI tools.
-        pkg.app_kind = if app.terminal {
-            AppKind::Cli
-        } else {
-            AppKind::Gui
-        };
+        // Steam type classification comes from local binary appinfo metadata;
+        // a launcher can identify a matching AppID but cannot distinguish a
+        // game from SteamVR, Proton, or other tools.
+        if pkg.source != PackageSource::Steam {
+            pkg.app_kind = if app.terminal {
+                AppKind::Cli
+            } else {
+                AppKind::Gui
+            };
+        }
     }
 }
 
@@ -342,11 +364,15 @@ pub struct ScanAvailability {
     pub snap: bool,
     pub flatpak: bool,
     pub appimage: bool,
+    #[serde(default)]
+    pub steam: bool,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub apt_error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub snap_error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub flatpak_error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub steam_error: Option<String>,
     pub appimage_dirs: Vec<String>,
 }

@@ -12,7 +12,7 @@
   <a href="https://github.com/khurrambhutto/scope/issues">Issues</a>
 </p>
 
-Scope puts apps from APT, Snap, Flatpak, AppImage, and user-local desktop launchers into one searchable list. You can update or uninstall supported apps, and you see the exact commands before anything runs. Privileged steps go through the standard Polkit dialog, so Scope never sees your password.
+Scope puts apps from APT, Snap, Flatpak, AppImage, user-local desktop launchers, and locally installed Steam games into one searchable list. You can update or uninstall supported package-manager apps, and you see the exact commands before anything runs. Privileged steps go through the standard Polkit dialog, so Scope never sees your password.
 
 <p align="center">
   <img src="docs/image.png" alt="Scope v0.3.4 showing the Apps and Updates toggle, installed apps, search, source filter, and Show all control in its dark red interface" width="960" />
@@ -48,11 +48,11 @@ cargo run
 
 Use the **Apps / Updates** toggle at the top to switch between installed apps and available updates. Search by app or package name, filter by source, or refresh to rescan. Select a row to see its details and the actions it supports.
 
-The default list shows GUI apps and command-line tools that you would expect to manage. AppImages and user-local desktop launchers appear for discovery only, and their update and uninstall actions are disabled.
+The default list shows GUI apps, command-line tools, and locally discovered Steam games. Scope finds games in native and Flatpak Steam libraries; Steam tools and entries with an unknown type appear only with **Show all**. Known pending Steam updates also appear in **Updates**. Steam's locally recorded status can be pending, paused, or in progress; refresh to rescan its local manifest. Scope does not check Steam online, so an unknown status means no usable recorded state and **No update recorded** is not confirmation that the game is up to date. Steam is read-only in Scope: **Open in Steam** hands the game to Steam's library page for management. AppImages and user-local desktop launchers also appear for discovery only, and their update and uninstall actions are disabled.
 
-Turn on **Show all** in the footer to see every row the scanners return, including libraries and system components. Show all does not bypass safety checks. Protected packages stay locked even when it is on.
+Turn on **Show all** in the footer to see every row the scanners return, including libraries, system components, Steam tools, and Steam entries with an unknown type. Show all does not bypass safety checks. Protected packages stay locked even when it is on.
 
-Every update or uninstall follows the same steps:
+Every Scope-managed update or uninstall follows the same steps:
 
 1. Scope builds a plan that lists the exact commands.
 2. You review the plan and confirm it.
@@ -63,26 +63,27 @@ Only one package operation can run at a time.
 
 ## Supported sources
 
-| Source | Scanned | Uninstall | Update |
+| Source | Scanned | Uninstall | Update / handoff |
 | --- | --- | --- | --- |
 | APT | Manual installs only | `apt remove` | `apt install` |
 | Snap | Apps only, runtimes hidden | `snap remove` | `snap refresh` |
 | Flatpak | User and system installs, scoped separately | `flatpak uninstall` | `flatpak update` |
 | AppImage | Common locations | Not yet supported | Not yet supported |
 | Desktop launchers | Launchers no package manager owns | Disabled | Disabled |
+| Steam | Locally installed games in native and Flatpak libraries; tools and unknown types with Show all | Disabled (read-only) | Known pending updates appear in Updates; Open in Steam |
 
-Scope runs each package manager's own command. It never edits dpkg or apt databases directly.
+Scope runs each package manager's own command. Steam entries are handed off to Steam; Scope never edits package-manager databases directly.
 
 ## Status
 
 What works today:
 
-- One list across APT, Snap, Flatpak, AppImages, and unmanaged desktop launchers
+- One list across APT, Snap, Flatpak, AppImages, unmanaged desktop launchers, and locally discovered Steam games
 - Display names, categories, and icons from desktop entries and the freedesktop icon theme
 - Uninstall with a preview, Polkit authentication, and a deny-list for protected packages
 - Snap removal details showing installed revisions, managed data sizes, and retained recovery snapshots
 - Update with a preview for APT, Snap, and Flatpak
-- A self-updater that verifies signed checksums for official `.deb` builds
+- Locally recorded Steam update status, with known pending updates in Updates and handoff to Steam
 
 What is not done yet:
 
