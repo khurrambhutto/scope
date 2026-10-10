@@ -1,8 +1,8 @@
 # Scope
 
-> Scope is a free, open-source Linux app manager. It lists apps installed through APT, Snap, Flatpak, and AppImage plus locally installed Steam games in one searchable list, and it shows the exact commands for every supported update or uninstall before anything runs. Known pending Steam updates appear in Updates from the last local scan; Steam remains handoff-only. Written in Rust with Zed's GPUI. Ubuntu is the first target. Version 0.3.4, MIT License.
+> Scope is a free, open-source Linux app manager. It lists apps installed through APT, Snap, Flatpak, and AppImage in one searchable list, and it shows the exact commands for every update or uninstall before anything runs. Written in Rust with Zed's GPUI. Ubuntu is the first target. Version 0.3.4, MIT License.
 
-Scope is a desktop app for Ubuntu and other Linux systems. It answers the question "what is installed on this machine, and how do I update or remove supported apps safely?" It reads four package sources (APT, Snap, Flatpak, AppImage), locally installed Steam games, plus desktop launchers that no package manager owns. Steam discovery covers native and Flatpak libraries. Steam's recorded update state can be pending, paused, or in progress and refreshes only when Scope scans or rescans local manifests; Scope makes no online Steam check. An unknown status has no usable recorded state, while **No update recorded** is not confirmation that a game is up to date. Steam is read-only in Scope: **Open in Steam** hands a game to Steam for management, while Steam tools and entries with an unknown type appear only with **Show all**. Admin actions use the standard Polkit dialog, so the app never sees the user's password.
+Scope is a desktop app for Ubuntu and other Linux systems. It answers the question "what is installed on this machine, and how do I update or remove it safely?" It reads four package sources (APT, Snap, Flatpak, AppImage) plus desktop launchers that no package manager owns. Admin actions use the standard Polkit dialog, so the app never sees the user's password.
 
 ## Pages
 
@@ -22,8 +22,8 @@ Scope is a desktop app for Ubuntu and other Linux systems. It answers the questi
 - Name: Scope
 - Category: Linux desktop package manager, app manager
 - Platform: Linux, Ubuntu first, x86-64
-- Sources: APT (manual installs), Snap (apps, runtimes hidden), Flatpak (user and system scopes), AppImage (listed only), desktop launchers (listed only), Steam (locally discovered native and Flatpak library games; known pending updates in Updates; tools and unknown types with Show all)
-- Actions: uninstall and update for APT, Snap, and Flatpak; AppImage and desktop-launcher actions are disabled; Steam is read-only and uses Open in Steam for management
+- Sources: APT (manual installs), Snap (apps, runtimes hidden), Flatpak (user and system scopes), AppImage (listed only), desktop launchers (listed only)
+- Actions: uninstall and update for APT, Snap, and Flatpak; AppImage update and uninstall are not supported yet
 - Stack: Rust, Zed's GPUI, no webview
 - License: MIT
 - Author: Khurram Bhutto (https://khurrambhutto.tech/)

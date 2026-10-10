@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Scope, a Linux app manager for packages and Steam games</title>
+  <title>Scope, a Linux app manager for APT, Snap, Flatpak and AppImage</title>
   <meta name="google-site-verification" content="msIjf5-oHmJg_58yKXFLPUWxh03z06n0ON6FUat3KZ4" />
-  <meta name="description" content="Scope is a free, open-source Linux app manager. See apps from APT, Snap, Flatpak, AppImage, and locally installed Steam games in one list; update or uninstall supported package-manager apps with an exact-command preview.">
+  <meta name="description" content="Scope is a free, open-source Linux app manager. See, update, and uninstall apps from APT, Snap, Flatpak, and AppImage in one list, and preview the exact commands before anything runs.">
   <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
   <meta name="author" content="Khurram Bhutto">
   <meta name="application-name" content="Scope">
@@ -17,8 +17,8 @@
 
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://khurrambhutto.github.io/scope/">
-  <meta property="og:title" content="Scope, a Linux app manager for packages and Steam games">
-  <meta property="og:description" content="One list for your Linux apps and locally installed Steam games. Preview updates or uninstalls for supported package-manager apps. Free and open source.">
+  <meta property="og:title" content="Scope, a Linux app manager for APT, Snap, Flatpak and AppImage">
+  <meta property="og:description" content="One list for every app on your Linux system. Preview every update or uninstall before it runs. Free and open source.">
   <meta property="og:image" content="https://khurrambhutto.github.io/scope/image.png">
   <meta property="og:image:width" content="1262">
   <meta property="og:image:height" content="875">
@@ -27,8 +27,8 @@
   <meta property="og:locale" content="en_US">
 
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Scope, a Linux app manager for packages and Steam games">
-  <meta name="twitter:description" content="One list for Linux apps and locally installed Steam games, with a preview before updates or uninstalls for supported sources.">
+  <meta name="twitter:title" content="Scope, a Linux app manager for APT, Snap, Flatpak and AppImage">
+  <meta name="twitter:description" content="One list for every app on your Linux system, with a preview before every update or uninstall.">
   <meta name="twitter:image" content="https://khurrambhutto.github.io/scope/image.png">
   <meta name="twitter:image:alt" content="Scope showing installed APT, Snap, Flatpak and AppImage apps in one searchable list">
 
@@ -45,7 +45,7 @@
         "@id": "https://khurrambhutto.github.io/scope/#website",
         "url": "https://khurrambhutto.github.io/scope/",
         "name": "Scope",
-        "description": "Scope is a free, open-source Linux app manager for APT, Snap, Flatpak, AppImage, and locally installed Steam games.",
+        "description": "Scope is a free, open-source Linux app manager for APT, Snap, Flatpak, and AppImage.",
         "inLanguage": "en"
       },
       {
@@ -53,7 +53,7 @@
         "@id": "https://khurrambhutto.github.io/scope/#software",
         "name": "Scope",
         "alternateName": ["Scope Linux app manager"],
-        "description": "Scope is a Linux app manager that lists APT, Snap, Flatpak, AppImage, and locally installed Steam games in one searchable list. Update or uninstall supported package-manager apps after reviewing a preview of the exact commands.",
+        "description": "Scope is a Linux app manager that lists APT, Snap, Flatpak, and AppImage apps in one searchable list. Update or uninstall apps after reviewing a preview of the exact commands.",
         "url": "https://khurrambhutto.github.io/scope/",
         "image": "https://khurrambhutto.github.io/scope/image.png",
         "screenshot": "https://khurrambhutto.github.io/scope/image.png",
@@ -81,10 +81,10 @@
           ]
         },
         "featureList": [
-          "One list for APT, Snap, Flatpak, AppImage, and locally installed Steam games",
-          "Preview of the exact commands before every Scope-managed update or uninstall",
+          "One list for APT, Snap, Flatpak, and AppImage apps",
+          "Preview of the exact commands before every update or uninstall",
           "Polkit authentication, so the app never handles your password",
-          "Update APT, Snap, and Flatpak apps; show known pending Steam updates from the last local scan",
+          "Update APT, Snap, and Flatpak apps",
           "Deny-list that protects critical system packages",
           "Native Rust app built with Zed's GPUI, no webview"
         ]
@@ -98,7 +98,7 @@
             "name": "What is Scope?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Scope is a free, open-source Linux app manager. It lists apps from APT, Snap, Flatpak, AppImage, and locally installed Steam games in one searchable list. Supported package-manager apps can be updated or uninstalled from one place; known pending Steam updates appear in Updates, while Steam games open in Steam for management."
+              "text": "Scope is a free, open-source Linux app manager. It lists apps from APT, Snap, Flatpak, and AppImage in one searchable list, so you can see, update, and uninstall them from one place."
             }
           },
           {
@@ -106,7 +106,7 @@
             "name": "Which Linux apps can Scope manage?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Scope shows APT manual installs, Snap apps, Flatpak apps (user and system scope), AppImages, desktop launchers that no package manager owns, and locally installed Steam games. Update and uninstall work for APT, Snap, and Flatpak. AppImages and desktop launchers are discovery-only; Steam is read-only, but known pending updates and recorded paused or in-progress status appear after a rescan. Open in Steam hands management back to Steam."
+              "text": "Scope shows APT manual installs, Snap apps, Flatpak apps (user and system scope), AppImages, and desktop launchers that no package manager owns. Update and uninstall work for APT, Snap, and Flatpak. AppImages and desktop launchers are listed for discovery, and their actions are disabled."
             }
           },
           {
@@ -122,7 +122,7 @@
             "name": "Does Scope show what will change before it runs?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Yes. Every Scope-managed update or uninstall builds a plan with the exact commands. Scope checks the package against the live system before it runs anything, and APT actions are simulated first."
+              "text": "Yes. Every update or uninstall builds a plan with the exact commands. Scope checks the package against the live system before it runs anything, and APT actions are simulated first."
             }
           },
           {
@@ -188,7 +188,7 @@
       <div class="hero-top">
         <h1 id="hero-title">Every app on your Linux machine, in one list.</h1>
         <div class="hero-side">
-          <p class="lead">Scope brings APT, Snap, Flatpak, AppImage, and locally installed Steam games into one searchable list. Update or uninstall supported package-manager apps, and read the exact command before it runs.</p>
+          <p class="lead">Scope brings APT, Snap, Flatpak, and AppImage apps into one searchable list. Update or uninstall any of them, and read the exact command before it runs.</p>
           <div class="button-row">
             <a class="button button-primary" href="https://github.com/khurrambhutto/scope/releases/download/v0.3.4/scope_0.3.4_amd64.deb" rel="noopener noreferrer">Download the .deb</a>
             <a class="button button-ghost" href="https://github.com/khurrambhutto/scope" target="_blank" rel="noopener noreferrer">Read the source</a>
@@ -205,8 +205,8 @@
 
     <section class="section" id="sources" aria-labelledby="sources-title">
       <div class="page">
-        <h2 class="section-title" id="sources-title">Package systems and Steam, one list</h2>
-        <p class="section-lead">Each package-manager source keeps its own commands. Steam is read-only in Scope: known pending updates come from the last local scan, while Open in Steam hands management back to Steam. Scope never edits package databases directly.</p>
+        <h2 class="section-title" id="sources-title">Four package systems, one list</h2>
+        <p class="section-lead">Each source keeps its own commands. Scope runs those commands and never edits the package databases directly.</p>
 
         <div class="sources">
           <div class="source">
@@ -229,20 +229,15 @@
             <p>AppImages in common folders. Listed for now. Uninstall and update are not supported yet.</p>
             <span class="command-line"><span>listed only</span></span>
           </div>
-          <div class="source">
-            <h3 class="source-name"><span class="source-mark" style="background:var(--steam, var(--flatpak))"></span>Steam</h3>
-            <p>Locally installed games from native and Flatpak Steam libraries. Known pending updates appear in Updates; their recorded state can be pending, paused, or in progress. Rescan for a fresh local reading, then Open in Steam to manage it.</p>
-            <span class="command-line"><span>Open in Steam</span></span>
-          </div>
         </div>
-        <p class="source-note">Steam does not use an online check: an unknown status has no usable recorded state, and No update recorded does not confirm that a game is up to date. Desktop launchers that no package manager owns also appear for discovery only, with actions disabled. Steam tools and entries with an unknown type appear with Show all.</p>
+        <p class="source-note">Desktop launchers that no package manager owns also appear, for discovery only. Their actions are disabled.</p>
       </div>
     </section>
 
     <section class="section" id="how" aria-labelledby="how-title">
       <div class="page">
         <h2 class="section-title" id="how-title">Every change goes through a plan</h2>
-        <p class="section-lead">Scope never runs a package-manager update or uninstall the moment you click. Four steps stand between your click and the command, and the last two catch anything that changed since you reviewed the plan.</p>
+        <p class="section-lead">Scope never runs an update or uninstall the moment you click. Four steps stand between your click and the command, and the last two catch anything that changed since you reviewed the plan.</p>
 
         <ol class="steps">
           <li>
@@ -301,10 +296,10 @@
           <div class="done">
             <h3>Working</h3>
             <ul>
-              <li>One list across APT, Snap, Flatpak, AppImage, unmanaged desktop launchers, and locally discovered Steam games</li>
+              <li>One list across APT, Snap, Flatpak, AppImage, and unmanaged desktop launchers</li>
               <li>Display names, categories, and icons from desktop entries and the icon theme</li>
               <li>Uninstall with a preview, Polkit authentication, and a deny-list</li>
-              <li>Update with a preview for APT, Snap, and Flatpak; known pending Steam updates in Updates</li>
+              <li>Update with a preview for APT, Snap, and Flatpak</li>
               <li>Self-updater that checks a signed SHA-256 manifest for official .deb builds</li>
             </ul>
           </div>
@@ -346,11 +341,11 @@
         <div>
           <details>
             <summary>What is Scope?</summary>
-            <p>Scope is a free, open-source Linux app manager. It lists apps from APT, Snap, Flatpak, AppImage, and locally installed Steam games in one searchable list. Supported package-manager apps can be updated or uninstalled from one place; known pending Steam updates appear in Updates, while Steam games open in Steam for management.</p>
+            <p>Scope is a free, open-source Linux app manager. It lists apps from APT, Snap, Flatpak, and AppImage in one searchable list, so you can see, update, and uninstall them from one place.</p>
           </details>
           <details>
             <summary>Which Linux apps can Scope manage?</summary>
-            <p>Scope shows APT manual installs, Snap apps, Flatpak apps (user and system scope), AppImages, desktop launchers that no package manager owns, and locally installed Steam games. Update and uninstall work for APT, Snap, and Flatpak. AppImages and desktop launchers are discovery-only; Steam is read-only, but known pending updates and recorded paused or in-progress status appear after a rescan. Open in Steam hands management back to Steam.</p>
+            <p>Scope shows APT manual installs, Snap apps, Flatpak apps (user and system scope), AppImages, and desktop launchers that no package manager owns. Update and uninstall work for APT, Snap, and Flatpak. AppImages and desktop launchers are listed for discovery, and their actions are disabled.</p>
           </details>
           <details>
             <summary>Does Scope ask for my password?</summary>
