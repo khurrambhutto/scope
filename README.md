@@ -52,8 +52,9 @@ Switch to **Updates** to see available updates. **Show all** reveals the scanned
 | npm global, Bun global | Yes | Yes |
 | AppImage, unmanaged desktop launchers | Discovery only | Discovery only |
 | Steam games | Read-only | Open in Steam |
+| JetBrains Toolbox IDEs | Read-only | Open Toolbox |
 
-APT scans manual installs; Snap and Flatpak exclude runtimes. Steam games are discovered from native and Flatpak Steam libraries; Scope is read-only and **Open in Steam** hands management to Steam.
+APT scans manual installs; Snap and Flatpak exclude runtimes. Steam games are discovered from native and Flatpak Steam libraries; Scope is read-only and **Open in Steam** hands management to Steam. JetBrains Toolbox IDEs are discovered read-only from Toolbox metadata in default, legacy, and custom roots. **Open Toolbox** explicitly launches the resolved, valid installed `jetbrains-toolbox.desktop` manager launcher only when clicked; scanning never launches Toolbox, launch errors appear in Scope, and IDE updates and uninstalls remain unavailable there. Scope does not promise measured IDE or user-data sizes.
 
 Tool management requires verified user-owned installations inside your home directory. Global pipx installs and untracked Cargo binaries are unsupported. Git/local Python sources and local/custom-registry Cargo sources have no automatic updates. Pins and supported installation constraints are respected; pipx upgrades may drop original version constraints. Shared caches, interpreters, toolchains, and personal data are kept.
 

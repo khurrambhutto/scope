@@ -13,6 +13,9 @@ pub fn is_listable(pkg: &InstalledPackage) -> bool {
     if pkg.source == PackageSource::Steam {
         return matches!(pkg.app_kind, AppKind::Game | AppKind::Gui);
     }
+    if pkg.source == PackageSource::JetBrainsToolbox {
+        return pkg.app_kind == AppKind::Gui;
+    }
     if !matches!(pkg.app_kind, AppKind::Gui | AppKind::Cli) {
         return false;
     }
@@ -124,6 +127,21 @@ mod tests {
         assert!(!is_listable(&unknown));
         assert!(is_visible(&unknown, true));
         assert!(!can_uninstall(&game));
+    }
+
+    #[test]
+    fn lists_toolbox_ides_but_never_enables_uninstall() {
+        let ide = package(
+            PackageSource::JetBrainsToolbox,
+            "/home/user/.local/share/JetBrains/Toolbox/apps/pycharm",
+            AppKind::Gui,
+        );
+
+        assert!(is_listable(&ide));
+        assert!(!can_uninstall(&ide));
+        assert!(uninstall_block_reason(&ide)
+            .unwrap()
+            .contains("JetBrains Toolbox manages IDE updates and uninstall"));
     }
 
     #[test]

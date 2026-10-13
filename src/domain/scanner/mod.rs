@@ -7,6 +7,7 @@
 pub mod appimage;
 pub mod apt;
 pub mod flatpak;
+pub mod jetbrains_toolbox;
 pub mod snap;
 mod snap_version;
 pub mod steam;
@@ -127,6 +128,52 @@ mod tests {
         enrich(&mut pkg, &DesktopIndex::empty());
         assert_eq!(pkg.app_kind, AppKind::Cli);
     }
+
+    #[test]
+    fn cached_availability_without_toolbox_fields_deserializes() {
+        let mut cached = serde_json::to_value(ScanAvailability::default()).unwrap();
+        let fields = cached.as_object_mut().unwrap();
+        fields.remove("jetbrains_toolbox");
+        fields.remove("jetbrains_toolbox_error");
+
+        let availability: ScanAvailability = serde_json::from_value(cached).unwrap();
+        assert!(!availability.jetbrains_toolbox);
+        assert_eq!(availability.jetbrains_toolbox_error, None);
+    }
+
+    #[test]
+    fn enrich_keeps_toolbox_ide_gui_and_suppresses_its_terminal_launcher() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("Toolbox/apps/pycharm");
+        let executable = root.join("bin/pycharm");
+        let user_apps = directory.path().join("applications");
+        std::fs::create_dir_all(executable.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(&user_apps).unwrap();
+        std::fs::write(&executable, "").unwrap();
+        std::fs::write(
+            root.join("product-info.json"),
+            r#"{"launch":[{"os":"Linux","launcherPath":"bin/pycharm"}]}"#,
+        )
+        .unwrap();
+
+        let mut launcher = desktop_app("pycharm", "PyCharm", executable.to_str().unwrap());
+        launcher.file_path = user_apps.join("pycharm.desktop");
+        launcher.executable = Some(executable);
+        launcher.terminal = true;
+        let index = DesktopIndex::from_apps(vec![launcher]);
+        let mut pkg = InstalledPackage::new(
+            PackageSource::JetBrainsToolbox,
+            root.to_string_lossy().to_string(),
+        );
+        pkg.name = "PyCharm".into();
+        pkg.app_kind = AppKind::Gui;
+
+        enrich(&mut pkg, &index);
+
+        assert_eq!(pkg.app_kind, AppKind::Gui);
+        assert!(crate::domain::listing::is_listable(&pkg));
+        assert!(index.lookup_package(&pkg).is_some());
+    }
 }
 use tokio::task::JoinSet;
 
@@ -175,6 +222,7 @@ fn scanners() -> Vec<Box<dyn Scanner>> {
         Box::new(flatpak::FlatpakScanner),
         Box::new(appimage::AppImageScanner::new()),
         Box::new(steam::SteamScanner::new()),
+        Box::new(jetbrains_toolbox::JetBrainsToolboxScanner::new()),
         Box::new(tools::ToolScanner(PackageSource::Uv)),
         Box::new(tools::ToolScanner(PackageSource::Pipx)),
         Box::new(tools::ToolScanner(PackageSource::Cargo)),
@@ -258,6 +306,10 @@ pub async fn scan_all() -> (Vec<InstalledPackage>, ScanAvailability) {
             PackageSource::Steam => {
                 availability.steam = outcome.available;
                 availability.steam_error = outcome.error;
+            }
+            PackageSource::JetBrainsToolbox => {
+                availability.jetbrains_toolbox = outcome.available;
+                availability.jetbrains_toolbox_error = outcome.error;
             }
             PackageSource::Uv => {
                 availability.uv = outcome.available;
@@ -371,10 +423,14 @@ fn enrich(pkg: &mut InstalledPackage, desktop: &DesktopIndex) {
             pkg.categories = Some(app.categories.join(", "));
         }
         pkg.terminal = app.terminal;
-        // Steam type classification comes from local binary appinfo metadata;
-        // a launcher can identify a matching AppID but cannot distinguish a
-        // game from SteamVR, Proton, or other tools.
-        if pkg.source != PackageSource::Steam {
+        // Steam classification comes from local binary appinfo metadata.
+        // JetBrains Toolbox records each IDE as a GUI app in validated product
+        // metadata, so a `Terminal=true` launcher must not hide it by changing
+        // its scanner-provided classification.
+        if !matches!(
+            pkg.source,
+            PackageSource::Steam | PackageSource::JetBrainsToolbox
+        ) {
             pkg.app_kind = if app.terminal {
                 AppKind::Cli
             } else {
@@ -413,7 +469,8 @@ pub struct ScanAvailability {
     pub appimage: bool,
     #[serde(default)]
     pub steam: bool,
-    #[serde(skip_serializing_if = "Option::is_none", default)]
+    #[serde(default)]
+    pub jetbrains_toolbox: bool,
     pub apt_error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub snap_error: Option<String>,
@@ -421,5 +478,7 @@ pub struct ScanAvailability {
     pub flatpak_error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub steam_error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub jetbrains_toolbox_error: Option<String>,
     pub appimage_dirs: Vec<String>,
 }

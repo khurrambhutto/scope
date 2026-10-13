@@ -24,6 +24,7 @@ pub fn source_color(source: PackageSource) -> Hsla {
         PackageSource::AppImage => rgb(0x0b8a4f),
         PackageSource::Desktop => rgb(0x7569d2),
         PackageSource::Steam => rgb(0x1b5c8c),
+        PackageSource::JetBrainsToolbox => rgb(0x7f52ff),
     }
     .into()
 }
@@ -41,6 +42,7 @@ pub fn source_label(source: PackageSource) -> &'static str {
         PackageSource::AppImage => "AppImage",
         PackageSource::Desktop => "Desktop",
         PackageSource::Steam => "Steam",
+        PackageSource::JetBrainsToolbox => "Toolbox",
     }
 }
 

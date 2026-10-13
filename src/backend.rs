@@ -19,6 +19,7 @@ use crate::domain::scanner::{scan_all, ScanAvailability};
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct Scan {
     pub packages: Vec<InstalledPackage>,
+    #[serde(default)]
     pub availability: ScanAvailability,
     pub scanned_at_ms: u64,
 }
@@ -56,6 +57,13 @@ pub fn scan_blocking() -> Scan {
             scanned_at_ms: now_ms(),
         }
     })
+}
+
+/// Open JetBrains Toolbox through its validated desktop launcher off the UI thread.
+pub fn spawn_open_jetbrains_toolbox(tx: oneshot::Sender<Result<(), String>>) {
+    std::thread::spawn(move || {
+        let _ = tx.send(block_on(crate::domain::jetbrains_toolbox::open()));
+    });
 }
 
 fn now_ms() -> u64 {
@@ -429,5 +437,39 @@ mod tests {
         let plan = block_on(rx).unwrap().unwrap();
         assert!(plan.protected);
         assert!(store.take(&plan.plan_id).is_none());
+    }
+
+    #[test]
+    fn forged_toolbox_update_availability_cannot_issue_a_plan() {
+        let store = PlanStore::default();
+        let (tx, rx) = oneshot::channel();
+        let mut pkg = InstalledPackage::new(
+            PackageSource::JetBrainsToolbox,
+            "/home/user/.local/share/JetBrains/Toolbox/apps/pycharm",
+        );
+        pkg.name = "PyCharm".into();
+        pkg.version = "2026.2+build".into();
+        pkg.has_update = true;
+        pkg.update_version = Some("forged".into());
+
+        spawn_preview(store.clone(), OpKind::Update, pkg, tx);
+
+        assert!(block_on(rx).unwrap().is_err());
+        assert!(store.take("any-plan").is_none());
+    }
+
+    #[test]
+    fn cached_scan_without_availability_deserializes_to_defaults() {
+        let scan = Scan {
+            packages: vec![],
+            availability: ScanAvailability::default(),
+            scanned_at_ms: 1,
+        };
+        let mut cached = serde_json::to_value(scan).unwrap();
+        cached.as_object_mut().unwrap().remove("availability");
+
+        let restored: Scan = serde_json::from_value(cached).unwrap();
+        assert!(!restored.availability.jetbrains_toolbox);
+        assert_eq!(restored.availability.jetbrains_toolbox_error, None);
     }
 }

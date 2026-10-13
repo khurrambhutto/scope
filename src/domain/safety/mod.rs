@@ -59,6 +59,7 @@ pub fn check_package(source: PackageSource, package_id: &str) -> Protection {
         PackageSource::AppImage => check_appimage(package_id),
         PackageSource::Desktop => check_desktop(package_id),
         PackageSource::Steam => check_steam(package_id),
+        PackageSource::JetBrainsToolbox => check_jetbrains_toolbox(package_id),
     }
 }
 
@@ -190,6 +191,10 @@ fn check_steam(_app_id: &str) -> Protection {
     Protection::denied("Steam items are read-only in Scope. Manage updates in Steam.")
 }
 
+fn check_jetbrains_toolbox(_installation_root: &str) -> Protection {
+    Protection::denied("JetBrains Toolbox manages IDE updates and uninstall.")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -272,6 +277,20 @@ mod tests {
                 "/home/user/.local/share/applications/zed.desktop"
             )
             .protected
+        );
+    }
+
+    #[test]
+    fn toolbox_ides_are_read_only() {
+        let protection = check_package(
+            PackageSource::JetBrainsToolbox,
+            "/home/user/.local/share/JetBrains/Toolbox/apps/pycharm",
+        );
+
+        assert!(protection.protected);
+        assert_eq!(
+            protection.reason.as_deref(),
+            Some("JetBrains Toolbox manages IDE updates and uninstall.")
         );
     }
 

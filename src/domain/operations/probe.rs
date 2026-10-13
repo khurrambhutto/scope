@@ -102,6 +102,9 @@ pub async fn probe_package(
         PackageSource::Steam => {
             anyhow::bail!("Steam items are read-only in Scope. Manage updates in Steam.")
         }
+        PackageSource::JetBrainsToolbox => {
+            anyhow::bail!("JetBrains Toolbox manages IDE updates and uninstall.")
+        }
     }
 }
 
@@ -347,5 +350,15 @@ mod tests {
         assert!(
             futures::executor::block_on(probe_package(PackageSource::Steam, "570", None,)).is_err()
         );
+    }
+
+    #[test]
+    fn toolbox_probe_fails_closed() {
+        assert!(futures::executor::block_on(probe_package(
+            PackageSource::JetBrainsToolbox,
+            "/home/user/.local/share/JetBrains/Toolbox/apps/pycharm",
+            None,
+        ))
+        .is_err());
     }
 }

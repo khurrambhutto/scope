@@ -333,6 +333,24 @@ impl ScopeApp {
         self.open_op(kind, pkg, cx);
     }
 
+    pub(super) fn open_jetbrains_toolbox(&mut self, cx: &mut Context<Self>) {
+        let (tx, rx) = oneshot::channel::<Result<(), String>>();
+        backend::spawn_open_jetbrains_toolbox(tx);
+        cx.spawn(async move |this, cx| {
+            let result = rx.await;
+            this.update(cx, |this, cx| {
+                if let Err(message) = result.unwrap_or_else(|_| {
+                    Err("Could not open JetBrains Toolbox. Please try again.".to_string())
+                }) {
+                    this.error = Some(message);
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
     pub(super) fn confirm_op(&mut self, cx: &mut Context<Self>) {
         let Some(Dialog::Confirm { kind, pkg, plan }) = self.dialog.as_ref() else {
             return;
@@ -677,6 +695,10 @@ impl ScopeApp {
             ("Snap", availability.snap_error.as_ref()),
             ("Flatpak", availability.flatpak_error.as_ref()),
             ("Steam", availability.steam_error.as_ref()),
+            (
+                "JetBrains Toolbox",
+                availability.jetbrains_toolbox_error.as_ref(),
+            ),
             ("uv", availability.uv_error.as_ref()),
             ("pipx", availability.pipx_error.as_ref()),
             ("Cargo", availability.cargo_error.as_ref()),

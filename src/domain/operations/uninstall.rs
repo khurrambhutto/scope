@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 
-use crate::domain::package::{InstallScope, InstalledPackage};
+use crate::domain::package::{InstallScope, InstalledPackage, PackageSource};
 use crate::domain::safety;
 use crate::domain::system::run_elevated;
 
@@ -16,6 +16,9 @@ use super::{
 const UNINSTALL_TIMEOUT: Duration = Duration::from_secs(180);
 
 pub async fn preview(pkg: &InstalledPackage) -> Result<OperationPlan> {
+    if pkg.source == PackageSource::JetBrainsToolbox {
+        anyhow::bail!("JetBrains Toolbox manages IDE updates and uninstall.")
+    }
     let target = OperationTarget::from_package(pkg)?;
     if let OperationTarget::Tool {
         package_id,
@@ -129,6 +132,9 @@ fn build_steps(target: &OperationTarget, protected: bool) -> (AuthMethod, Vec<Pl
         OperationTarget::Steam { .. } => {
             blocked("Steam items are read-only in Scope. Manage updates in Steam.")
         }
+        OperationTarget::JetBrainsToolbox { .. } => {
+            blocked("JetBrains Toolbox manages IDE updates and uninstall.")
+        }
     }
 }
 
@@ -143,6 +149,9 @@ fn blocked(message: &str) -> (AuthMethod, Vec<PlanStep>) {
 }
 
 pub fn revalidate(plan: &OperationPlan, probed: &super::probe::ProbedPackage) -> Result<()> {
+    if matches!(plan.target, OperationTarget::JetBrainsToolbox { .. }) {
+        anyhow::bail!("JetBrains Toolbox manages IDE updates and uninstall.")
+    }
     if !probed.present {
         anyhow::bail!(
             "This uninstall plan is stale: '{}' is no longer installed. Rescan and try again.",
@@ -214,6 +223,12 @@ pub async fn apply(
         OperationTarget::Steam { .. } => OperationResult {
             success: false,
             message: "Steam items are read-only in Scope. Manage updates in Steam.".into(),
+            logs: String::new(),
+            exit_code: None,
+        },
+        OperationTarget::JetBrainsToolbox { .. } => OperationResult {
+            success: false,
+            message: "JetBrains Toolbox manages IDE updates and uninstall.".into(),
             logs: String::new(),
             exit_code: None,
         },
@@ -304,6 +319,26 @@ mod tests {
     fn steam_revalidation_and_apply_fail_closed() {
         let plan = plan(OperationTarget::Steam {
             app_id: "570".into(),
+        });
+
+        assert!(revalidate(&plan, &present()).is_err());
+        let result = futures::executor::block_on(apply(&plan, &|_| {}));
+        assert!(!result.success);
+    }
+    #[test]
+    fn toolbox_preview_rejects_even_a_forged_package() {
+        let package = InstalledPackage::new(
+            PackageSource::JetBrainsToolbox,
+            "/home/user/.local/share/JetBrains/Toolbox/apps/pycharm",
+        );
+
+        assert!(futures::executor::block_on(preview(&package)).is_err());
+    }
+
+    #[test]
+    fn toolbox_forged_target_revalidation_and_apply_fail_closed() {
+        let plan = plan(OperationTarget::JetBrainsToolbox {
+            installation_root: "/home/user/.local/share/JetBrains/Toolbox/apps/pycharm".into(),
         });
 
         assert!(revalidate(&plan, &present()).is_err());

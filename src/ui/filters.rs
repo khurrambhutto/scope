@@ -32,6 +32,7 @@ pub(super) enum SourceFilter {
     Snap,
     Flatpak,
     AppImage,
+    JetBrainsToolbox,
     Others,
 }
 
@@ -43,6 +44,7 @@ impl SourceFilter {
             SourceFilter::Snap => "Snap",
             SourceFilter::Flatpak => "Flatpak",
             SourceFilter::AppImage => "AppImage",
+            SourceFilter::JetBrainsToolbox => "JetBrains Toolbox",
             SourceFilter::Others => "Others",
         }
     }
@@ -54,6 +56,7 @@ impl SourceFilter {
             SourceFilter::Snap => source == PackageSource::Snap,
             SourceFilter::Flatpak => source == PackageSource::Flatpak,
             SourceFilter::AppImage => source == PackageSource::AppImage,
+            SourceFilter::JetBrainsToolbox => source == PackageSource::JetBrainsToolbox,
             SourceFilter::Others => matches!(
                 source,
                 PackageSource::Steam
@@ -63,6 +66,7 @@ impl SourceFilter {
                     | PackageSource::Cargo
                     | PackageSource::Npm
                     | PackageSource::Bun
+                    | PackageSource::JetBrainsToolbox
             ),
         }
     }
@@ -209,6 +213,7 @@ impl ScopeApp {
                         (SourceFilter::Snap, "Snap"),
                         (SourceFilter::Flatpak, "Flatpak"),
                         (SourceFilter::AppImage, "AppImage"),
+                        (SourceFilter::JetBrainsToolbox, "JetBrains Toolbox"),
                         (SourceFilter::Others, "Others"),
                     ];
                     options
@@ -277,6 +282,8 @@ mod tests {
         assert!(!SourceFilter::Flatpak.matches(PackageSource::Apt));
         assert!(SourceFilter::AppImage.matches(PackageSource::AppImage));
         assert!(!SourceFilter::AppImage.matches(PackageSource::Snap));
+        assert!(SourceFilter::JetBrainsToolbox.matches(PackageSource::JetBrainsToolbox));
+        assert!(!SourceFilter::JetBrainsToolbox.matches(PackageSource::Apt));
         for source in [
             PackageSource::Uv,
             PackageSource::Pipx,
@@ -285,6 +292,7 @@ mod tests {
             PackageSource::Bun,
             PackageSource::Steam,
             PackageSource::Desktop,
+            PackageSource::JetBrainsToolbox,
         ] {
             assert!(SourceFilter::Others.matches(source));
         }
