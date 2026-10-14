@@ -112,6 +112,9 @@ pub struct InstalledPackage {
     /// Verified manager context; never reconstructed from a display name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_installation: Option<Box<crate::domain::tool_managers::ToolInstallation>>,
+    /// Verified Scope/Gear Lever integration of an AppImage in `~/AppImages`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub appimage_installation: Option<Box<crate::domain::appimage::AppImageInstallation>>,
     /// An unavailable update check or source-specific update limitation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub update_note: Option<String>,
@@ -171,6 +174,7 @@ impl InstalledPackage {
             package_id,
             install_scope: None,
             tool_installation: None,
+            appimage_installation: None,
             update_note: None,
             name: String::new(),
             display_name: None,
@@ -201,6 +205,7 @@ impl InstalledPackage {
             package_id,
             install_scope: Some(scope),
             tool_installation: None,
+            appimage_installation: None,
             update_note: None,
             name: String::new(),
             display_name: None,

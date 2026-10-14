@@ -65,6 +65,16 @@ pub async fn probe_target(plan: &super::OperationPlan) -> Result<ProbedPackage> 
         )
         .await?;
         Ok(ProbedPackage::installed(Some(plan.current_version.clone())))
+    } else if let super::OperationTarget::AppImage {
+        installation: Some(installation),
+        ..
+    } = &plan.target
+    {
+        crate::domain::appimage::operations::verify(installation)?;
+        Ok(ProbedPackage::installed(Some(plan.current_version.clone())))
+    } else if let super::OperationTarget::AppImageInstall { plan: install } = &plan.target {
+        crate::domain::appimage::install::revalidate(install)?;
+        Ok(ProbedPackage::installed(None))
     } else {
         probe_package(
             plan.target.source(),

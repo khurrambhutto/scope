@@ -23,6 +23,7 @@ pub async fn simulate(operation: Operation, package_id: &str) -> anyhow::Result<
     let action = match operation {
         Operation::Uninstall => "remove",
         Operation::Update => "install",
+        Operation::Install => anyhow::bail!("APT transactions cover uninstall and update only"),
     };
     let output = capture_output_env(
         "apt-get",
@@ -68,6 +69,7 @@ pub fn parse(
     removals.dedup();
     let target_present = match operation {
         Operation::Uninstall => removals.iter().any(|name| name == package_id),
+        Operation::Install => false,
         Operation::Update => installs
             .iter()
             .chain(&upgrades)

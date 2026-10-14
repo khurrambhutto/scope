@@ -90,6 +90,8 @@ pub struct ScopeApp {
     pub(super) open_select: Option<OpenSelect>,
     pub(super) dialog: Option<Dialog>,
     operation: OperationController,
+    /// An AppImage opened while another operation was applying.
+    pending_install: Option<std::path::PathBuf>,
     pub(super) operation_status: Option<OperationStatus>,
     pub(super) plans: PlanStore,
     pub(super) updater: UpdaterUi,
@@ -148,6 +150,7 @@ impl ScopeApp {
             open_select: None,
             dialog: None,
             operation: OperationController::default(),
+            pending_install: None,
             operation_status: None,
             plans: PlanStore::default(),
             updater: UpdaterUi::default(),
@@ -306,8 +309,15 @@ impl ScopeApp {
                         this.dialog = Some(match result {
                             Ok(Ok(plan)) => Dialog::Confirm {
                                 kind,
-                                pkg,
+                                pkg: if kind == OpKind::Install {
+                                    let mut pkg = pkg;
+                                    pkg.display_name = Some(plan.display_name.clone());
+                                    pkg
+                                } else {
+                                    pkg
+                                },
                                 plan: Box::new(plan),
+                                remove_app_data: false,
                             },
                             Ok(Err(message)) => Dialog::Failed { kind, pkg, message },
                             Err(_) => Dialog::Failed {
@@ -324,6 +334,17 @@ impl ScopeApp {
         .detach();
     }
 
+    /// Preview installing an AppImage opened from the file manager.
+    pub fn open_appimage(&mut self, path: std::path::PathBuf, cx: &mut Context<Self>) {
+        if self.operation.is_applying() {
+            self.pending_install = Some(path);
+            return;
+        }
+        self.settings_open = false;
+        self.open_op(OpKind::Install, backend::opened_appimage(&path), cx);
+        cx.notify();
+    }
+
     /// Open the operation dialog for a visible row by its stable key. The row
     /// handler captures only the key, so no package is cloned per frame.
     pub(super) fn open_op_by_key(&mut self, kind: OpKind, key: &str, cx: &mut Context<Self>) {
@@ -333,11 +354,28 @@ impl ScopeApp {
         self.open_op(kind, pkg, cx);
     }
 
+    pub(super) fn set_remove_app_data(&mut self, checked: bool, cx: &mut Context<Self>) {
+        if let Some(Dialog::Confirm {
+            remove_app_data, ..
+        }) = self.dialog.as_mut()
+        {
+            *remove_app_data = checked;
+            cx.notify();
+        }
+    }
+
     pub(super) fn confirm_op(&mut self, cx: &mut Context<Self>) {
-        let Some(Dialog::Confirm { kind, pkg, plan }) = self.dialog.as_ref() else {
+        let Some(Dialog::Confirm {
+            kind,
+            pkg,
+            plan,
+            remove_app_data,
+        }) = self.dialog.as_ref()
+        else {
             return;
         };
         let kind = *kind;
+        let remove_app_data = *remove_app_data;
         let pkg = pkg.clone();
         let plan = plan.clone();
         let Some(request) = self.operation.begin_apply(&plan.plan_id) else {
@@ -354,7 +392,12 @@ impl ScopeApp {
         cx.notify();
 
         let (tx, mut rx) = mpsc::unbounded::<OpMsg>();
-        backend::spawn_apply(self.plans.clone(), plan.plan_id.clone(), tx);
+        backend::spawn_apply(
+            self.plans.clone(),
+            plan.plan_id.clone(),
+            remove_app_data,
+            tx,
+        );
 
         let entity = cx.entity().downgrade();
         cx.spawn(async move |_this, cx| {
@@ -388,6 +431,9 @@ impl ScopeApp {
                                 cx.notify();
                                 if refresh {
                                     this.start_scan(cx);
+                                }
+                                if let Some(path) = this.pending_install.take() {
+                                    this.open_appimage(path, cx);
                                 }
                             }
                         }

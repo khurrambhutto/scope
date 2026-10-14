@@ -34,6 +34,8 @@ pub(super) enum Dialog {
         kind: OpKind,
         pkg: InstalledPackage,
         plan: Box<OperationPlan>,
+        /// Opt-in removal of `plan.app_data`; always starts unchecked.
+        remove_app_data: bool,
     },
 }
 
@@ -68,6 +70,7 @@ impl ScopeApp {
         let heading = match dialog.kind() {
             OpKind::Uninstall => format!("Uninstall {title}"),
             OpKind::Update => format!("Update {title}"),
+            OpKind::Install => format!("Install {title}"),
         };
 
         let body: AnyElement = match dialog {
@@ -78,6 +81,7 @@ impl ScopeApp {
                 .child(match kind {
                     OpKind::Uninstall => "Preparing uninstall preview…",
                     OpKind::Update => "Preparing update preview…",
+                    OpKind::Install => "Reading the AppImage…",
                 })
                 .into_any_element(),
             Dialog::Failed { message, .. } => div()
@@ -93,7 +97,12 @@ impl ScopeApp {
                     act(entity, |this, cx| this.close_dialog(cx)),
                 )))
                 .into_any_element(),
-            Dialog::Confirm { kind, pkg, plan } => confirm_body(entity, *kind, pkg, plan),
+            Dialog::Confirm {
+                kind,
+                pkg,
+                plan,
+                remove_app_data,
+            } => confirm_body(entity, *kind, pkg, plan, *remove_app_data),
         };
 
         modal_shell(heading, body, entity, corner_radius)
@@ -203,6 +212,7 @@ fn confirm_body(
     kind: OpKind,
     pkg: &InstalledPackage,
     plan: &OperationPlan,
+    remove_app_data: bool,
 ) -> AnyElement {
     // Protected covers AppImages too: `safety::check_package` denies every
     // AppImage path, so their preview plans always arrive protected.
@@ -226,12 +236,22 @@ fn confirm_body(
             .into_any_element();
     }
 
+    if let crate::domain::operations::OperationTarget::AppImageInstall { plan: install } =
+        &plan.target
+    {
+        return confirm_actions(
+            entity,
+            ButtonStyle::Update,
+            div().child(plan_rows(install_rows(install, pkg))),
+        );
+    }
+
     let mut rows: Vec<(&'static str, String)> = vec![("Package", plan.target.id().to_string())];
     if let Some(scope) = plan.target.install_scope() {
         rows.push(("Scope", scope.id().to_string()));
     }
     match kind {
-        OpKind::Uninstall => {
+        OpKind::Uninstall | OpKind::Install => {
             rows.push((
                 "Version",
                 if plan.current_version.is_empty() {
@@ -280,24 +300,167 @@ fn confirm_body(
         rows.push(("Effects", installation.notes.join("\n\n")));
     }
 
+    if let crate::domain::operations::OperationTarget::AppImage {
+        installation: Some(installation),
+        ..
+    } = &plan.target
+    {
+        match (kind, &installation.update) {
+            (OpKind::Update, Some(update)) => {
+                rows.push(("Source", update.source.clone()));
+                rows.push(("Download", update.download_url.clone()));
+                if let Some(step) = plan.steps.get(1) {
+                    rows.push(("Checksum", step.command_summary.clone()));
+                }
+                rows.push((
+                    "Effects",
+                    "Replaces the file in place and keeps its launcher settings.".into(),
+                ));
+            }
+            _ => {
+                rows.push(("Launchers", paths(&installation.launchers)));
+                if !installation.icons.is_empty() {
+                    rows.push(("Icons", paths(&installation.icons)));
+                }
+                rows.push((
+                    "Effects",
+                    if plan.app_data.is_empty() {
+                        "Moves these files to Trash. Portable .home/.config folders are kept, and no app data folders were found by name."
+                    } else {
+                        "Moves these files to Trash. Portable .home/.config folders are kept, and the app data below is kept unless you select it."
+                    }
+                    .into(),
+                ));
+            }
+        }
+    }
+
     let confirm_style = match kind {
         OpKind::Uninstall => ButtonStyle::Danger,
-        OpKind::Update => ButtonStyle::Update,
+        OpKind::Update | OpKind::Install => ButtonStyle::Update,
     };
 
+    confirm_actions(
+        entity,
+        confirm_style,
+        div()
+            .child(plan_rows(rows))
+            .when_some(plan.snap_details.as_ref(), |this, details| {
+                this.child(super::package_details::breakdown(
+                    Some(&crate::domain::package_details::PackageDetails::from(
+                        details.as_ref(),
+                    )),
+                    PackageSource::Snap,
+                ))
+            })
+            .when(
+                kind == OpKind::Uninstall && !plan.app_data.is_empty(),
+                |this| this.child(app_data_choice(entity, &plan.app_data, remove_app_data)),
+            ),
+    )
+}
+
+/// Opt-in list of app data found by name, moved to Trash only when checked.
+fn app_data_choice(
+    entity: &WeakEntity<ScopeApp>,
+    app_data: &[crate::domain::appimage::app_data::AppData],
+    checked: bool,
+) -> AnyElement {
+    let total: u64 = app_data.iter().filter_map(|data| data.bytes).sum();
+    let partial = app_data.iter().any(|data| data.bytes.is_none());
+    let label = format!(
+        "Also move app data to Trash ({}{})",
+        theme::format_size(total),
+        if partial { "+" } else { "" }
+    );
+    let entity = entity.clone();
+    div()
+        .mt(px(14.))
+        .pt(px(12.))
+        .border_t_1()
+        .border_color(border())
+        .flex()
+        .flex_col()
+        .gap(px(8.))
+        .child(
+            gpui_kit::component::checkbox::Checkbox::new("dlg-remove-app-data")
+                .label(label)
+                .checked(checked)
+                .on_click(move |checked, _window, cx| {
+                    let checked = *checked;
+                    entity
+                        .update(cx, |this, cx| this.set_remove_app_data(checked, cx))
+                        .ok();
+                }),
+        )
+        .child(
+            div().text_color(text_dim()).child(plan_rows(
+                app_data
+                    .iter()
+                    .map(|data| {
+                        let size = data
+                            .bytes
+                            .map(theme::format_size)
+                            .unwrap_or_else(|| "size unknown".into());
+                        (
+                            data.kind.label(),
+                            format!("{}  ·  {size}", data.path.display()),
+                        )
+                    })
+                    .collect(),
+            )),
+        )
+        .into_any_element()
+}
+
+fn paths(paths: &[std::path::PathBuf]) -> String {
+    paths
+        .iter()
+        .map(|path| path.display().to_string())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn install_rows(
+    install: &crate::domain::appimage::install::InstallPlan,
+    pkg: &InstalledPackage,
+) -> Vec<(&'static str, String)> {
+    let mut rows = vec![
+        ("File", install.source.display().to_string()),
+        (
+            "Version",
+            install.version.clone().unwrap_or_else(|| "—".into()),
+        ),
+        ("Size", theme::format_size(pkg.size_bytes)),
+        ("Install to", install.destination.display().to_string()),
+        ("Launcher", install.launcher.display().to_string()),
+    ];
+    if let Some(icon) = &install.icon {
+        rows.push(("Icon", icon.display().to_string()));
+    }
+    rows.push((
+        "Updates",
+        install
+            .update_source
+            .clone()
+            .unwrap_or_else(|| "Not available".into()),
+    ));
+    if !install.notes.is_empty() {
+        rows.push(("Notes", install.notes.join("\n\n")));
+    }
+    rows
+}
+
+fn confirm_actions(
+    entity: &WeakEntity<ScopeApp>,
+    confirm_style: ButtonStyle,
+    content: gpui_kit::Div,
+) -> AnyElement {
     div()
         .p(px(20.))
         .flex()
         .flex_col()
-        .child(plan_rows(rows))
-        .when_some(plan.snap_details.as_ref(), |this, details| {
-            this.child(super::package_details::breakdown(
-                Some(&crate::domain::package_details::PackageDetails::from(
-                    details.as_ref(),
-                )),
-                PackageSource::Snap,
-            ))
-        })
+        .child(content)
         .child(dialog_actions(vec![
             button(
                 "dlg-cancel",

@@ -88,6 +88,7 @@ async fn apply_preview(pkg: &InstalledPackage, operation: Operation) {
     let plan = match operation {
         Operation::Update => plans::update::preview(pkg).await.unwrap(),
         Operation::Uninstall => plans::uninstall::preview(pkg).await.unwrap(),
+        Operation::Install => unreachable!("tools have no install plans"),
     };
     let store = plans::PlanStore::default();
     store.issue(plan.clone());
@@ -102,6 +103,7 @@ async fn apply_preview(pkg: &InstalledPackage, operation: Operation) {
             plans::uninstall::revalidate(&plan, &probed).unwrap();
             plans::uninstall::apply(&plan, &|_| {}).await
         }
+        Operation::Install => unreachable!("tools have no install plans"),
     };
     assert!(result.success, "{}\n{}", result.message, result.logs);
     assert!(store.take(&plan.plan_id).is_none());
