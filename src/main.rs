@@ -9,6 +9,7 @@
 
 mod backend;
 mod domain;
+mod instance;
 mod theme;
 mod ui;
 
@@ -80,9 +81,15 @@ impl AssetSource for Assets {
 }
 
 fn main() {
+    // Opening an AppImage with Scope while it runs reuses the open window.
+    let requested = instance::requested_file();
+    if instance::forward(&requested) {
+        return;
+    }
+    let requests = instance::listen();
     gpui_kit::application()
         .with_assets(Assets)
-        .run(|cx: &mut App| {
+        .run(move |cx: &mut App| {
             // Kit layers (theme, dialogs, notifications). Required once,
             // before opening windows or using any gpui-kit component.
             gpui_kit::init(cx);
@@ -134,9 +141,29 @@ fn main() {
                 .expect("failed to open the Scope window");
 
             window
-                .update(cx, |app, window, cx| app.focus_search(window, cx))
+                .update(cx, |app, window, cx| {
+                    app.focus_search(window, cx);
+                    if let Some(path) = requested.clone() {
+                        app.open_appimage(path, cx);
+                    }
+                })
                 .ok();
             cx.activate(true);
+
+            if let Some(mut requests) = requests {
+                cx.spawn(async move |cx| {
+                    use futures::StreamExt as _;
+                    while let Some(request) = requests.next().await {
+                        let _ = window.update(cx, |app, window, cx| {
+                            window.activate_window();
+                            if let Some(path) = request {
+                                app.open_appimage(path, cx);
+                            }
+                        });
+                    }
+                })
+                .detach();
+            }
         });
 }
 

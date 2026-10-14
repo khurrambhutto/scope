@@ -10,7 +10,8 @@ use std::path::PathBuf;
 use futures::channel::{mpsc, oneshot};
 
 use crate::domain::operations::{
-    uninstall, update, Operation, OperationPlan, OperationResult, OperationStage, PlanStore,
+    uninstall, update, Operation, OperationPlan, OperationResult, OperationStage, OperationTarget,
+    PlanStore,
 };
 use crate::domain::package::InstalledPackage;
 use crate::domain::scanner::{scan_all, ScanAvailability};
@@ -129,6 +130,8 @@ pub fn spawn_package_details(
 pub enum OpKind {
     Uninstall,
     Update,
+    /// Integrate an opened AppImage; `pkg.package_id` is the file path.
+    Install,
 }
 
 /// Messages streamed from a running apply task back to the UI.
@@ -171,6 +174,7 @@ pub fn spawn_preview(
                     }
                     update::preview(&pkg).await
                 }
+                OpKind::Install => install_preview(&pkg).await,
             }
         }) {
             Ok(plan) => plan,
@@ -186,19 +190,94 @@ pub fn spawn_preview(
     });
 }
 
+/// A list row standing in for an opened AppImage file before it is installed.
+pub fn opened_appimage(path: &std::path::Path) -> InstalledPackage {
+    let mut pkg = InstalledPackage::new(
+        crate::domain::package::PackageSource::AppImage,
+        path.to_string_lossy(),
+    );
+    pkg.name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "AppImage".into());
+    if let Ok(size) = std::fs::metadata(path).map(|m| m.len()) {
+        pkg.size_bytes = size;
+    }
+    pkg
+}
+
+async fn install_preview(pkg: &InstalledPackage) -> anyhow::Result<OperationPlan> {
+    let install =
+        crate::domain::appimage::install::preview(std::path::Path::new(&pkg.package_id)).await?;
+    Ok(OperationPlan {
+        plan_id: crate::domain::operations::new_plan_id(),
+        operation: Operation::Install,
+        display_name: install.name.clone(),
+        current_version: String::new(),
+        target_version: install.version.clone().unwrap_or_default(),
+        requires_auth: false,
+        auth_method: crate::domain::operations::AuthMethod::None,
+        protected: false,
+        protection_reason: None,
+        steps: install_steps(&install),
+        created_at_ms: crate::domain::operations::now_ms(),
+        apt_transaction_fingerprint: None,
+        snap_details: None,
+        app_data: Vec::new(),
+        target: OperationTarget::AppImageInstall {
+            plan: Box::new(install),
+        },
+    })
+}
+
+fn install_steps(
+    install: &crate::domain::appimage::install::InstallPlan,
+) -> Vec<crate::domain::operations::PlanStep> {
+    use crate::domain::operations::PlanStep;
+    let mut steps = vec![PlanStep {
+        description: if install.move_source {
+            "Move the AppImage into ~/AppImages.".into()
+        } else {
+            "Keep the AppImage in ~/AppImages.".into()
+        },
+        command_summary: install.destination.display().to_string(),
+    }];
+    steps.push(PlanStep {
+        description: "Create its app-menu launcher.".into(),
+        command_summary: install.launcher.display().to_string(),
+    });
+    if let Some(icon) = &install.icon {
+        steps.push(PlanStep {
+            description: "Save its icon.".into(),
+            command_summary: icon.display().to_string(),
+        });
+    }
+    steps
+}
+
 /// Revalidate and apply an issued plan, streaming stage/log messages.
 ///
 /// Mirrors `apply_uninstall` / `apply_update`: take the plan from the store,
 /// probe the live system, re-run the safety revalidation, then execute.
-pub fn spawn_apply(plans: PlanStore, plan_id: String, tx: mpsc::UnboundedSender<OpMsg>) {
+/// `remove_app_data` only selects whether the plan's own `app_data` list is
+/// used; the paths always come from the stored plan.
+pub fn spawn_apply(
+    plans: PlanStore,
+    plan_id: String,
+    remove_app_data: bool,
+    tx: mpsc::UnboundedSender<OpMsg>,
+) {
     std::thread::spawn(move || {
         block_on(async move {
-            let Some(plan) = plans.take(&plan_id) else {
+            let Some(mut plan) = plans.take(&plan_id) else {
                 let _ = tx.unbounded_send(OpMsg::Done(failed(
                     "Stale or unknown plan. Please preview again.",
                 )));
                 return;
             };
+            if !remove_app_data {
+                plan.app_data.clear();
+            }
 
             let _ = tx.unbounded_send(OpMsg::Stage(OperationStage::Verifying));
             if let Some(expected) = plan.apt_transaction_fingerprint.as_deref() {
@@ -236,6 +315,11 @@ pub fn spawn_apply(plans: PlanStore, plan_id: String, tx: mpsc::UnboundedSender<
             let revalidation = match plan.operation {
                 Operation::Uninstall => uninstall::revalidate(&plan, &probed),
                 Operation::Update => update::revalidate(&plan, &probed),
+                // The probe already ran `install::revalidate` on the file.
+                Operation::Install => match &plan.target {
+                    OperationTarget::AppImageInstall { .. } => Ok(()),
+                    _ => Err(anyhow::anyhow!("Only AppImage files can be installed.")),
+                },
             };
             if let Err(e) = revalidation {
                 let _ = tx.unbounded_send(OpMsg::Done(failed(e.to_string())));
@@ -248,9 +332,21 @@ pub fn spawn_apply(plans: PlanStore, plan_id: String, tx: mpsc::UnboundedSender<
                 let _ = line_tx.unbounded_send(OpMsg::Log(line.to_string()));
             };
 
-            let result = match plan.operation {
-                Operation::Uninstall => uninstall::apply(&plan, &on_line).await,
-                Operation::Update => update::apply(&plan, &on_line).await,
+            let result = match (&plan.operation, &plan.target) {
+                (Operation::Uninstall, _) => uninstall::apply(&plan, &on_line).await,
+                (Operation::Update, _) => update::apply(&plan, &on_line).await,
+                (Operation::Install, OperationTarget::AppImageInstall { plan: install }) => {
+                    match crate::domain::appimage::install::apply(install, &on_line).await {
+                        Ok(message) => OperationResult {
+                            success: true,
+                            message,
+                            logs: String::new(),
+                            exit_code: Some(0),
+                        },
+                        Err(error) => failed(format!("Install failed: {error}")),
+                    }
+                }
+                (Operation::Install, _) => failed("Only AppImage files can be installed."),
             };
             let _ = tx.unbounded_send(OpMsg::Done(result));
         });

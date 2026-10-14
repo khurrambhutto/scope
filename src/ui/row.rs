@@ -212,14 +212,14 @@ fn action_button(
     let entity = entity.clone();
     let action_id = match kind {
         OpKind::Uninstall => "action-uninstall",
-        OpKind::Update => "action-update",
+        OpKind::Update | OpKind::Install => "action-update",
     };
     button(
         action_id,
         label,
         match kind {
             OpKind::Uninstall => ButtonStyle::Danger,
-            OpKind::Update => ButtonStyle::Update,
+            OpKind::Update | OpKind::Install => ButtonStyle::Update,
         },
         move |_ev, _window, cx| {
             cx.stop_propagation();

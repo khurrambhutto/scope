@@ -4,7 +4,10 @@
 //! whose extension is `.AppImage` *and* whose magic bytes match the AppImage
 //! signature (`0x41 0x49` + type byte at offset 8, after the ELF magic). Name
 //! and version are parsed from the filename heuristic; size comes from file
-//! metadata.
+//! metadata. AppImages integrated into `~/AppImages` by Scope or Gear Lever
+//! carry their verified installation, launcher name and version, and the
+//! result of a bounded update check against their embedded update
+//! information.
 
 use std::future::Future;
 use std::path::{Path, PathBuf};
@@ -69,7 +72,7 @@ fn dirs() -> Vec<PathBuf> {
 }
 
 async fn scan(dirs: Vec<PathBuf>) -> Result<Vec<InstalledPackage>> {
-    Ok(tokio::task::spawn_blocking(move || {
+    let mut packages = tokio::task::spawn_blocking(move || {
         let mut packages = Vec::new();
         for dir in dirs {
             for entry in WalkDir::new(&dir)
@@ -86,10 +89,65 @@ async fn scan(dirs: Vec<PathBuf>) -> Result<Vec<InstalledPackage>> {
                 }
             }
         }
+        if let Ok(roots) = crate::domain::appimage::Roots::current() {
+            attach_integrations(&roots, &mut packages);
+        }
         packages
     })
     .await
-    .unwrap_or_default())
+    .unwrap_or_default();
+    crate::domain::appimage::updates::check_all(&mut packages).await;
+    Ok(packages)
+}
+
+/// Mark AppImages integrated by Scope or Gear Lever, including integrated
+/// files without an `.AppImage` extension that the walk skipped.
+fn attach_integrations(
+    roots: &crate::domain::appimage::Roots,
+    packages: &mut Vec<InstalledPackage>,
+) {
+    use crate::domain::appimage::managed;
+    let mut integrations = managed::discover(roots);
+    for pkg in packages.iter_mut() {
+        let Some(integration) = integrations.remove(Path::new(&pkg.package_id)) else {
+            continue;
+        };
+        apply_integration(roots, pkg, &integration);
+    }
+    for (path, integration) in integrations {
+        if packages
+            .iter()
+            .any(|pkg| Path::new(&pkg.package_id) == path)
+            || !is_appimage(&path)
+        {
+            continue;
+        }
+        if let Some(mut pkg) = build_package(&path) {
+            apply_integration(roots, &mut pkg, &integration);
+            packages.push(pkg);
+        }
+    }
+}
+
+fn apply_integration(
+    roots: &crate::domain::appimage::Roots,
+    pkg: &mut InstalledPackage,
+    integration: &crate::domain::appimage::managed::Integration,
+) {
+    let Ok(installation) = crate::domain::appimage::managed::installation(
+        roots,
+        Path::new(&pkg.package_id),
+        integration,
+    ) else {
+        return;
+    };
+    if let Some(name) = &integration.name {
+        pkg.name = name.clone();
+    }
+    if let Some(version) = &integration.version {
+        pkg.version = version.clone();
+    }
+    pkg.appimage_installation = Some(Box::new(installation));
 }
 
 fn is_hidden(name: &Path) -> bool {

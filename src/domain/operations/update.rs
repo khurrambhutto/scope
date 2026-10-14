@@ -16,7 +16,7 @@ use super::{
 const UPDATE_TIMEOUT: Duration = Duration::from_secs(300);
 
 pub async fn preview(pkg: &InstalledPackage) -> Result<OperationPlan> {
-    if pkg.source != PackageSource::Steam
+    if !matches!(pkg.source, PackageSource::Steam | PackageSource::AppImage)
         && (pkg.version.trim().is_empty() || pkg.version.eq_ignore_ascii_case("unknown"))
     {
         anyhow::bail!("Installed version is unknown. Rescan before updating.")
@@ -30,7 +30,7 @@ pub async fn preview(pkg: &InstalledPackage) -> Result<OperationPlan> {
         crate::domain::tool_managers::operations::verify(package_id, installation, &pkg.version)
             .await?;
     }
-    let protection = safety::check_package(pkg.source, &pkg.package_id);
+    let protection = safety::check_target(&target);
     let (auth, mut steps) = if let OperationTarget::Tool {
         package_id,
         installation,
@@ -44,6 +44,19 @@ pub async fn preview(pkg: &InstalledPackage) -> Result<OperationPlan> {
                 Operation::Update,
                 pkg.update_version.as_deref().unwrap_or("latest"),
             )?,
+        )
+    } else if let (
+        OperationTarget::AppImage {
+            installation: Some(installation),
+            ..
+        },
+        false,
+    ) = (&target, protection.protected)
+    {
+        crate::domain::appimage::operations::verify(installation)?;
+        (
+            AuthMethod::None,
+            crate::domain::appimage::operations::steps(installation, Operation::Update)?,
         )
     } else {
         build_steps(pkg, &target, protection.protected)
@@ -80,6 +93,7 @@ pub async fn preview(pkg: &InstalledPackage) -> Result<OperationPlan> {
         created_at_ms: now_ms(),
         apt_transaction_fingerprint: fingerprint,
         snap_details: None,
+        app_data: Vec::new(),
     })
 }
 
@@ -132,7 +146,9 @@ fn build_steps(
                 }],
             )
         }
-        OperationTarget::AppImage { .. } => blocked("AppImage updates are not supported yet."),
+        OperationTarget::AppImage { .. } | OperationTarget::AppImageInstall { .. } => {
+            blocked("AppImage integration metadata is missing. Rescan first.")
+        }
         OperationTarget::Desktop { .. } => {
             blocked("This app is not managed by a supported package manager.")
         }
@@ -159,12 +175,24 @@ pub fn revalidate(plan: &OperationPlan, probed: &super::probe::ProbedPackage) ->
             plan.display_name
         )
     }
-    let protection = safety::check_package(plan.target.source(), plan.target.id());
+    let protection = safety::check_target(&plan.target);
     if protection.protected {
         anyhow::bail!(
             "Refusing to update protected package: {}",
             protection.reason.unwrap_or_else(|| "protected".into())
         )
+    }
+    if let OperationTarget::AppImage {
+        installation: Some(installation),
+        ..
+    } = &plan.target
+    {
+        // AppImage identity is the verified file (size and mtime), checked by
+        // the probe; launcher version labels are informational only.
+        if installation.update.is_none() {
+            anyhow::bail!("'{}' no longer has a verified update.", plan.display_name)
+        }
+        return Ok(());
     }
     if probed.has_update == Some(false) {
         anyhow::bail!("'{}' no longer has an update.", plan.display_name)
@@ -232,7 +260,13 @@ pub async fn apply(
             )
             .await
         }
-        OperationTarget::AppImage { .. } | OperationTarget::Desktop { .. } => OperationResult {
+        OperationTarget::AppImage {
+            installation: Some(installation),
+            ..
+        } => crate::domain::appimage::operations::update(installation, on_line).await,
+        OperationTarget::AppImage { .. }
+        | OperationTarget::AppImageInstall { .. }
+        | OperationTarget::Desktop { .. } => OperationResult {
             success: false,
             message: "This app cannot be updated through Scope.".into(),
             logs: String::new(),
@@ -271,6 +305,7 @@ mod tests {
             created_at_ms: 0,
             apt_transaction_fingerprint: Some("fingerprint".into()),
             snap_details: None,
+            app_data: Vec::new(),
         }
     }
 

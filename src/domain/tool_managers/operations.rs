@@ -173,6 +173,7 @@ pub fn steps(
         description: match operation {
             Operation::Uninstall => format!("Remove the verified {} installation '{id}'.", installation.source.id()),
             Operation::Update => format!("Upgrade '{id}' using its original {} installation settings. The manager resolves compatible versions when this command runs.", installation.source.id()),
+            Operation::Install => bail!("Tool installs are not supported"),
         }, command_summary: command.summary,
     }, PlanStep { description: format!("Installation root: {}", installation.root.display()), command_summary: "User installation; no administrator authorization.".into() }];
     if let UpdateRecipe::Javascript { bin, node, .. } = &installation.update {
@@ -262,6 +263,7 @@ pub async fn apply(
                 (Operation::Update, Some(pkg)) if pkg.tool_installation.as_ref().is_some_and(|i| i.receipt_hash != installation.receipt_hash) => format!("'{id}' installation refreshed. Release version remains {}.", pkg.version_label()),
                 (Operation::Update, Some(_)) => format!("'{id}' is already at the version allowed by its installation settings. No version change."),
                 (Operation::Update, None) => { result.success = false; "The manager finished but the installation is missing. Check the operation log.".into() }
+                (Operation::Install, _) => { result.success = false; "Tool installs are not supported.".into() }
             };
         }
         Ok::<_, anyhow::Error>(result)

@@ -24,12 +24,37 @@ pub(super) fn discover(pkg: &InstalledPackage) -> Result<Discovery> {
             if !appimage::is_appimage(path) {
                 bail!("The detected file is no longer a valid AppImage");
             }
+            // Scope/Gear Lever integrations own their file, launchers, and
+            // icons; anything else is only discovered.
+            let installation = pkg.appimage_installation.as_deref();
+            let (owned, sidecar_effect) = match installation {
+                Some(_) => (DetailEffect::Removed, DetailEffect::Kept),
+                None => (DetailEffect::Informational, DetailEffect::Informational),
+            };
             discovery.add(
                 "AppImage",
                 path.display().to_string(),
-                DetailEffect::Informational,
+                owned,
                 Target::File(path.to_path_buf()),
             );
+            if let Some(installation) = installation {
+                for launcher in &installation.launchers {
+                    discovery.add(
+                        "Launcher",
+                        launcher.display().to_string(),
+                        DetailEffect::Removed,
+                        Target::File(launcher.clone()),
+                    );
+                }
+                for icon in &installation.icons {
+                    discovery.add(
+                        "Icon",
+                        icon.display().to_string(),
+                        DetailEffect::Removed,
+                        Target::File(icon.clone()),
+                    );
+                }
+            }
             // AppImageKit's documented portable mode uses these exact sidecars:
             // https://docs.appimage.org/user-guide/portable-mode.html
             for (suffix, label) in [(".home", "Portable data"), (".config", "Portable config")] {
@@ -43,7 +68,7 @@ pub(super) fn discover(pkg: &InstalledPackage) -> Result<Discovery> {
                     discovery.add(
                         label,
                         sidecar.display().to_string(),
-                        DetailEffect::Informational,
+                        sidecar_effect,
                         Target::Directory(sidecar),
                     );
                 }
@@ -129,5 +154,34 @@ mod tests {
             .any(|i| i.label == "Portable data" && i.effect == DetailEffect::Informational));
         std::fs::write(image, b"not an AppImage").unwrap();
         assert!(discover(&pkg).is_err());
+    }
+
+    #[test]
+    fn integrated_appimages_report_removed_files_and_kept_portable_data() {
+        let dir = tempfile::tempdir().unwrap();
+        let image = dir.path().join("demo.appimage");
+        std::fs::write(&image, b"\x7fELF\0\0\0\0AI\x02").unwrap();
+        std::fs::create_dir(dir.path().join("demo.appimage.config")).unwrap();
+        let launcher = dir.path().join("demo.desktop");
+        std::fs::write(&launcher, b"[Desktop Entry]\n").unwrap();
+        let mut pkg = InstalledPackage::new(PackageSource::AppImage, image.display().to_string());
+        pkg.appimage_installation = Some(Box::new(crate::domain::appimage::AppImageInstallation {
+            path: image,
+            launcher: launcher.clone(),
+            launchers: vec![launcher],
+            icons: vec![],
+            size: 0,
+            modified_ns: 0,
+            update_info: None,
+            update: None,
+        }));
+        let items = discover(&pkg).unwrap().details.items;
+        assert_eq!(items[0].effect, DetailEffect::Removed);
+        assert!(items
+            .iter()
+            .any(|i| i.label == "Launcher" && i.effect == DetailEffect::Removed));
+        assert!(items
+            .iter()
+            .any(|i| i.label == "Portable config" && i.effect == DetailEffect::Kept));
     }
 }

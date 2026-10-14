@@ -5,6 +5,8 @@
 //! typed `std`/`tokio` `Command` invocations with explicit argv — never
 //! `sh -c` with frontend-provided strings.
 
+pub mod trash;
+
 use std::time::Duration;
 
 use tokio::io::AsyncReadExt;

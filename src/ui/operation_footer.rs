@@ -49,6 +49,7 @@ pub(super) fn operation_footer(
                 OperationStage::Executing => match kind {
                     OpKind::Uninstall => format!("Uninstalling {title}…"),
                     OpKind::Update => format!("Updating {title}…"),
+                    OpKind::Install => format!("Installing {title}…"),
                 },
             };
             let hint = if *requires_auth {
@@ -64,6 +65,7 @@ pub(super) fn operation_footer(
                 let heading = match kind {
                     OpKind::Uninstall => format!("{title} was uninstalled"),
                     OpKind::Update => format!("{title} was updated"),
+                    OpKind::Install => format!("{title} was installed"),
                 };
                 (heading, String::new(), false)
             } else if is_cancelled(result) {
@@ -76,6 +78,7 @@ pub(super) fn operation_footer(
                 let heading = match kind {
                     OpKind::Uninstall => format!("Could not uninstall {title}"),
                     OpKind::Update => format!("Could not update {title}"),
+                    OpKind::Install => format!("Could not install {title}"),
                 };
                 (heading, result.message.clone(), false)
             }

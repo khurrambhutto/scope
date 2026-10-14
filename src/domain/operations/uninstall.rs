@@ -25,7 +25,7 @@ pub async fn preview(pkg: &InstalledPackage) -> Result<OperationPlan> {
         crate::domain::tool_managers::operations::verify(package_id, installation, &pkg.version)
             .await?;
     }
-    let protection = safety::check_package(pkg.source, &pkg.package_id);
+    let protection = safety::check_target(&target);
     let (auth, mut steps) = if let OperationTarget::Tool {
         package_id,
         installation,
@@ -39,6 +39,19 @@ pub async fn preview(pkg: &InstalledPackage) -> Result<OperationPlan> {
                 Operation::Uninstall,
                 "",
             )?,
+        )
+    } else if let (
+        OperationTarget::AppImage {
+            installation: Some(installation),
+            ..
+        },
+        false,
+    ) = (&target, protection.protected)
+    {
+        crate::domain::appimage::operations::verify(installation)?;
+        (
+            AuthMethod::None,
+            crate::domain::appimage::operations::steps(installation, Operation::Uninstall)?,
         )
     } else {
         build_steps(&target, protection.protected)
@@ -67,6 +80,23 @@ pub async fn preview(pkg: &InstalledPackage) -> Result<OperationPlan> {
     } else {
         None
     };
+    let app_data = match (&target, protection.protected) {
+        (
+            OperationTarget::AppImage {
+                installation: Some(installation),
+                ..
+            },
+            false,
+        ) => {
+            let installation = installation.as_ref().clone();
+            tokio::task::spawn_blocking(move || {
+                crate::domain::appimage::operations::find_app_data(&installation)
+            })
+            .await
+            .unwrap_or_default()
+        }
+        _ => Vec::new(),
+    };
     Ok(OperationPlan {
         plan_id: new_plan_id(),
         operation: Operation::Uninstall,
@@ -82,6 +112,7 @@ pub async fn preview(pkg: &InstalledPackage) -> Result<OperationPlan> {
         created_at_ms: now_ms(),
         apt_transaction_fingerprint: fingerprint,
         snap_details,
+        app_data,
     })
 }
 
@@ -122,7 +153,9 @@ fn build_steps(target: &OperationTarget, protected: bool) -> (AuthMethod, Vec<Pl
                 }],
             )
         }
-        OperationTarget::AppImage { .. } => blocked("AppImage uninstall is not supported yet."),
+        OperationTarget::AppImage { .. } | OperationTarget::AppImageInstall { .. } => {
+            blocked("AppImage integration metadata is missing. Rescan first.")
+        }
         OperationTarget::Desktop { .. } => {
             blocked("This app is not managed by a supported package manager.")
         }
@@ -149,7 +182,7 @@ pub fn revalidate(plan: &OperationPlan, probed: &super::probe::ProbedPackage) ->
             plan.display_name
         )
     }
-    let protection = safety::check_package(plan.target.source(), plan.target.id());
+    let protection = safety::check_target(&plan.target);
     if protection.protected {
         anyhow::bail!(
             "Refusing to remove protected package: {}",
@@ -205,7 +238,16 @@ pub async fn apply(
             )
             .await
         }
-        OperationTarget::AppImage { .. } | OperationTarget::Desktop { .. } => OperationResult {
+        OperationTarget::AppImage {
+            installation: Some(installation),
+            ..
+        } => {
+            crate::domain::appimage::operations::uninstall(installation, &plan.app_data, on_line)
+                .await
+        }
+        OperationTarget::AppImage { .. }
+        | OperationTarget::AppImageInstall { .. }
+        | OperationTarget::Desktop { .. } => OperationResult {
             success: false,
             message: "This app cannot be uninstalled through Scope.".into(),
             logs: String::new(),
@@ -242,6 +284,7 @@ mod tests {
             created_at_ms: 0,
             apt_transaction_fingerprint: None,
             snap_details: None,
+            app_data: Vec::new(),
         }
     }
 

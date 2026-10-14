@@ -29,6 +29,7 @@ pub fn is_visible(pkg: &InstalledPackage, show_all: bool) -> bool {
 /// True when the backend safety policy permits an uninstall plan.
 pub fn can_uninstall(pkg: &InstalledPackage) -> bool {
     matches!(pkg.app_kind, AppKind::Gui | AppKind::Cli)
+        && (pkg.source != PackageSource::AppImage || pkg.appimage_installation.is_some())
         && (!crate::domain::tool_managers::is_tool_source(pkg.source)
             || pkg
                 .tool_installation
@@ -50,6 +51,15 @@ pub fn uninstall_block_reason(pkg: &InstalledPackage) -> Option<String> {
         return Some(reason);
     }
     let protection = safety::check_package(pkg.source, &pkg.package_id);
+    if protection.reason.is_none()
+        && pkg.source == PackageSource::AppImage
+        && pkg.appimage_installation.is_none()
+    {
+        return Some(
+            "This AppImage has no launcher from Scope or Gear Lever. Open it with Scope to install it."
+                .into(),
+        );
+    }
     protection.reason.or_else(|| {
         matches!(pkg.app_kind, AppKind::Unknown)
             .then(|| "Scope cannot verify this package as a user-facing app or CLI tool.".into())
@@ -96,10 +106,29 @@ mod tests {
     }
 
     #[test]
-    fn lists_appimages_but_disables_uninstall_until_supported() {
+    fn lists_appimages_but_disables_uninstall_outside_the_managed_folder() {
         let app = package(PackageSource::AppImage, "/opt/tool.AppImage", AppKind::Gui);
         assert!(is_listable(&app));
         assert!(!can_uninstall(&app));
+    }
+
+    #[test]
+    fn managed_folder_appimages_need_a_verified_integration() {
+        let path = format!("{}/AppImages/tool.appimage", std::env::var("HOME").unwrap());
+        let mut app = package(PackageSource::AppImage, &path, AppKind::Gui);
+        assert!(!can_uninstall(&app));
+        assert!(uninstall_block_reason(&app).unwrap().contains("Gear Lever"));
+        app.appimage_installation = Some(Box::new(crate::domain::appimage::AppImageInstallation {
+            path: path.into(),
+            launcher: "/l.desktop".into(),
+            launchers: vec![],
+            icons: vec![],
+            size: 0,
+            modified_ns: 0,
+            update_info: None,
+            update: None,
+        }));
+        assert!(can_uninstall(&app));
     }
 
     #[test]

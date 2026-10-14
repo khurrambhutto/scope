@@ -50,10 +50,13 @@ Switch to **Updates** to see available updates. **Show all** reveals the scanned
 | uv tools, pipx | Yes | Yes |
 | Cargo | Yes | Yes |
 | npm global, Bun global | Yes | Yes |
-| AppImage, unmanaged desktop launchers | Discovery only | Discovery only |
+| AppImage in `~/AppImages` (installed by Scope or Gear Lever) | Yes | Yes, when the AppImage publishes update information |
+| Other AppImages, unmanaged desktop launchers | Discovery only | Discovery only |
 | Steam games | Read-only | Open in Steam |
 
 APT scans manual installs; Snap and Flatpak exclude runtimes. Steam games are discovered from native and Flatpak Steam libraries; Scope is read-only and **Open in Steam** hands management to Steam.
+
+Open an AppImage with Scope (double-click it or choose **Open With → Scope**) to install it the way [Gear Lever](https://github.com/mijorus/gearlever) does: the file moves into `~/AppImages`, its icon goes to `~/AppImages/.icons`, and a launcher is added to your app menu. Scope and Gear Lever recognise each other's installs. Updates use the GitHub-release or zsync information the AppImage embeds and are applied only when the download matches the published checksum. Uninstall moves the AppImage, its launchers, and its icon to Trash; portable `.home`/`.config` folders and app data are kept. Reading an AppImage's launcher needs `unsquashfs` (`squashfs-tools`), and most AppImages need FUSE 2 (`libfuse2t64`) to start.
 
 Tool management requires verified user-owned installations inside your home directory. Global pipx installs and untracked Cargo binaries are unsupported. Git/local Python sources and local/custom-registry Cargo sources have no automatic updates. Pins and supported installation constraints are respected; pipx upgrades may drop original version constraints. Shared caches, interpreters, toolchains, and personal data are kept.
 
