@@ -52,6 +52,13 @@ impl Scanner for SnapScanner {
     fn scan(&self) -> Pin<Box<dyn Future<Output = Result<ScanReport>> + Send + '_>> {
         Box::pin(async { scan().await.map(ScanReport::ok) })
     }
+
+    fn check_updates<'a>(
+        &'a self,
+        report: &'a mut ScanReport,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(check_updates(&mut report.packages))
+    }
 }
 
 /// One parsed row of `snap list`.
@@ -93,7 +100,6 @@ async fn scan() -> Result<Vec<InstalledPackage>> {
         packages.push(package_from_row(row, size, Path::new("/snap")));
     }
 
-    check_updates(&mut packages).await;
     Ok(packages)
 }
 

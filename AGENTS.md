@@ -25,11 +25,13 @@ src/                      GPUI app
   main.rs                 composition and wiring only
   instance.rs             single window: later launches hand opened files over a
                           $XDG_RUNTIME_DIR socket
+  backend/scan_cache.rs   background cache reads and ordered atomic writes
   backend.rs              thin orchestration: scan + persistent cache,
                           plan preview/apply with streamed logs,
                           scope-icon:// URL decoding
   domain/                 backend domain (vendored from old src-tauri/src/)
-    scanner/              per-source scanners (apt.rs, snap.rs, flatpak.rs, appimage.rs, steam.rs)
+    scanner/              per-source inventory and update checks, pipeline.rs publishes
+                          the enriched inventory before the final update results
     desktop_entries/      .desktop discovery and parsing
     icons/                icon theme resolution and scope-icon:// URLs
     operations/           preview/apply flows, APT simulation, PlanStore
@@ -71,6 +73,7 @@ docs/                     GitHub Pages site
 
 - Feature logic lives in domain modules. `main.rs` and `app_view.rs` only compose and wire.
 - `backend.rs` is a thin wrapper: look up state, delegate to `domain/scanner/` / `domain/operations/` / `domain/safety/`, return DTOs.
+- Scans publish cached rows, fresh installed inventory, then final update results. Source inventory must not wait for update services. Keep cache reads, serialization, and atomic writes off the UI thread; persist only complete, accepted scans in acceptance order. Preserve footprint inspections when only update state changes.
 - A feature that fits no existing module gets a new small module instead of growing a file past a few hundred lines.
 - Keep screens operational and app-like, never marketing pages.
 - Uninstall/update previews use a modal. Applying and results appear at the bottom only while an operation is active or has a dismissible result, so browsing stays available; only one package operation may apply at a time. There is no idle footer. The app count appears in the search bar only, and Show all sits to its right in the filter bar.

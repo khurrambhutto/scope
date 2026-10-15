@@ -13,6 +13,14 @@ impl Scanner for ToolScanner {
         Box::pin(async move { system::resolve(tool_managers::manager_name(self.0)).is_some() })
     }
     fn scan(&self) -> Pin<Box<dyn Future<Output = Result<ScanReport>> + Send + '_>> {
-        Box::pin(tool_managers::scan(self.0))
+        Box::pin(async move { tool_managers::inventory(self.0).await.map(ScanReport::ok) })
+    }
+    fn check_updates<'a>(
+        &'a self,
+        report: &'a mut ScanReport,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async move {
+            report.warning = tool_managers::check_updates(&mut report.packages).await;
+        })
     }
 }

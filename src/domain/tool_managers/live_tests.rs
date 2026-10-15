@@ -6,9 +6,10 @@ use crate::domain::operations::{self as plans, Operation};
 #[ignore = "reads installed tool inventories and previews; no package changes"]
 async fn live_inventory_and_previews() {
     for source in [PackageSource::Uv, PackageSource::Pipx, PackageSource::Cargo] {
-        let report = scan(source).await.unwrap();
-        assert!(!report.packages.is_empty(), "{source:?}");
-        for pkg in report.packages {
+        let mut packages = inventory(source).await.unwrap();
+        let _ = check_updates(&mut packages).await;
+        assert!(!packages.is_empty(), "{source:?}");
+        for pkg in packages {
             validate(pkg.tool_installation.as_ref().unwrap()).unwrap();
             let plan = plans::uninstall::preview(&pkg).await.unwrap();
             assert!(!plan.requires_auth);
