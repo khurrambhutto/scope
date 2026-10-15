@@ -153,7 +153,9 @@ fn build_steps(target: &OperationTarget, protected: bool) -> (AuthMethod, Vec<Pl
                 }],
             )
         }
-        OperationTarget::AppImage { .. } | OperationTarget::AppImageInstall { .. } => {
+        OperationTarget::AppImage { .. }
+        | OperationTarget::AppImageInstall { .. }
+        | OperationTarget::DebInstall { .. } => {
             blocked("AppImage integration metadata is missing. Rescan first.")
         }
         OperationTarget::Desktop { .. } => {
@@ -247,6 +249,7 @@ pub async fn apply(
         }
         OperationTarget::AppImage { .. }
         | OperationTarget::AppImageInstall { .. }
+        | OperationTarget::DebInstall { .. }
         | OperationTarget::Desktop { .. } => OperationResult {
             success: false,
             message: "This app cannot be uninstalled through Scope.".into(),

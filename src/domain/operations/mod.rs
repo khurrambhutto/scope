@@ -7,6 +7,7 @@
 //! before executing — so a stale or tampered plan is rejected.
 
 pub mod apt_transaction;
+pub mod deb_install;
 pub mod probe;
 pub mod uninstall;
 pub mod update;
@@ -30,6 +31,9 @@ pub enum OperationTarget {
     },
     Apt {
         package_id: String,
+    },
+    DebInstall {
+        plan: Box<deb_install::DebInstallPlan>,
     },
     Snap {
         package_id: String,
@@ -104,7 +108,7 @@ impl OperationTarget {
     pub fn source(&self) -> PackageSource {
         match self {
             Self::Tool { installation, .. } => installation.source,
-            Self::Apt { .. } => PackageSource::Apt,
+            Self::Apt { .. } | Self::DebInstall { .. } => PackageSource::Apt,
             Self::Snap { .. } => PackageSource::Snap,
             Self::Flatpak { .. } => PackageSource::Flatpak,
             Self::AppImage { .. } | Self::AppImageInstall { .. } => PackageSource::AppImage,
@@ -118,6 +122,7 @@ impl OperationTarget {
             Self::Tool { package_id, .. }
             | Self::Apt { package_id }
             | Self::Snap { package_id } => package_id,
+            Self::DebInstall { plan } => &plan.package_id,
             Self::Flatpak { app_id, .. } | Self::Steam { app_id } => app_id,
             Self::AppImage { path, .. } => path.to_str().unwrap_or(""),
             Self::AppImageInstall { plan } => plan.source.to_str().unwrap_or(""),
