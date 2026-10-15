@@ -94,7 +94,7 @@ jobs:
           Terminal=false
           Type=Application
           Categories=Utility;System;PackageManager;
-          MimeType=application/vnd.appimage;application/x-iso9660-appimage;
+          MimeType=application/vnd.debian.binary-package;application/x-deb;application/vnd.appimage;application/x-iso9660-appimage;
           EOF
           cat > "$PKGDIR/DEBIAN/control" << EOF
           Package: scope

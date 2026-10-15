@@ -8,4 +8,4 @@ Icon=scope
 Terminal=false
 Type=Application
 Categories=System;
-MimeType=application/vnd.appimage;application/x-iso9660-appimage;
+MimeType=application/vnd.debian.binary-package;application/x-deb;application/vnd.appimage;application/x-iso9660-appimage;

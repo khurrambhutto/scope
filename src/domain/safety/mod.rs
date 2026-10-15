@@ -68,7 +68,7 @@ pub fn check_package(source: PackageSource, package_id: &str) -> Protection {
 pub fn check_target(target: &crate::domain::operations::OperationTarget) -> Protection {
     use crate::domain::operations::OperationTarget;
     match target {
-        OperationTarget::AppImageInstall { .. } => {
+        OperationTarget::AppImageInstall { .. } | OperationTarget::DebInstall { .. } => {
             Protection::denied("Install plans cannot be uninstalled or updated.")
         }
         OperationTarget::AppImage {

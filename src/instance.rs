@@ -1,6 +1,6 @@
 //! One Scope window per session.
 //!
-//! Opening an AppImage with Scope launches `scope-gpui <file>`. When Scope is
+//! Opening a package file with Scope launches `scope-gpui <file>`. When Scope is
 //! already running, the new process hands the path to the running window over
 //! a Unix socket in the private `$XDG_RUNTIME_DIR` and exits, so the install
 //! preview appears in the existing window. The receiver treats every path as
@@ -16,7 +16,7 @@ use futures::channel::mpsc;
 
 const MAX_MESSAGE: u64 = 4096;
 
-/// A request from another launch: an AppImage to preview, or just "show".
+/// A request from another launch: a package file to preview, or just "show".
 pub type Request = Option<PathBuf>;
 
 fn socket_path() -> Option<PathBuf> {
