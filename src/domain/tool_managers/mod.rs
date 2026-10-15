@@ -17,7 +17,6 @@ mod uv;
 
 use crate::domain::{
     package::{AppKind, InstalledPackage, PackageSource},
-    scanner::ScanReport,
     system,
 };
 use anyhow::{bail, Context, Result};
@@ -131,10 +130,8 @@ pub async fn inventory_recorded(installation: &ToolInstallation) -> Result<Vec<I
     }
 }
 
-pub async fn scan(source: PackageSource) -> Result<ScanReport> {
-    let mut packages = inventory(source).await?;
-    let warning = updates::check(&mut packages).await;
-    Ok(ScanReport { packages, warning })
+pub async fn check_updates(packages: &mut [InstalledPackage]) -> Option<String> {
+    updates::check(packages).await
 }
 
 pub(super) fn package(

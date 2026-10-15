@@ -9,12 +9,14 @@ use std::path::PathBuf;
 
 use futures::channel::{mpsc, oneshot};
 
+mod scan_cache;
+
 use crate::domain::operations::{
     uninstall, update, Operation, OperationPlan, OperationResult, OperationStage, OperationTarget,
     PlanStore,
 };
 use crate::domain::package::InstalledPackage;
-use crate::domain::scanner::{scan_all, ScanAvailability};
+use crate::domain::scanner::{scan_all_with_inventory, ScanAvailability};
 
 /// One full scan of every package source, matching the Tauri `CachedScan` DTO.
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
@@ -47,16 +49,44 @@ fn block_on<F: Future>(future: F) -> F::Output {
     runtime().block_on(future)
 }
 
-/// Run a full scan on a background thread.
-pub fn scan_blocking() -> Scan {
-    block_on(async {
-        let (packages, availability) = scan_all().await;
-        Scan {
-            packages,
-            availability,
-            scanned_at_ms: now_ms(),
+/// Installed rows arrive before update checks complete. Only complete scans
+/// should be persisted, so an interrupted check never replaces the cache.
+pub struct ScanUpdate {
+    pub scan: Scan,
+    pub complete: bool,
+}
+
+/// Cache I/O and the scan both run away from the window's event loop.
+pub fn spawn_scan(load_cache: bool, tx: mpsc::UnboundedSender<ScanUpdate>) {
+    std::thread::spawn(move || {
+        if load_cache {
+            if let Some(scan) = read_cache() {
+                let _ = tx.unbounded_send(ScanUpdate {
+                    scan,
+                    complete: false,
+                });
+            }
         }
-    })
+        let (packages, availability) =
+            block_on(scan_all_with_inventory(|(packages, availability)| {
+                let _ = tx.unbounded_send(ScanUpdate {
+                    scan: Scan {
+                        packages,
+                        availability,
+                        scanned_at_ms: now_ms(),
+                    },
+                    complete: false,
+                });
+            }));
+        let _ = tx.unbounded_send(ScanUpdate {
+            scan: Scan {
+                packages,
+                availability,
+                scanned_at_ms: now_ms(),
+            },
+            complete: true,
+        });
+    });
 }
 
 fn now_ms() -> u64 {
@@ -66,41 +96,15 @@ fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
-/// Path of the persisted scan inside the XDG data directory.
-fn cache_path() -> Option<PathBuf> {
-    let base = std::env::var_os("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .or_else(|| {
-            std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share"))
-        })?;
-    Some(base.join("scope").join("scan-cache.json"))
-}
-
-/// Load the previous session's scan, if any, so a cold start paints instantly.
+/// Read the previous session on a background worker.
 pub fn read_cache() -> Option<Scan> {
-    let bytes = std::fs::read(cache_path()?).ok()?;
-    serde_json::from_slice(&bytes).ok()
+    scan_cache::read()
 }
 
-/// Persist a scan for the next launch.
-pub fn write_cache(scan: &Scan) {
-    let Some(path) = cache_path() else { return };
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    if let Ok(bytes) = serde_json::to_vec(scan) {
-        if let Some(parent) = path.parent() {
-            if let Ok(mut temp) = tempfile::Builder::new()
-                .prefix(".scan-cache-")
-                .tempfile_in(parent)
-            {
-                use std::io::Write as _;
-                if temp.write_all(&bytes).is_ok() && temp.as_file().sync_all().is_ok() {
-                    let _ = temp.persist(path);
-                }
-            }
-        }
-    }
+/// Queue complete, accepted scans in UI acceptance order. Disk writes run on a
+/// single worker so an older slow write cannot overwrite a newer scan.
+pub fn cache_scan(scan: Scan) {
+    scan_cache::store(scan);
 }
 
 /// Load source-aware informational details off the UI thread.

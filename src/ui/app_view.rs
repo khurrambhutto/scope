@@ -131,13 +131,12 @@ impl ScopeApp {
             }
         });
 
-        // Paint the previous session's list immediately, then always rescan.
-        let scan = backend::read_cache();
+        // Cache loading starts on the scan worker after the window is created.
 
         let mut app = Self {
             search_input,
             _search_change: search_change,
-            scan,
+            scan: None,
             loading: true,
             refreshing: false,
             error: None,
@@ -183,29 +182,43 @@ impl ScopeApp {
         let request = self.packages.begin_scan();
         self.refreshing = true;
         self.error = None;
-        let (tx, rx) = oneshot::channel::<backend::Scan>();
-        std::thread::spawn(move || {
-            let scan = backend::scan_blocking();
-            let _ = tx.send(scan);
-        });
+        let (tx, mut rx) = mpsc::unbounded();
+        backend::spawn_scan(self.scan.is_none(), tx);
         cx.spawn(async move |this, cx| {
-            let scan = rx.await;
-            this.update(cx, |this, cx| {
-                if !this.packages.accepts_scan(request) {
+            while let Some(update) = rx.next().await {
+                let accepted = this
+                    .update(cx, |this, cx| {
+                        if !this.packages.accepts_scan(request) {
+                            return false;
+                        }
+                        if update.complete {
+                            backend::cache_scan(update.scan.clone());
+                        }
+                        this.scan = Some(update.scan);
+                        this.scan_gen += 1;
+                        // The final message changes update state only. Preserve
+                        // in-flight footprint measurements and their short cache.
+                        if !update.complete {
+                            this.package_details.clear();
+                            this.load_package_details(cx);
+                        }
+                        this.loading = false;
+                        this.refreshing = !update.complete;
+                        cx.notify();
+                        true
+                    })
+                    .unwrap_or(false);
+                if !accepted {
                     return;
                 }
-                if let Ok(scan) = scan {
-                    backend::write_cache(&scan);
-                    this.scan = Some(scan);
-                    this.scan_gen += 1;
-                    this.package_details.clear();
-                    this.load_package_details(cx);
+            }
+            let _ = this.update(cx, |this, cx| {
+                if this.packages.accepts_scan(request) {
+                    this.loading = false;
+                    this.refreshing = false;
+                    cx.notify();
                 }
-                this.loading = false;
-                this.refreshing = false;
-                cx.notify();
-            })
-            .ok();
+            });
         })
         .detach();
     }

@@ -33,6 +33,13 @@ impl Scanner for AptScanner {
     fn scan(&self) -> Pin<Box<dyn Future<Output = Result<ScanReport>> + Send + '_>> {
         Box::pin(async { scan().await.map(ScanReport::ok) })
     }
+
+    fn check_updates<'a>(
+        &'a self,
+        report: &'a mut ScanReport,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(check_updates(&mut report.packages))
+    }
 }
 
 // Field separator unlikely to appear in package metadata.
@@ -94,7 +101,6 @@ async fn scan() -> Result<Vec<InstalledPackage>> {
         pkg.app_kind = classify(&pkg.name, section);
         packages.push(pkg);
     }
-    check_updates(&mut packages).await;
     Ok(packages)
 }
 

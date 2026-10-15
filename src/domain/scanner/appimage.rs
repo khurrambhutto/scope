@@ -49,6 +49,15 @@ impl Scanner for AppImageScanner {
         let dirs = self.dirs.clone();
         Box::pin(async move { scan(dirs).await.map(ScanReport::ok) })
     }
+
+    fn check_updates<'a>(
+        &'a self,
+        report: &'a mut ScanReport,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(crate::domain::appimage::updates::check_all(
+            &mut report.packages,
+        ))
+    }
 }
 
 /// Directories scanned for `.AppImage` files. Kept explicit and tight — Scope
@@ -72,7 +81,7 @@ fn dirs() -> Vec<PathBuf> {
 }
 
 async fn scan(dirs: Vec<PathBuf>) -> Result<Vec<InstalledPackage>> {
-    let mut packages = tokio::task::spawn_blocking(move || {
+    let packages = tokio::task::spawn_blocking(move || {
         let mut packages = Vec::new();
         for dir in dirs {
             for entry in WalkDir::new(&dir)
@@ -96,7 +105,6 @@ async fn scan(dirs: Vec<PathBuf>) -> Result<Vec<InstalledPackage>> {
     })
     .await
     .unwrap_or_default();
-    crate::domain::appimage::updates::check_all(&mut packages).await;
     Ok(packages)
 }
 

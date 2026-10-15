@@ -7,7 +7,7 @@
 //!
 //! User and system installs are independent, so they are listed and checked
 //! concurrently. `flatpak update --appstream` is global rather than per-scope, so
-//! it runs once per scan and overlaps the listings.
+//! it runs once per scan after the local Flatpak inventory is ready.
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -33,29 +33,32 @@ impl Scanner for FlatpakScanner {
     fn scan(&self) -> Pin<Box<dyn Future<Output = Result<ScanReport>> + Send + '_>> {
         Box::pin(scan())
     }
+
+    fn check_updates<'a>(
+        &'a self,
+        report: &'a mut ScanReport,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(check_updates(&mut report.packages))
+    }
 }
 
 async fn scan() -> Result<ScanReport> {
-    // AppStream metadata is shared by both scopes and may reach the network, so
-    // refresh it once while the two scope listings run.
-    let appstream = tokio::spawn(refresh_appstream());
     let (user, system) = tokio::join!(
         list_scope(InstallScope::User),
         list_scope(InstallScope::System)
     );
-    let _ = appstream.await;
+    let (packages, warning) = merge_scopes(user, system)?;
+    Ok(ScanReport { packages, warning })
+}
 
-    let (mut packages, warning) = merge_scopes(user, system)?;
-
-    // Update checks read AppStream data, so they run after the refresh.
+async fn check_updates(packages: &mut [InstalledPackage]) {
+    refresh_appstream().await;
     let (user_updates, system_updates) = tokio::join!(
         available_updates(InstallScope::User),
         available_updates(InstallScope::System)
     );
-    mark_updates(&mut packages, InstallScope::User, &user_updates);
-    mark_updates(&mut packages, InstallScope::System, &system_updates);
-
-    Ok(ScanReport { packages, warning })
+    mark_updates(packages, InstallScope::User, &user_updates);
+    mark_updates(packages, InstallScope::System, &system_updates);
 }
 
 fn scope_flag(scope: InstallScope) -> &'static str {
