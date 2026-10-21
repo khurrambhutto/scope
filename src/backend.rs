@@ -130,7 +130,7 @@ pub fn spawn_package_details(
 pub enum OpKind {
     Uninstall,
     Update,
-    /// Integrate an opened AppImage; `pkg.package_id` is the file path.
+    /// Install an opened package file; `pkg.package_id` is the file path.
     Install,
 }
 
@@ -190,10 +190,14 @@ pub fn spawn_preview(
     });
 }
 
-/// A list row standing in for an opened AppImage file before it is installed.
-pub fn opened_appimage(path: &std::path::Path) -> InstalledPackage {
+/// A list row standing in for an opened package file before it is installed.
+pub fn opened_package(path: &std::path::Path) -> InstalledPackage {
     let mut pkg = InstalledPackage::new(
-        crate::domain::package::PackageSource::AppImage,
+        if is_deb(path) {
+            crate::domain::package::PackageSource::Apt
+        } else {
+            crate::domain::package::PackageSource::AppImage
+        },
         path.to_string_lossy(),
     );
     pkg.name = path
@@ -206,7 +210,18 @@ pub fn opened_appimage(path: &std::path::Path) -> InstalledPackage {
     pkg
 }
 
+fn is_deb(path: &std::path::Path) -> bool {
+    path.extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("deb"))
+}
+
 async fn install_preview(pkg: &InstalledPackage) -> anyhow::Result<OperationPlan> {
+    if pkg.source == crate::domain::package::PackageSource::Apt {
+        return crate::domain::operations::deb_install::preview(std::path::Path::new(
+            &pkg.package_id,
+        ))
+        .await;
+    }
     let install =
         crate::domain::appimage::install::preview(std::path::Path::new(&pkg.package_id)).await?;
     Ok(OperationPlan {
@@ -280,7 +295,11 @@ pub fn spawn_apply(
             }
 
             let _ = tx.unbounded_send(OpMsg::Stage(OperationStage::Verifying));
-            if let Some(expected) = plan.apt_transaction_fingerprint.as_deref() {
+            if let Some(expected) = plan
+                .apt_transaction_fingerprint
+                .as_deref()
+                .filter(|_| !matches!(plan.target, OperationTarget::DebInstall { .. }))
+            {
                 let transaction = match crate::domain::operations::apt_transaction::simulate(
                     plan.operation,
                     plan.target.id(),
@@ -317,8 +336,11 @@ pub fn spawn_apply(
                 Operation::Update => update::revalidate(&plan, &probed),
                 // The probe already ran `install::revalidate` on the file.
                 Operation::Install => match &plan.target {
-                    OperationTarget::AppImageInstall { .. } => Ok(()),
-                    _ => Err(anyhow::anyhow!("Only AppImage files can be installed.")),
+                    OperationTarget::AppImageInstall { .. }
+                    | OperationTarget::DebInstall { .. } => Ok(()),
+                    _ => Err(anyhow::anyhow!(
+                        "Only AppImage and Debian package files can be installed."
+                    )),
                 },
             };
             if let Err(e) = revalidation {
@@ -335,6 +357,12 @@ pub fn spawn_apply(
             let result = match (&plan.operation, &plan.target) {
                 (Operation::Uninstall, _) => uninstall::apply(&plan, &on_line).await,
                 (Operation::Update, _) => update::apply(&plan, &on_line).await,
+                (Operation::Install, OperationTarget::DebInstall { .. }) => {
+                    match crate::domain::operations::deb_install::apply(&plan, &on_line).await {
+                        Ok(result) => result,
+                        Err(error) => failed(format!("Install failed: {error}")),
+                    }
+                }
                 (Operation::Install, OperationTarget::AppImageInstall { plan: install }) => {
                     match crate::domain::appimage::install::apply(install, &on_line).await {
                         Ok(message) => OperationResult {
@@ -346,7 +374,9 @@ pub fn spawn_apply(
                         Err(error) => failed(format!("Install failed: {error}")),
                     }
                 }
-                (Operation::Install, _) => failed("Only AppImage files can be installed."),
+                (Operation::Install, _) => {
+                    failed("Only AppImage and Debian package files can be installed.")
+                }
             };
             let _ = tx.unbounded_send(OpMsg::Done(result));
         });
@@ -494,6 +524,18 @@ mod tests {
         let mut pkg = InstalledPackage::new(PackageSource::Apt, id);
         pkg.name = id.to_string();
         pkg
+    }
+
+    #[test]
+    fn opened_files_route_debs_to_apt_and_appimages_to_appimage() {
+        assert_eq!(
+            opened_package(std::path::Path::new("/tmp/an app.DEB")).source,
+            PackageSource::Apt
+        );
+        assert_eq!(
+            opened_package(std::path::Path::new("/tmp/an app.AppImage")).source,
+            PackageSource::AppImage
+        );
     }
 
     #[test]

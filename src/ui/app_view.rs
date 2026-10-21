@@ -90,7 +90,7 @@ pub struct ScopeApp {
     pub(super) open_select: Option<OpenSelect>,
     pub(super) dialog: Option<Dialog>,
     operation: OperationController,
-    /// An AppImage opened while another operation was applying.
+    /// A package file opened while another operation was applying.
     pending_install: Option<std::path::PathBuf>,
     pub(super) operation_status: Option<OperationStatus>,
     pub(super) plans: PlanStore,
@@ -334,14 +334,14 @@ impl ScopeApp {
         .detach();
     }
 
-    /// Preview installing an AppImage opened from the file manager.
-    pub fn open_appimage(&mut self, path: std::path::PathBuf, cx: &mut Context<Self>) {
+    /// Preview installing a package file opened from the file manager.
+    pub fn open_package(&mut self, path: std::path::PathBuf, cx: &mut Context<Self>) {
         if self.operation.is_applying() {
             self.pending_install = Some(path);
             return;
         }
         self.settings_open = false;
-        self.open_op(OpKind::Install, backend::opened_appimage(&path), cx);
+        self.open_op(OpKind::Install, backend::opened_package(&path), cx);
         cx.notify();
     }
 
@@ -433,7 +433,7 @@ impl ScopeApp {
                                     this.start_scan(cx);
                                 }
                                 if let Some(path) = this.pending_install.take() {
-                                    this.open_appimage(path, cx);
+                                    this.open_package(path, cx);
                                 }
                             }
                         }

@@ -81,7 +81,7 @@ impl ScopeApp {
                 .child(match kind {
                     OpKind::Uninstall => "Preparing uninstall preview…",
                     OpKind::Update => "Preparing update preview…",
-                    OpKind::Install => "Reading the AppImage…",
+                    OpKind::Install => "Preparing install preview…",
                 })
                 .into_any_element(),
             Dialog::Failed { message, .. } => div()
@@ -214,8 +214,6 @@ fn confirm_body(
     plan: &OperationPlan,
     remove_app_data: bool,
 ) -> AnyElement {
-    // Protected covers AppImages too: `safety::check_package` denies every
-    // AppImage path, so their preview plans always arrive protected.
     if plan.protected {
         let reason = plan
             .protection_reason
@@ -244,6 +242,29 @@ fn confirm_body(
             ButtonStyle::Update,
             div().child(plan_rows(install_rows(install, pkg))),
         );
+    }
+
+    if let crate::domain::operations::OperationTarget::DebInstall { plan: install } = &plan.target {
+        let mut rows = vec![
+            ("File", install.source.display().to_string()),
+            ("Package", install.package_id.clone()),
+            ("Version", install.version.clone()),
+            ("Architecture", install.architecture.clone()),
+            (
+                "Current version",
+                install
+                    .installed_version
+                    .clone()
+                    .unwrap_or_else(|| "Not installed".into()),
+            ),
+        ];
+        for step in &plan.steps {
+            rows.push(("Effects", step.description.clone()));
+            if !step.command_summary.is_empty() {
+                rows.push(("Command", step.command_summary.clone()));
+            }
+        }
+        return confirm_actions(entity, ButtonStyle::Update, div().child(plan_rows(rows)));
     }
 
     let mut rows: Vec<(&'static str, String)> = vec![("Package", plan.target.id().to_string())];

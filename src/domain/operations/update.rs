@@ -146,7 +146,9 @@ fn build_steps(
                 }],
             )
         }
-        OperationTarget::AppImage { .. } | OperationTarget::AppImageInstall { .. } => {
+        OperationTarget::AppImage { .. }
+        | OperationTarget::AppImageInstall { .. }
+        | OperationTarget::DebInstall { .. } => {
             blocked("AppImage integration metadata is missing. Rescan first.")
         }
         OperationTarget::Desktop { .. } => {
@@ -266,6 +268,7 @@ pub async fn apply(
         } => crate::domain::appimage::operations::update(installation, on_line).await,
         OperationTarget::AppImage { .. }
         | OperationTarget::AppImageInstall { .. }
+        | OperationTarget::DebInstall { .. }
         | OperationTarget::Desktop { .. } => OperationResult {
             success: false,
             message: "This app cannot be updated through Scope.".into(),
