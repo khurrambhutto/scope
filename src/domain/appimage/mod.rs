@@ -2,7 +2,7 @@
 //!
 //! Scope installs, updates, and removes AppImages the way Gear Lever does: the
 //! file lives directly in `~/AppImages`, a launcher in the user's applications
-//! directory points at it through `TryExec`, and its icon sits in
+//! directory points at it through `Exec`, and its icon sits in
 //! `~/AppImages/.icons`. Either tool can therefore manage what the other
 //! integrated. AppImages anywhere else stay discovery-only.
 
@@ -15,7 +15,9 @@ pub mod install;
 #[cfg(test)]
 mod live_tests;
 pub mod managed;
+pub mod metadata;
 pub mod operations;
+mod transaction;
 pub mod updates;
 
 use std::path::{Path, PathBuf};
@@ -28,7 +30,7 @@ use serde::{Deserialize, Serialize};
 pub struct AppImageInstallation {
     /// The AppImage, a direct child of `~/AppImages`.
     pub path: PathBuf,
-    /// The launcher whose `TryExec` names `path`; rewritten on update.
+    /// The launcher whose direct `Exec` names `path`; rewritten on update.
     pub launcher: PathBuf,
     /// Every user launcher that runs `path`; all of them break on removal.
     pub launchers: Vec<PathBuf>,
@@ -100,20 +102,28 @@ impl Roots {
 
     /// Require a user-owned, regular, valid type 2 AppImage at a managed location.
     pub fn verify_owned_file(&self, path: &Path) -> Result<()> {
-        use std::os::unix::fs::MetadataExt as _;
         if !self.is_managed_location(path) {
             bail!("Scope only manages AppImages kept directly in ~/AppImages");
         }
-        let metadata = std::fs::symlink_metadata(path)
-            .with_context(|| format!("{} is no longer present", path.display()))?;
-        let uid = std::fs::metadata(&self.home)?.uid();
-        if !metadata.file_type().is_file() || metadata.uid() != uid {
+        if self.appimages.canonicalize()? != self.home.canonicalize()?.join("AppImages") {
+            bail!("Scope cannot manage a symlinked AppImages directory");
+        }
+        if !self.is_owned_regular(path) {
             bail!("{} is not a regular file owned by you", path.display());
         }
         if elf::appimage_type(path) != Some(elf::AppImageType::Two) {
             bail!("{} is no longer a valid AppImage", path.display());
         }
         Ok(())
+    }
+
+    pub(super) fn is_owned_regular(&self, path: &Path) -> bool {
+        use std::os::unix::fs::MetadataExt as _;
+        let Ok(home) = std::fs::metadata(&self.home) else {
+            return false;
+        };
+        std::fs::symlink_metadata(path)
+            .is_ok_and(|metadata| metadata.file_type().is_file() && metadata.uid() == home.uid())
     }
 }
 
@@ -219,6 +229,18 @@ mod tests {
         assert!(roots.verify_owned_file(&link).is_err());
 
         std::fs::write(&app, b"not an appimage").unwrap();
+        assert!(roots.verify_owned_file(&app).is_err());
+    }
+
+    #[test]
+    fn a_symlinked_appimages_directory_is_not_a_managed_root() {
+        let dir = tempfile::tempdir().unwrap();
+        let roots = test_roots(dir.path());
+        let app = roots.appimages.join("demo.appimage");
+        std::fs::write(&app, elf::test_appimage("", b"hsqs")).unwrap();
+        let elsewhere = dir.path().join("elsewhere");
+        std::fs::rename(&roots.appimages, &elsewhere).unwrap();
+        std::os::unix::fs::symlink(&elsewhere, &roots.appimages).unwrap();
         assert!(roots.verify_owned_file(&app).is_err());
     }
 }

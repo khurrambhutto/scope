@@ -54,12 +54,33 @@ async fn install_then_uninstall_round_trip() {
 
     let integration = managed::discover(&roots).remove(&plan.destination).unwrap();
     assert_eq!(integration.launcher, plan.launcher);
-    let installation = managed::installation(&roots, &plan.destination, &integration).unwrap();
+    let mut installation = managed::installation(&roots, &plan.destination, &integration).unwrap();
     managed::verify(&roots, &installation).unwrap();
 
     // Opening the same file again is recognised as already installed.
     std::fs::copy(&fixture, &opened).unwrap();
     assert!(install::preview(&opened).await.is_err());
+
+    // ZCode rewrites its desktop entry on launch, dropping TryExec and the
+    // X-AppImage metadata. It must remain discoverable and removable.
+    std::fs::write(
+        &plan.launcher,
+        format!(
+            "[Desktop Entry]\nType=Application\nName={}\nExec=\"{}\" --no-sandbox %U\nIcon=zcode\n",
+            plan.name,
+            plan.destination.display()
+        ),
+    )
+    .unwrap();
+    let rewritten = managed::discover(&roots).remove(&plan.destination).unwrap();
+    installation = managed::installation(&roots, &plan.destination, &rewritten).unwrap();
+    managed::verify(&roots, &installation).unwrap();
+    assert_eq!(
+        super::metadata::read_version(&plan.destination)
+            .await
+            .unwrap(),
+        plan.version
+    );
 
     let result = operations::uninstall(&installation, &[], &|line| println!("{line}")).await;
     assert!(result.success, "{}", result.message);

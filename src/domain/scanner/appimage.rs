@@ -81,7 +81,7 @@ fn dirs() -> Vec<PathBuf> {
 }
 
 async fn scan(dirs: Vec<PathBuf>) -> Result<Vec<InstalledPackage>> {
-    let packages = tokio::task::spawn_blocking(move || {
+    let mut packages = tokio::task::spawn_blocking(move || {
         let mut packages = Vec::new();
         for dir in dirs {
             for entry in WalkDir::new(&dir)
@@ -105,6 +105,7 @@ async fn scan(dirs: Vec<PathBuf>) -> Result<Vec<InstalledPackage>> {
     })
     .await
     .unwrap_or_default();
+    crate::domain::appimage::metadata::enrich(&mut packages).await;
     Ok(packages)
 }
 
@@ -252,4 +253,103 @@ fn trim_appimage_suffix(filename: &str) -> &str {
     filename
         .trim_end_matches(".AppImage")
         .trim_end_matches(".appimage")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::appimage::{elf, test_roots};
+
+    #[test]
+    fn self_rewritten_launcher_keeps_the_installed_appimage_manageable() {
+        let dir = tempfile::tempdir().unwrap();
+        let roots = test_roots(dir.path());
+        let path = roots.appimages.join("zcode.appimage");
+        std::fs::write(&path, elf::test_appimage("", b"hsqs")).unwrap();
+        std::fs::write(
+            roots.applications.join("zcode.desktop"),
+            format!(
+                "[Desktop Entry]\nName=ZCode\nComment=ZCode Desktop App\nExec=\"{}\" \"--no-sandbox\" %U\nTerminal=false\nType=Application\nIcon=zcode\nCategories=Development;\nMimeType=x-scheme-handler/zcode;\nStartupWMClass=ZCode\n",
+                path.display()
+            ),
+        )
+        .unwrap();
+        let mut packages = vec![build_package(&path).unwrap()];
+        attach_integrations(&roots, &mut packages);
+        let installation = packages[0]
+            .appimage_installation
+            .as_ref()
+            .expect("an installed AppImage must stay removable after rewriting its launcher");
+        crate::domain::appimage::managed::verify(&roots, installation).unwrap();
+    }
+
+    #[tokio::test]
+    async fn bundled_version_survives_a_launcher_rewrite_and_overrides_a_stale_label() {
+        let dir = tempfile::tempdir().unwrap();
+        let roots = test_roots(dir.path());
+        let path = roots.appimages.join("zcode.appimage");
+        if !crate::domain::appimage::metadata::write_test_bundle(
+            &path,
+            "[Desktop Entry]\nType=Application\nName=ZCode\nExec=AppRun %U\nX-AppImage-Version=3.16.3.8992\n",
+        ) {
+            return;
+        }
+        for version_field in ["", "X-AppImage-Version=0.0.34\n"] {
+            std::fs::write(
+                roots.applications.join("zcode.desktop"),
+                format!("[Desktop Entry]\nType=Application\nName=ZCode\nExec=\"{}\" --no-sandbox %U\n{version_field}", path.display()),
+            )
+            .unwrap();
+            let mut packages = vec![build_package(&path).unwrap()];
+            attach_integrations(&roots, &mut packages);
+            crate::domain::appimage::metadata::enrich(&mut packages).await;
+            assert_eq!(packages[0].version, "3.16.3.8992");
+            assert!(packages[0].appimage_installation.is_some());
+        }
+    }
+
+    /// Read-only check against an already installed AppImage.
+    #[tokio::test]
+    #[ignore = "needs SCOPE_TEST_APPIMAGE naming an installed AppImage"]
+    async fn scans_an_integrated_appimage() {
+        let path = PathBuf::from(std::env::var_os("SCOPE_TEST_APPIMAGE").unwrap());
+        let packages = scan(vec![path.parent().unwrap().to_path_buf()])
+            .await
+            .unwrap();
+        let package = packages
+            .iter()
+            .find(|package| Path::new(&package.package_id) == path)
+            .expect("the installed file must be scanned");
+        println!("name={} version={}", package.name, package.version);
+        let installation = package
+            .appimage_installation
+            .as_ref()
+            .expect("the installed AppImage must be manageable");
+        crate::domain::appimage::managed::verify(
+            &crate::domain::appimage::Roots::current().unwrap(),
+            installation,
+        )
+        .unwrap();
+        assert_ne!(
+            package.version, "unknown",
+            "installed version must be detected"
+        );
+        let plan = crate::domain::operations::uninstall::preview(package)
+            .await
+            .unwrap();
+        assert!(
+            !plan.protected,
+            "{}",
+            plan.protection_reason.unwrap_or_default()
+        );
+        assert!(plan
+            .steps
+            .iter()
+            .any(|step| step.command_summary == format!("gio trash {}", path.display())));
+        let probed = crate::domain::operations::probe::probe_target(&plan)
+            .await
+            .unwrap();
+        crate::domain::operations::uninstall::revalidate(&plan, &probed).unwrap();
+        println!("uninstall preview and apply-time verification accepted; no operation executed");
+    }
 }

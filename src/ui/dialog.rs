@@ -301,10 +301,15 @@ fn confirm_body(
             ));
         }
     }
-    if pkg.source != PackageSource::Snap
-        && !crate::domain::tool_managers::is_tool_source(pkg.source)
+    if kind == OpKind::Update
+        || (pkg.source != PackageSource::Snap
+            && !crate::domain::tool_managers::is_tool_source(pkg.source))
     {
         rows.push(("Size", theme::format_size(pkg.size_bytes)));
+    }
+
+    if kind == OpKind::Update {
+        return confirm_actions(entity, ButtonStyle::Update, div().child(plan_rows(rows)));
     }
 
     if let crate::domain::operations::OperationTarget::Tool { installation, .. } = &plan.target {
@@ -314,9 +319,6 @@ fn confirm_body(
         }
         if let Some(step) = plan.steps.first() {
             rows.push(("Command", step.command_summary.clone()));
-            if kind == OpKind::Update {
-                rows.push(("Resolution", step.description.clone()));
-            }
         }
         rows.push(("Effects", installation.notes.join("\n\n")));
     }
@@ -326,34 +328,19 @@ fn confirm_body(
         ..
     } = &plan.target
     {
-        match (kind, &installation.update) {
-            (OpKind::Update, Some(update)) => {
-                rows.push(("Source", update.source.clone()));
-                rows.push(("Download", update.download_url.clone()));
-                if let Some(step) = plan.steps.get(1) {
-                    rows.push(("Checksum", step.command_summary.clone()));
-                }
-                rows.push((
-                    "Effects",
-                    "Replaces the file in place and keeps its launcher settings.".into(),
-                ));
-            }
-            _ => {
-                rows.push(("Launchers", paths(&installation.launchers)));
-                if !installation.icons.is_empty() {
-                    rows.push(("Icons", paths(&installation.icons)));
-                }
-                rows.push((
-                    "Effects",
-                    if plan.app_data.is_empty() {
-                        "Moves these files to Trash. Portable .home/.config folders are kept, and no app data folders were found by name."
-                    } else {
-                        "Moves these files to Trash. Portable .home/.config folders are kept, and the app data below is kept unless you select it."
-                    }
-                    .into(),
-                ));
-            }
+        rows.push(("Launchers", paths(&installation.launchers)));
+        if !installation.icons.is_empty() {
+            rows.push(("Icons", paths(&installation.icons)));
         }
+        rows.push((
+            "Effects",
+            if plan.app_data.is_empty() {
+                "Moves these files to Trash. Portable .home/.config folders are kept, and no app data folders were found by name."
+            } else {
+                "Moves these files to Trash. Portable .home/.config folders are kept, and the app data below is kept unless you select it."
+            }
+            .into(),
+        ));
     }
 
     let confirm_style = match kind {

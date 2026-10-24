@@ -7,15 +7,14 @@
 //! is already integrated under the same name replaces it in place, keeping
 //! its file name, launcher, and launch settings.
 
-use std::io::{Read as _, Write as _};
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
-use sha2::Digest as _;
 
 use super::desktop::{self, LaunchSettings};
 use super::extract::{self, Metadata};
+use super::transaction::{self, PreparedFile};
 use super::{managed, AppImageInstallation, Roots};
 
 /// Everything the install preview showed, checked again before applying.
@@ -277,6 +276,13 @@ pub(super) async fn integrate(
 ) -> Result<()> {
     std::fs::create_dir_all(&roots.appimages)?;
     std::fs::create_dir_all(&roots.applications)?;
+    if roots.appimages.canonicalize()? != roots.home.canonicalize()?.join("AppImages") {
+        bail!("Scope cannot install into a symlinked AppImages directory");
+    }
+    let launcher_identity = target
+        .replaces
+        .map(|existing| super::identity(&existing.launcher))
+        .transpose()?;
     let previous = match target.replaces {
         Some(existing) => Some(
             desktop::DesktopFile::read(&existing.launcher)?
@@ -287,38 +293,14 @@ pub(super) async fn integrate(
         None => None,
     };
 
-    if source != target.destination {
-        let source = source.to_path_buf();
-        let destination = target.destination.clone();
-        let appimages = roots.appimages.clone();
-        let expected = expected_sha256.to_string();
-        let replace = target.replaces.is_some();
-        tokio::task::spawn_blocking(move || {
-            place_appimage(&source, &appimages, &destination, &expected, replace)
-        })
-        .await
-        .context("Copy worker stopped")??;
-    } else {
-        if super::hashes::compute(source)?.sha256 != expected_sha256 {
-            bail!("The AppImage changed since the preview. Open it again.");
-        }
-        set_mode(source, 0o755)?;
-    }
-    on_line(&format!("[scope] placed {}", target.destination.display()));
-
-    let icon = match &meta.icon {
-        Some(icon) => {
-            let stem = target
-                .destination
-                .file_stem()
-                .map(|s| s.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            let path = roots.icons().join(format!("{stem}.{}", icon.extension));
-            write_atomic(&roots.icons(), &path, &icon.bytes, 0o644)?;
-            Some(path)
-        }
-        None => None,
-    };
+    let icon = meta.icon.as_ref().map(|icon| {
+        let stem = target
+            .destination
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy();
+        roots.icons().join(format!("{stem}.{}", icon.extension))
+    });
     let text = desktop::integrated_launcher(
         &meta.launcher,
         &target.destination,
@@ -326,12 +308,51 @@ pub(super) async fn integrate(
         meta.version.as_deref(),
         previous.as_ref(),
     )?;
-    write_atomic(
-        &roots.applications,
+    let mut files = Vec::new();
+    if let (Some(icon), Some(metadata)) = (&icon, &meta.icon) {
+        std::fs::create_dir_all(roots.icons())?;
+        if roots.icons().canonicalize()? != roots.appimages.canonicalize()?.join(".icons") {
+            bail!("Scope cannot install into a symlinked AppImage icon directory");
+        }
+        let replace = target
+            .replaces
+            .is_some_and(|existing| existing.icons.contains(icon));
+        files.push(PreparedFile::bytes(icon, &metadata.bytes, replace)?);
+    }
+    files.push(PreparedFile::bytes(
         &target.launcher,
         text.as_bytes(),
-        0o644,
-    )?;
+        target.replaces.is_some(),
+    )?);
+    let source = source.to_path_buf();
+    let destination = target.destination.clone();
+    let expected = expected_sha256.to_string();
+    let replaces = target.replaces.cloned();
+    let roots_for_commit = roots.clone();
+    tokio::task::spawn_blocking(move || {
+        if source != destination {
+            files.push(PreparedFile::appimage(
+                &source,
+                &destination,
+                &expected,
+                replaces.is_some(),
+            )?);
+        } else if super::hashes::compute(&source)?.sha256 != expected {
+            bail!("The AppImage changed since the preview. Open it again.");
+        }
+        // Copying can take time. Refuse a replaced file or retargeted launcher.
+        if let Some(existing) = &replaces {
+            managed::verify(&roots_for_commit, existing)?;
+            if Some(super::identity(&existing.launcher)?) != launcher_identity {
+                bail!("The AppImage launch settings changed during installation. Try again.");
+            }
+        }
+        transaction::commit(files)
+    })
+    .await
+    .context("Install worker stopped")??;
+    set_mode(&target.destination, 0o755)?;
+    on_line(&format!("[scope] placed {}", target.destination.display()));
     on_line(&format!(
         "[scope] wrote launcher {}",
         target.launcher.display()
@@ -346,56 +367,6 @@ pub(super) async fn integrate(
             let _ = crate::domain::system::trash::trash(old).await;
         }
     }
-    Ok(())
-}
-
-/// Copy into a hidden temporary file beside the destination while hashing,
-/// then rename it into place so a running copy is never half-written.
-fn place_appimage(
-    source: &Path,
-    appimages: &Path,
-    destination: &Path,
-    expected_sha256: &str,
-    replace: bool,
-) -> Result<()> {
-    let mut input = std::fs::File::open(source)?;
-    let mut temp = tempfile::Builder::new()
-        .prefix(".scope-install-")
-        .tempfile_in(appimages)?;
-    let mut hasher = sha2::Sha256::new();
-    let mut buffer = vec![0u8; 1 << 16];
-    loop {
-        let read = input.read(&mut buffer)?;
-        if read == 0 {
-            break;
-        }
-        hasher.update(&buffer[..read]);
-        temp.write_all(&buffer[..read])?;
-    }
-    if super::hashes::hex(&hasher.finalize()) != expected_sha256 {
-        bail!("The AppImage changed since it was checked. Nothing was installed.");
-    }
-    temp.as_file().sync_all()?;
-    set_mode(temp.path(), 0o755)?;
-    if replace {
-        temp.persist(destination)?;
-    } else {
-        temp.persist_noclobber(destination).map_err(|e| {
-            anyhow::anyhow!("{} already exists: {}", destination.display(), e.error)
-        })?;
-    }
-    Ok(())
-}
-
-fn write_atomic(dir: &Path, path: &Path, bytes: &[u8], mode: u32) -> Result<()> {
-    std::fs::create_dir_all(dir)?;
-    let mut temp = tempfile::Builder::new()
-        .prefix(".scope-")
-        .tempfile_in(dir)?;
-    temp.write_all(bytes)?;
-    temp.as_file().sync_all()?;
-    set_mode(temp.path(), mode)?;
-    temp.persist(path)?;
     Ok(())
 }
 
@@ -522,5 +493,48 @@ mod tests {
         assert!(result.is_err());
         assert!(!target.destination.exists());
         assert!(!target.launcher.exists());
+    }
+
+    #[tokio::test]
+    async fn failed_icon_preparation_keeps_the_previous_appimage_and_launcher() {
+        let dir = tempfile::tempdir().unwrap();
+        let roots = test_roots(dir.path());
+        let source = dir.path().join("demo.AppImage");
+        std::fs::write(&source, elf::test_appimage("old", b"hsqs")).unwrap();
+        let mut target = Target {
+            destination: roots.appimages.join("demo_app.appimage"),
+            launcher: roots.applications.join("demo_app.desktop"),
+            replaces: None,
+        };
+        let hash = super::super::hashes::compute(&source).unwrap().sha256;
+        integrate(
+            &roots,
+            &source,
+            &hash,
+            &meta("Demo App", Some("1.2")),
+            &target,
+            &|_| {},
+        )
+        .await
+        .unwrap();
+        let original = std::fs::read(&target.destination).unwrap();
+        let launcher = std::fs::read(&target.launcher).unwrap();
+        let integration = managed::discover(&roots)
+            .remove(&target.destination)
+            .unwrap();
+        let existing = managed::installation(&roots, &target.destination, &integration).unwrap();
+        target.replaces = Some(&existing);
+        std::fs::write(&source, elf::test_appimage("new", b"hsqs-new")).unwrap();
+        let hash = super::super::hashes::compute(&source).unwrap().sha256;
+        let mut updated = meta("Demo App", Some("2.0"));
+        updated.icon.as_mut().unwrap().extension = "svg";
+        std::fs::create_dir(roots.icons().join("demo_app.svg")).unwrap();
+        assert!(
+            integrate(&roots, &source, &hash, &updated, &target, &|_| {})
+                .await
+                .is_err()
+        );
+        assert_eq!(std::fs::read(&target.destination).unwrap(), original);
+        assert_eq!(std::fs::read(&target.launcher).unwrap(), launcher);
     }
 }

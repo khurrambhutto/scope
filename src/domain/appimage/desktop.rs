@@ -163,10 +163,7 @@ pub fn integrated_launcher(
     let program = quote_exec_arg(&appimage.to_string_lossy());
     let shipped_settings =
         LaunchSettings::from_exec(&unescape(shipped.entry("Exec").unwrap_or("")));
-    let mut settings = previous.cloned().unwrap_or(LaunchSettings {
-        env: Vec::new(),
-        args: shipped_settings.args,
-    });
+    let mut settings = previous.cloned().unwrap_or(shipped_settings);
     if !settings
         .env
         .iter()
@@ -179,6 +176,7 @@ pub fn integrated_launcher(
         .unwrap_or_else(|| "applications-other".into());
 
     let mut file = shipped.clone();
+    file.set("Desktop Entry", "Type", "Application");
     let mut exec = String::new();
     if !settings.env.is_empty() {
         exec.push_str("env ");
@@ -382,6 +380,40 @@ mod tests {
         );
         assert_eq!(file.entry("Icon"), Some("applications-other"));
         assert_eq!(file.entry("X-AppImage-Version"), Some("2.0"));
+    }
+
+    #[test]
+    fn fresh_install_preserves_the_shipped_environment() {
+        let shipped = DesktopFile::parse(
+            "[Desktop Entry]\nType=Application\nName=Demo\nExec=env QT_QPA_PLATFORM=xcb AppRun --flag %U\n",
+        );
+        let installed = integrated_launcher(
+            &shipped,
+            Path::new("/home/u/AppImages/demo.appimage"),
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let installed = DesktopFile::parse(&installed);
+        assert_eq!(
+            installed.entry("Exec"),
+            Some("env QT_QPA_PLATFORM=xcb DESKTOPINTEGRATION=1 /home/u/AppImages/demo.appimage --flag %U")
+        );
+    }
+
+    #[test]
+    fn an_accepted_launcher_without_a_type_is_normalized_to_application() {
+        let shipped = DesktopFile::parse("[Desktop Entry]\nName=Demo\nExec=AppRun\n");
+        let text = integrated_launcher(
+            &shipped,
+            Path::new("/home/u/AppImages/demo.appimage"),
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(DesktopFile::parse(&text).entry("Type"), Some("Application"));
     }
 
     #[test]
