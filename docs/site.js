@@ -540,8 +540,8 @@
   /* ---------- Install tabs ---------- */
 
   var INSTALL = {
-    deb: { lines: ["sudo apt install ./scope_0.3.6_amd64.deb"], note: "Run it from the folder you downloaded the .deb to. The ./ tells apt to use the local file." },
-    appimage: { lines: ["chmod +x Scope-0.3.6-x86_64.AppImage", "./Scope-0.3.6-x86_64.AppImage"], note: "Portable and self-contained. Self-updates are available on the .deb build." },
+    deb: { lines: ["sudo apt install ./scope_0.3.7_amd64.deb"], note: "Run it from the folder you downloaded the .deb to. The ./ tells apt to use the local file." },
+    appimage: { lines: ["chmod +x Scope-0.3.7-x86_64.AppImage", "./Scope-0.3.7-x86_64.AppImage"], note: "Portable and self-contained. Self-updates are available on the .deb build." },
     source: { lines: ["git clone https://github.com/khurrambhutto/scope.git", "cd scope && cargo run"], note: "Needs Rust stable and GPUI's system libraries. The install guide lists them." }
   };
   var installCmd = document.querySelector("[data-install-cmd]");
