@@ -239,14 +239,15 @@ pub async fn apply(
             .await
         }
         OperationTarget::Snap { package_id } => {
-            run_elevated(
+            let result = run_elevated(
                 "snap",
                 &["refresh", package_id],
                 AuthMethod::Pkexec,
                 UPDATE_TIMEOUT,
                 on_line,
             )
-            .await
+            .await;
+            snap_update_result(result, package_id, &plan.display_name)
         }
         OperationTarget::Flatpak { app_id, scope } => {
             let (auth, flag) = match scope {
@@ -284,11 +285,97 @@ pub async fn apply(
     }
 }
 
+fn snap_update_result(
+    mut result: OperationResult,
+    package_id: &str,
+    display_name: &str,
+) -> OperationResult {
+    let running_apps = format!("snap \"{package_id}\" has running apps");
+    if !result.success
+        && (result.message.contains(&running_apps) || result.logs.contains(&running_apps))
+    {
+        result.message = format!(
+            "{display_name} is still running. Quit it completely, then try updating again."
+        );
+    }
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::domain::operations::probe::ProbedPackage;
     use crate::domain::package::PackageSource;
+
+    #[test]
+    fn snap_running_app_error_explains_how_to_retry() {
+        let result = OperationResult {
+            success: false,
+            message: "Operation failed (exit Some(1)): error: cannot refresh \"bitwarden\": snap \"bitwarden\" has running apps".into(),
+            logs: "error: cannot refresh \"bitwarden\": snap \"bitwarden\" has running apps".into(),
+            exit_code: Some(1),
+        };
+        let original_logs = result.logs.clone();
+        let result = snap_update_result(result, "bitwarden", "Bitwarden");
+
+        assert_eq!(
+            result.message,
+            "Bitwarden is still running. Quit it completely, then try updating again."
+        );
+        assert!(!result.success);
+        assert_eq!(result.exit_code, Some(1));
+        assert_eq!(result.logs, original_logs);
+    }
+
+    #[test]
+    fn snap_running_app_error_is_found_in_multiline_logs() {
+        let result = OperationResult {
+            success: false,
+            message: "Operation failed (exit Some(1)): error: cannot perform the following tasks:".into(),
+            logs: "error: cannot perform the following tasks:\n- Ensure prerequisites (snap \"bitwarden\" has running apps (bitwarden), pids: 1234)".into(),
+            exit_code: Some(1),
+        };
+
+        assert_eq!(
+            snap_update_result(result, "bitwarden", "Bitwarden").message,
+            "Bitwarden is still running. Quit it completely, then try updating again."
+        );
+    }
+
+    #[test]
+    fn snap_other_failures_keep_the_original_message() {
+        for error in [
+            "error: cannot communicate with server",
+            "error: snap \"another-app\" has running apps",
+        ] {
+            let result = OperationResult {
+                success: false,
+                message: error.into(),
+                logs: error.into(),
+                exit_code: Some(1),
+            };
+
+            assert_eq!(
+                snap_update_result(result, "bitwarden", "Bitwarden").message,
+                error
+            );
+        }
+    }
+
+    #[test]
+    fn snap_success_keeps_the_original_message() {
+        let result = OperationResult {
+            success: true,
+            message: "Operation completed successfully.".into(),
+            logs: "snap \"bitwarden\" has running apps".into(),
+            exit_code: Some(0),
+        };
+
+        assert_eq!(
+            snap_update_result(result, "bitwarden", "Bitwarden").message,
+            "Operation completed successfully."
+        );
+    }
 
     fn plan(version: &str) -> OperationPlan {
         OperationPlan {
