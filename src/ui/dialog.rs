@@ -4,8 +4,8 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    div, linear_color_stop, linear_gradient, px, rgba, AnyElement, App, ClickEvent, FontWeight,
-    Pixels, WeakEntity, Window,
+    div, linear_color_stop, linear_gradient, px, relative, rgba, AnyElement, App, ClickEvent,
+    FontWeight, Pixels, WeakEntity, Window,
 };
 
 use crate::backend::OpKind;
@@ -105,7 +105,12 @@ impl ScopeApp {
             } => confirm_body(entity, *kind, pkg, plan, *remove_app_data),
         };
 
-        modal_shell(heading, body, entity, corner_radius)
+        let install_card = matches!(dialog, Dialog::Confirm { kind: OpKind::Install, plan, .. } if !plan.protected);
+        if install_card {
+            modal_shell_styled(heading, body, entity, corner_radius, ModalStyle::Install)
+        } else {
+            modal_shell(heading, body, entity, corner_radius)
+        }
     }
 }
 
@@ -116,7 +121,7 @@ pub(super) fn modal_shell(
     entity: &WeakEntity<ScopeApp>,
     corner_radius: Pixels,
 ) -> AnyElement {
-    modal_shell_styled(heading, body, entity, corner_radius, false)
+    modal_shell_styled(heading, body, entity, corner_radius, ModalStyle::Operation)
 }
 
 pub(super) fn settings_modal_shell(
@@ -124,7 +129,20 @@ pub(super) fn settings_modal_shell(
     entity: &WeakEntity<ScopeApp>,
     corner_radius: Pixels,
 ) -> AnyElement {
-    modal_shell_styled("Settings".into(), body, entity, corner_radius, true)
+    modal_shell_styled(
+        "Settings".into(),
+        body,
+        entity,
+        corner_radius,
+        ModalStyle::Settings,
+    )
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ModalStyle {
+    Operation,
+    Settings,
+    Install,
 }
 
 fn modal_shell_styled(
@@ -132,8 +150,9 @@ fn modal_shell_styled(
     body: AnyElement,
     entity: &WeakEntity<ScopeApp>,
     corner_radius: Pixels,
-    settings: bool,
+    style: ModalStyle,
 ) -> AnyElement {
+    let settings = style == ModalStyle::Settings;
     div()
         .id("modal-overlay")
         .absolute()
@@ -161,6 +180,14 @@ fn modal_shell_styled(
                 .max_h(px(600.))
                 .overflow_y_scroll()
                 .rounded(px(16.))
+                .when(style == ModalStyle::Install, |this| {
+                    this.w(px(640.))
+                        .max_w(relative(0.92))
+                        .max_h(relative(0.9))
+                        .overflow_hidden()
+                        .flex()
+                        .flex_col()
+                })
                 .when(settings, |this| this.w(px(420.)).rounded(px(12.)))
                 .border_1()
                 .border_color(border())
@@ -173,38 +200,42 @@ fn modal_shell_styled(
                     ))
                 })
                 .shadow_lg()
-                .child(
-                    div()
-                        .relative()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .px(px(20.))
-                        .py(px(16.))
-                        .when(settings, |this| {
-                            this.pl(px(20.)).pr(px(16.)).pt(px(18.)).pb(px(14.))
-                        })
-                        .when(!settings, |this| this.border_b_1().border_color(border()))
-                        .child(
-                            div()
-                                .text_size(px(17.))
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .when(settings, |this| this.text_size(px(16.)))
-                                .child(heading),
-                        )
-                        .child(
-                            Button::new("modal-close")
-                                .ghost()
-                                .icon(IconName::Close)
-                                .accessibility_label("Close dialog")
-                                .size(px(30.))
-                                .rounded(px(16.))
-                                .on_click(act(entity, |this, cx| this.close_dialog(cx))),
-                        ),
-                )
+                .when(style != ModalStyle::Install, |this| {
+                    this.child(
+                        div()
+                            .relative()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .px(px(20.))
+                            .py(px(16.))
+                            .when(settings, |this| {
+                                this.pl(px(20.)).pr(px(16.)).pt(px(18.)).pb(px(14.))
+                            })
+                            .when(!settings, |this| this.border_b_1().border_color(border()))
+                            .child(
+                                div()
+                                    .text_size(px(17.))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .when(settings, |this| this.text_size(px(16.)))
+                                    .child(heading),
+                            )
+                            .child(modal_close(entity)),
+                    )
+                })
                 .child(body),
         )
         .into_any_element()
+}
+
+pub(super) fn modal_close(entity: &WeakEntity<ScopeApp>) -> Button {
+    Button::new("modal-close")
+        .ghost()
+        .icon(IconName::Close)
+        .accessibility_label("Close dialog")
+        .size(px(30.))
+        .rounded(px(16.))
+        .on_click(act(entity, |this, cx| this.close_dialog(cx)))
 }
 
 fn confirm_body(
@@ -234,37 +265,12 @@ fn confirm_body(
             .into_any_element();
     }
 
-    if let crate::domain::operations::OperationTarget::AppImageInstall { plan: install } =
-        &plan.target
-    {
-        return confirm_actions(
-            entity,
-            ButtonStyle::Update,
-            div().child(plan_rows(install_rows(install, pkg))),
-        );
-    }
-
-    if let crate::domain::operations::OperationTarget::DebInstall { plan: install } = &plan.target {
-        let mut rows = vec![
-            ("File", install.source.display().to_string()),
-            ("Package", install.package_id.clone()),
-            ("Version", install.version.clone()),
-            ("Architecture", install.architecture.clone()),
-            (
-                "Current version",
-                install
-                    .installed_version
-                    .clone()
-                    .unwrap_or_else(|| "Not installed".into()),
-            ),
-        ];
-        for step in &plan.steps {
-            rows.push(("Effects", step.description.clone()));
-            if !step.command_summary.is_empty() {
-                rows.push(("Command", step.command_summary.clone()));
-            }
-        }
-        return confirm_actions(entity, ButtonStyle::Update, div().child(plan_rows(rows)));
+    if matches!(
+        plan.target,
+        crate::domain::operations::OperationTarget::AppImageInstall { .. }
+            | crate::domain::operations::OperationTarget::DebInstall { .. }
+    ) {
+        return super::install_preview::body(entity, pkg, plan);
     }
 
     let mut rows: Vec<(&'static str, String)> = vec![("Package", plan.target.id().to_string())];
@@ -427,36 +433,6 @@ fn paths(paths: &[std::path::PathBuf]) -> String {
         .map(|path| path.display().to_string())
         .collect::<Vec<_>>()
         .join("\n")
-}
-
-fn install_rows(
-    install: &crate::domain::appimage::install::InstallPlan,
-    pkg: &InstalledPackage,
-) -> Vec<(&'static str, String)> {
-    let mut rows = vec![
-        ("File", install.source.display().to_string()),
-        (
-            "Version",
-            install.version.clone().unwrap_or_else(|| "—".into()),
-        ),
-        ("Size", theme::format_size(pkg.size_bytes)),
-        ("Install to", install.destination.display().to_string()),
-        ("Launcher", install.launcher.display().to_string()),
-    ];
-    if let Some(icon) = &install.icon {
-        rows.push(("Icon", icon.display().to_string()));
-    }
-    rows.push((
-        "Updates",
-        install
-            .update_source
-            .clone()
-            .unwrap_or_else(|| "Not available".into()),
-    ));
-    if !install.notes.is_empty() {
-        rows.push(("Notes", install.notes.join("\n\n")));
-    }
-    rows
 }
 
 fn confirm_actions(

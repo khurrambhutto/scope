@@ -64,6 +64,9 @@ async fn changed_archive_is_rejected_before_querying_installed_state() {
         version: "1.0".into(),
         architecture: "all".into(),
         installed_version: None,
+        metadata: Default::default(),
+        size_bytes: 0,
+        changes: vec![],
     };
     std::fs::write(source, "different bytes").unwrap();
     assert!(revalidate(&plan)
@@ -82,6 +85,9 @@ async fn protection_is_rechecked_before_reading_archive() {
         version: "1.0".into(),
         architecture: "all".into(),
         installed_version: None,
+        metadata: Default::default(),
+        size_bytes: 0,
+        changes: vec![],
     };
     assert!(revalidate(&plan)
         .await
@@ -94,7 +100,7 @@ fn fixture(directory: &Path, version: &str) -> PathBuf {
     let root = directory.join(format!("root-{version}"));
     std::fs::create_dir_all(root.join("DEBIAN")).unwrap();
     std::fs::write(root.join("DEBIAN/control"), format!(
-        "Package: scope-deb-fixture\nVersion: {version}\nArchitecture: all\nMaintainer: Scope Tests <test@example.invalid>\nDescription: Disposable archive fixture\nSection: utils\nPriority: optional\n"
+        "Package: scope-deb-fixture\nVersion: {version}\nArchitecture: all\nMaintainer: Scope Tests <test@example.invalid>\nHomepage: https://example.invalid/app\nDescription: Disposable archive fixture\n .\n A longer description.\nSection: utils\nPriority: optional\n"
     )).unwrap();
     // Inspection and simulation must never run this script.
     std::fs::write(root.join("DEBIAN/preinst"), "#!/bin/sh\nexit 99\n").unwrap();
@@ -128,7 +134,7 @@ async fn real_archive_metadata_and_isolated_apt_simulation_never_execute_scripts
         "dpkg-deb",
         &[
             "--show",
-            "--showformat=${Package}\n${Version}\n${Architecture}\n",
+            "--showformat=${Package}\n${Version}\n${Architecture}\n${Homepage}\n${Description}\n",
             archive.argument().unwrap(),
         ],
     )
@@ -137,6 +143,12 @@ async fn real_archive_metadata_and_isolated_apt_simulation_never_execute_scripts
     assert_eq!(
         metadata(&output).unwrap(),
         ("scope-deb-fixture".into(), "1.0".into(), "all".into())
+    );
+    let app = app_metadata(&output);
+    assert_eq!(app.homepage.as_deref(), Some("https://example.invalid/app"));
+    assert_eq!(
+        app.description.as_deref(),
+        Some("Disposable archive fixture\n\nA longer description.")
     );
     let status = directory.path().join("status");
     std::fs::write(&status, "").unwrap();
@@ -209,6 +221,34 @@ fn rejects_installed_state_changes_for_both_new_installs_and_upgrades() {
     assert!(validate_installed_state(Some("1.0"), Some("1.0")).is_ok());
 }
 
+#[test]
+fn compact_install_preview_retains_additional_apt_changes() {
+    let transaction = apt_transaction::parse(
+        "Inst demo (2.0 local-deb [all])\nInst helper (1.0 Ubuntu [all])\nInst editor [1.0] (2.0 Ubuntu [all])\nRemv old-editor [1.0]\n",
+        Operation::Install,
+        "demo",
+    ).unwrap();
+    assert_eq!(
+        transaction_changes(&transaction, "demo"),
+        vec![
+            "Also installs: helper.",
+            "Also upgrades: editor.",
+            "Removes: old-editor.",
+        ]
+    );
+}
+
+#[test]
+fn compact_install_preview_omits_the_target_from_additional_changes() {
+    let transaction = apt_transaction::parse(
+        "Inst demo [1.0] (2.0 local-deb [all])\n",
+        Operation::Install,
+        "demo",
+    )
+    .unwrap();
+    assert!(transaction_changes(&transaction, "demo").is_empty());
+}
+
 #[tokio::test]
 async fn install_target_rejects_update_and_uninstall_routes() {
     let install = DebInstallPlan {
@@ -218,6 +258,9 @@ async fn install_target_rejects_update_and_uninstall_routes() {
         version: "2.0".into(),
         architecture: "all".into(),
         installed_version: Some("1.0".into()),
+        metadata: Default::default(),
+        size_bytes: 0,
+        changes: vec![],
     };
     let plan = OperationPlan {
         plan_id: "fixture".into(),

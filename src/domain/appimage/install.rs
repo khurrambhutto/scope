@@ -25,6 +25,8 @@ pub struct InstallPlan {
     pub source_modified_ns: u128,
     pub source_sha256: String,
     pub name: String,
+    #[serde(default)]
+    pub metadata: crate::domain::install_metadata::InstallMetadata,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
     pub destination: PathBuf,
@@ -149,6 +151,24 @@ pub async fn preview(source: &Path) -> Result<InstallPlan> {
         ));
     }
 
+    let homepage = [
+        "X-AppImage-Homepage",
+        "X-AppImage-Website",
+        "X-Website",
+        "Homepage",
+    ]
+    .into_iter()
+    .find_map(|key| meta.launcher.entry(key));
+    let mut metadata = crate::domain::install_metadata::InstallMetadata::new(
+        meta.launcher
+            .entry("Comment")
+            .or_else(|| meta.launcher.entry("GenericName")),
+        homepage,
+    );
+    if let Some(icon) = &meta.icon {
+        metadata = metadata.with_icon(&icon.bytes, icon.extension);
+    }
+
     Ok(InstallPlan {
         move_source: source != destination,
         source,
@@ -156,6 +176,7 @@ pub async fn preview(source: &Path) -> Result<InstallPlan> {
         source_modified_ns,
         source_sha256,
         name: meta.name,
+        metadata,
         version: meta.version,
         destination,
         launcher,

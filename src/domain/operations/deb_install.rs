@@ -27,6 +27,12 @@ pub struct DebInstallPlan {
     pub version: String,
     pub architecture: String,
     pub installed_version: Option<String>,
+    #[serde(default)]
+    pub metadata: crate::domain::install_metadata::InstallMetadata,
+    #[serde(default)]
+    pub size_bytes: u64,
+    #[serde(default)]
+    pub changes: Vec<String>,
 }
 
 /// A private snapshot prevents changes to a file in Downloads while APT reads
@@ -167,12 +173,14 @@ pub async fn preview(source: &Path) -> Result<OperationPlan> {
         "dpkg-deb",
         &[
             "--show",
-            "--showformat=${Package}\n${Version}\n${Architecture}\n",
+            "--showformat=${Package}\n${Version}\n${Architecture}\n${Homepage}\n${Description}\n",
             archive.argument()?,
         ],
     )
     .await?;
     let (package_id, version, architecture) = metadata(&output)?;
+    let metadata = app_metadata(&output);
+    let size_bytes = std::fs::metadata(&archive.path)?.len();
     query("dpkg", &["--validate-version", &version]).await?;
     let host = query("dpkg", &["--print-architecture"]).await?;
     if architecture != "all" && architecture != host.trim() {
@@ -194,6 +202,7 @@ pub async fn preview(source: &Path) -> Result<OperationPlan> {
         }
     }
     let transaction = transaction(&archive, &package_id).await?;
+    let changes = transaction_changes(&transaction, &package_id);
     let steps = vec![
         PlanStep {
             description: format!("Install {package_id} {version} system-wide with APT. Only install files from publishers you trust. Package scripts run with administrator privileges."),
@@ -231,9 +240,39 @@ pub async fn preview(source: &Path) -> Result<OperationPlan> {
                 version,
                 architecture,
                 installed_version,
+                metadata,
+                size_bytes,
+                changes,
             }),
         },
     })
+}
+
+fn app_metadata(output: &str) -> crate::domain::install_metadata::InstallMetadata {
+    let mut fields = output.splitn(5, '\n');
+    let homepage = fields.nth(3);
+    crate::domain::install_metadata::InstallMetadata::new(fields.next(), homepage)
+}
+
+fn transaction_changes(
+    transaction: &apt_transaction::AptTransaction,
+    package: &str,
+) -> Vec<String> {
+    [
+        ("Also installs", &transaction.installs),
+        ("Also upgrades", &transaction.upgrades),
+        ("Removes", &transaction.removals),
+    ]
+    .into_iter()
+    .filter_map(|(label, packages)| {
+        let others = packages
+            .iter()
+            .filter(|id| id.as_str() != package)
+            .cloned()
+            .collect::<Vec<_>>();
+        (!others.is_empty()).then(|| format!("{label}: {}.", others.join(", ")))
+    })
+    .collect()
 }
 
 fn list(packages: &[String]) -> String {
