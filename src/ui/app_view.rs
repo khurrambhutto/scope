@@ -391,7 +391,7 @@ impl ScopeApp {
         let remove_app_data = *remove_app_data;
         let pkg = pkg.clone();
         let plan = plan.clone();
-        let Some(request) = self.operation.begin_apply(&plan.plan_id) else {
+        let Some(request) = self.operation.begin_apply(&plan.plan_id, self.updater_busy) else {
             return;
         };
         self.dialog = None;
@@ -432,19 +432,17 @@ impl ScopeApp {
                             // Output remains in the backend result for diagnostics.
                             OpMsg::Log(_line) => {}
                             OpMsg::Done(result) => {
-                                if !this.operation.finish_apply(request) {
+                                let Some(result) = this.operation.finish_apply(request, result)
+                                else {
                                     return;
-                                }
-                                let refresh = result.success;
+                                };
                                 this.operation_status = Some(OperationStatus::Done {
                                     kind,
                                     pkg: pkg.clone(),
                                     result,
                                 });
                                 cx.notify();
-                                if refresh {
-                                    this.start_scan(cx);
-                                }
+                                this.start_scan(cx);
                                 if let Some(path) = this.pending_install.take() {
                                     this.open_package(path, cx);
                                 }
@@ -453,6 +451,23 @@ impl ScopeApp {
                     })
                     .ok();
             }
+            entity
+                .update(cx, |this, cx| {
+                    let Some(result) = this.operation.fail_apply(request) else {
+                        return;
+                    };
+                    this.operation_status = Some(OperationStatus::Done {
+                        kind,
+                        pkg: pkg.clone(),
+                        result,
+                    });
+                    cx.notify();
+                    this.start_scan(cx);
+                    if let Some(path) = this.pending_install.take() {
+                        this.open_package(path, cx);
+                    }
+                })
+                .ok();
         })
         .detach();
 
@@ -557,7 +572,7 @@ impl ScopeApp {
     }
 
     pub(super) fn start_update(&mut self, cx: &mut Context<Self>) {
-        if self.updater_busy {
+        if !self.operation.can_start_updater(self.updater_busy) {
             return;
         }
         let Some(check) = self.updater.begin_install() else {
@@ -587,6 +602,14 @@ impl ScopeApp {
                     })
                     .ok();
             }
+            entity
+                .update(cx, |this, cx| {
+                    this.updater_busy = false;
+                    if this.updater.fail_install_stream() {
+                        cx.notify();
+                    }
+                })
+                .ok();
         })
         .detach();
     }

@@ -17,7 +17,7 @@ use anyhow::{Context, Result};
 
 use crate::domain::package::{AppKind, InstalledPackage, PackageSource};
 use crate::domain::scanner::{ScanReport, Scanner};
-use crate::domain::system::{capture_stdout, which, SCAN_TIMEOUT};
+use crate::domain::system::{capture_stdout, which, SystemError, SCAN_TIMEOUT};
 
 pub struct AptScanner;
 
@@ -38,7 +38,7 @@ impl Scanner for AptScanner {
         &'a self,
         report: &'a mut ScanReport,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(check_updates(&mut report.packages))
+        Box::pin(check_updates(report))
     }
 }
 
@@ -170,12 +170,28 @@ fn is_system_service_path(file: &Path) -> bool {
 }
 
 /// Run `apt list --upgradable` and mark packages that have available updates.
-async fn check_updates(packages: &mut [InstalledPackage]) {
-    let output =
-        match capture_stdout("apt", &["list", "--upgradable"], Duration::from_secs(30)).await {
-            Ok(o) => o,
-            Err(_) => return,
-        };
+async fn check_updates(report: &mut ScanReport) {
+    if report.packages.is_empty() {
+        return;
+    }
+    let result = capture_stdout("apt", &["list", "--upgradable"], Duration::from_secs(30)).await;
+    apply_update_result(report, result);
+}
+
+fn apply_update_result(report: &mut ScanReport, result: Result<String, SystemError>) {
+    let output = match result {
+        Ok(output) => output,
+        Err(error) => {
+            let message = format!("APT update check failed: {error}");
+            for package in &mut report.packages {
+                super::update_status::unavailable(package, &mut report.warning, &message);
+            }
+            return;
+        }
+    };
+    for package in &mut report.packages {
+        super::update_status::checked(package);
+    }
 
     // Line format: "package/suite candidate_version arch [upgradable from: old_version]"
     // Or:          "package/arch candidate_version arch [held]"
@@ -183,7 +199,8 @@ async fn check_updates(packages: &mut [InstalledPackage]) {
         return;
     };
 
-    let indexes: HashMap<String, usize> = packages
+    let indexes: HashMap<String, usize> = report
+        .packages
         .iter()
         .enumerate()
         .map(|(index, package)| (package.package_id.clone(), index))
@@ -196,7 +213,10 @@ async fn check_updates(packages: &mut [InstalledPackage]) {
         if let Some(caps) = re.captures(line) {
             let name = &caps[1];
             let candidate = &caps[3];
-            if let Some(pkg) = indexes.get(name).and_then(|index| packages.get_mut(*index)) {
+            if let Some(pkg) = indexes
+                .get(name)
+                .and_then(|index| report.packages.get_mut(*index))
+            {
                 pkg.has_update = true;
                 pkg.update_version = Some(candidate.to_string());
             }
@@ -257,5 +277,59 @@ mod tests {
         assert_eq!(classify_from_signals(true, false), AppKind::Cli);
         assert_eq!(classify_from_signals(false, false), AppKind::Unknown);
         assert_eq!(classify_from_signals(true, true), AppKind::Unknown);
+    }
+
+    fn pending_package() -> InstalledPackage {
+        let mut package = InstalledPackage::new(PackageSource::Apt, "firefox");
+        package.version = "1.0".into();
+        package.update_note = Some("Checking for updates...".into());
+        package
+    }
+
+    #[test]
+    fn failed_update_result_retains_packages_and_reports_unknown_status() {
+        let mut report = ScanReport::ok(vec![pending_package()]);
+        let error = SystemError::Timeout {
+            program: "apt".into(),
+            timeout: Duration::from_secs(30),
+        };
+
+        apply_update_result(&mut report, Err(error));
+
+        assert_eq!(report.packages.len(), 1);
+        assert_eq!(
+            report.packages[0].update_note.as_deref(),
+            Some("APT update check failed: apt timed out after 30s")
+        );
+        assert_eq!(
+            report.warning.as_deref(),
+            report.packages[0].update_note.as_deref()
+        );
+        assert!(!report.packages[0].has_update);
+    }
+
+    #[test]
+    fn successful_empty_update_result_clears_pending_status() {
+        let mut report = ScanReport::ok(vec![pending_package()]);
+
+        apply_update_result(&mut report, Ok("Listing...\n".into()));
+
+        assert_eq!(report.packages[0].update_note, None);
+        assert!(!report.packages[0].has_update);
+        assert_eq!(report.warning, None);
+    }
+
+    #[test]
+    fn successful_update_result_maps_the_candidate_version() {
+        let mut report = ScanReport::ok(vec![pending_package()]);
+
+        apply_update_result(
+            &mut report,
+            Ok("Listing...\nfirefox/stable 2.0 amd64 [upgradable from: 1.0]\n".into()),
+        );
+
+        assert!(report.packages[0].has_update);
+        assert_eq!(report.packages[0].update_version.as_deref(), Some("2.0"));
+        assert_eq!(report.packages[0].update_note, None);
     }
 }

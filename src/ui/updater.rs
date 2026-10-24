@@ -140,6 +140,16 @@ impl UpdaterUi {
             }
         };
     }
+
+    pub fn fail_install_stream(&mut self) -> bool {
+        if !matches!(self.status, UpdaterStatus::Installing { .. }) {
+            return false;
+        }
+        self.status = UpdaterStatus::Error {
+            message: "Update stopped before Scope received a result. Please check Scope's installation and try again.".into(),
+        };
+        true
+    }
 }
 
 /// Banner row with inline actions. Callbacks come from `app_view` so this
@@ -343,6 +353,21 @@ mod tests {
         assert!(ui.begin_install().is_some());
         assert!(!ui.confirming);
         assert!(ui.begin_install().is_none());
+    }
+
+    #[test]
+    fn a_closed_install_stream_leaves_a_visible_error() {
+        let mut ui = UpdaterUi {
+            status: UpdaterStatus::Installing {
+                check: check(),
+                lines: vec![],
+            },
+            confirming: false,
+        };
+
+        assert!(ui.fail_install_stream());
+        assert!(matches!(ui.status, UpdaterStatus::Error { .. }));
+        assert!(!ui.fail_install_stream());
     }
 
     #[test]

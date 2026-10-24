@@ -38,7 +38,7 @@ impl Scanner for FlatpakScanner {
         &'a self,
         report: &'a mut ScanReport,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(check_updates(&mut report.packages))
+        Box::pin(check_updates(report))
     }
 }
 
@@ -51,14 +51,17 @@ async fn scan() -> Result<ScanReport> {
     Ok(ScanReport { packages, warning })
 }
 
-async fn check_updates(packages: &mut [InstalledPackage]) {
+async fn check_updates(report: &mut ScanReport) {
+    if report.packages.is_empty() {
+        return;
+    }
     refresh_appstream().await;
     let (user_updates, system_updates) = tokio::join!(
-        available_updates(InstallScope::User),
-        available_updates(InstallScope::System)
+        available_updates_for_report(report, InstallScope::User),
+        available_updates_for_report(report, InstallScope::System)
     );
-    mark_updates(packages, InstallScope::User, &user_updates);
-    mark_updates(packages, InstallScope::System, &system_updates);
+    apply_scope_updates(report, InstallScope::User, user_updates);
+    apply_scope_updates(report, InstallScope::System, system_updates);
 }
 
 fn scope_flag(scope: InstallScope) -> &'static str {
@@ -149,9 +152,8 @@ async fn list_scope(scope: InstallScope) -> Result<Vec<InstalledPackage>> {
 }
 
 /// Available updates for one scope, keyed by application id.
-async fn available_updates(scope: InstallScope) -> HashMap<String, Option<String>> {
-    let mut updates = HashMap::new();
-    let output = match capture_stdout(
+async fn available_updates(scope: InstallScope) -> Result<HashMap<String, Option<String>>> {
+    let output = capture_stdout(
         "flatpak",
         &[
             "remote-ls",
@@ -162,12 +164,10 @@ async fn available_updates(scope: InstallScope) -> HashMap<String, Option<String
         SCAN_TIMEOUT,
     )
     .await
-    {
-        Ok(o) => o,
-        Err(_) => return updates,
-    };
+    .context(format!("flatpak update check {}", scope_flag(scope)))?;
 
     // Tab-delimited: application_id\tversion
+    let mut updates = HashMap::new();
     for line in output.lines() {
         let line = line.trim();
         if line.is_empty() {
@@ -181,7 +181,54 @@ async fn available_updates(scope: InstallScope) -> HashMap<String, Option<String
             .map(|s| s.to_string());
         updates.insert(app_id.to_string(), version);
     }
-    updates
+    Ok(updates)
+}
+
+async fn available_updates_for_report(
+    report: &ScanReport,
+    scope: InstallScope,
+) -> Result<HashMap<String, Option<String>>> {
+    if report
+        .packages
+        .iter()
+        .any(|package| package.install_scope == Some(scope))
+    {
+        available_updates(scope).await
+    } else {
+        Ok(HashMap::new())
+    }
+}
+
+fn apply_scope_updates(
+    report: &mut ScanReport,
+    scope: InstallScope,
+    result: Result<HashMap<String, Option<String>>>,
+) {
+    match result {
+        Ok(updates) => {
+            for package in report
+                .packages
+                .iter_mut()
+                .filter(|package| package.install_scope == Some(scope))
+            {
+                super::update_status::checked(package);
+            }
+            mark_updates(&mut report.packages, scope, &updates);
+        }
+        Err(error) => {
+            let message = format!(
+                "Flatpak {} update check failed: {error:#}",
+                scope_flag(scope)
+            );
+            for package in report
+                .packages
+                .iter_mut()
+                .filter(|package| package.install_scope == Some(scope))
+            {
+                super::update_status::unavailable(package, &mut report.warning, &message);
+            }
+        }
+    }
 }
 
 /// Flag packages from one scope that have an available update.
@@ -221,4 +268,48 @@ fn parse_size(size_str: &str) -> u64 {
         _ => 1,
     };
     (number * multiplier as f64) as u64
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn pending_package(scope: InstallScope) -> InstalledPackage {
+        let mut package =
+            InstalledPackage::new_scoped(PackageSource::Flatpak, "org.example.App", scope);
+        package.update_note = Some("Checking for updates...".into());
+        package
+    }
+
+    #[test]
+    fn one_scope_update_failure_keeps_the_other_scope_result() {
+        let mut report = ScanReport {
+            packages: vec![
+                pending_package(InstallScope::User),
+                pending_package(InstallScope::System),
+            ],
+            warning: Some("Flatpak system scan failed".into()),
+        };
+        let mut system_updates = HashMap::new();
+        system_updates.insert("org.example.App".into(), Some("2.0".into()));
+
+        apply_scope_updates(
+            &mut report,
+            InstallScope::User,
+            Err(anyhow::anyhow!("remote query failed")),
+        );
+        apply_scope_updates(&mut report, InstallScope::System, Ok(system_updates));
+
+        assert_eq!(
+            report.packages[0].update_note.as_deref(),
+            Some("Flatpak --user update check failed: remote query failed")
+        );
+        assert_eq!(report.packages[1].update_version.as_deref(), Some("2.0"));
+        assert!(report.packages[1].has_update);
+        assert_eq!(report.packages[1].update_note, None);
+        assert_eq!(
+            report.warning.as_deref(),
+            Some("Flatpak system scan failed; Flatpak --user update check failed: remote query failed")
+        );
+    }
 }

@@ -14,6 +14,7 @@ pub mod snap;
 mod snap_version;
 pub mod steam;
 mod tools;
+mod update_status;
 
 use std::future::Future;
 

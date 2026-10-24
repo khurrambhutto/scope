@@ -26,7 +26,7 @@ use anyhow::{Context, Result};
 
 use crate::domain::package::{AppKind, InstalledPackage, PackageSource};
 use crate::domain::scanner::{ScanReport, Scanner};
-use crate::domain::system::{capture_output, capture_stdout, which};
+use crate::domain::system::{capture_output, capture_stdout, which, SystemError};
 
 pub struct SnapScanner;
 
@@ -57,7 +57,7 @@ impl Scanner for SnapScanner {
         &'a self,
         report: &'a mut ScanReport,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(check_updates(&mut report.packages))
+        Box::pin(check_updates(report))
     }
 }
 
@@ -225,15 +225,31 @@ fn parse_du_totals(stdout: &str) -> HashMap<String, u64> {
 }
 
 /// Run `snap refresh --list` and mark snaps that have available updates.
-/// Note: the list shows current version, not the target, so we set
-/// `has_update = true` without a specific target version for v1.
-async fn check_updates(packages: &mut [InstalledPackage]) {
-    let output = match capture_stdout("snap", &["refresh", "--list"], SNAP_TIMEOUT).await {
-        Ok(o) => o,
-        Err(_) => return,
-    };
+async fn check_updates(report: &mut ScanReport) {
+    if report.packages.is_empty() {
+        return;
+    }
+    let result = capture_stdout("snap", &["refresh", "--list"], SNAP_TIMEOUT).await;
+    apply_update_result(report, result);
+}
 
-    let indexes: HashMap<String, usize> = packages
+fn apply_update_result(report: &mut ScanReport, result: Result<String, SystemError>) {
+    let output = match result {
+        Ok(output) => output,
+        Err(error) => {
+            let message = format!("Snap update check failed: {error}");
+            for package in &mut report.packages {
+                super::update_status::unavailable(package, &mut report.warning, &message);
+            }
+            return;
+        }
+    };
+    for package in &mut report.packages {
+        super::update_status::checked(package);
+    }
+
+    let indexes: HashMap<String, usize> = report
+        .packages
         .iter()
         .enumerate()
         .map(|(index, package)| (package.package_id.clone(), index))
@@ -244,15 +260,17 @@ async fn check_updates(packages: &mut [InstalledPackage]) {
             continue;
         }
         let mut fields = line.split_whitespace();
-        let (Some(name), Some(_), Some(_), Some(_)) =
+        let (Some(name), Some(version), Some(_), Some(_)) =
             (fields.next(), fields.next(), fields.next(), fields.next())
         else {
             continue;
         };
-        if let Some(pkg) = indexes.get(name).and_then(|index| packages.get_mut(*index)) {
+        if let Some(pkg) = indexes
+            .get(name)
+            .and_then(|index| report.packages.get_mut(*index))
+        {
             pkg.has_update = true;
-            // The Version column in refresh --list is the current version, not
-            // the target. We mark the update as available without a target version.
+            pkg.update_version = (!version.is_empty()).then(|| version.to_string());
         }
     }
 }
@@ -357,5 +375,79 @@ mod tests {
         for app in ["firefox", "code", "vlc", "onlyoffice-desktopeditors"] {
             assert!(!is_runtime(app), "{app} should be treated as an app");
         }
+    }
+
+    fn pending_package(version: &str) -> InstalledPackage {
+        let mut package = InstalledPackage::new(PackageSource::Snap, "firefox");
+        package.version = version.into();
+        package.update_note = Some("Checking for updates...".into());
+        package
+    }
+
+    #[test]
+    fn failed_update_result_retains_packages_and_reports_unknown_status() {
+        let mut report = ScanReport::ok(vec![pending_package("157.0.1-1")]);
+        let error = SystemError::Timeout {
+            program: "snap".into(),
+            timeout: SNAP_TIMEOUT,
+        };
+
+        apply_update_result(&mut report, Err(error));
+
+        assert_eq!(report.packages.len(), 1);
+        assert_eq!(
+            report.packages[0].update_note.as_deref(),
+            Some("Snap update check failed: snap timed out after 8s")
+        );
+        assert_eq!(
+            report.warning.as_deref(),
+            report.packages[0].update_note.as_deref()
+        );
+        assert!(!report.packages[0].has_update);
+    }
+
+    #[test]
+    fn successful_empty_update_result_clears_pending_status() {
+        let mut report = ScanReport::ok(vec![pending_package("157.0.1-1")]);
+
+        apply_update_result(
+            &mut report,
+            Ok("Name Version Rev Tracking Publisher Notes\n".into()),
+        );
+
+        assert_eq!(report.packages[0].update_note, None);
+        assert!(!report.packages[0].has_update);
+        assert_eq!(report.warning, None);
+    }
+
+    #[test]
+    fn refresh_list_version_is_the_target_and_installed_version_stays_raw() {
+        let mut report = ScanReport::ok(vec![pending_package("157.0.1-1")]);
+
+        apply_update_result(
+            &mut report,
+            Ok("Name Version Rev Tracking Publisher Notes\nfirefox 158.0.1-1 9113 latest/stable canonical -\n".into()),
+        );
+
+        assert_eq!(report.packages[0].version, "157.0.1-1");
+        assert_eq!(
+            report.packages[0].update_version.as_deref(),
+            Some("158.0.1-1")
+        );
+        assert!(report.packages[0].has_update);
+    }
+
+    #[test]
+    fn refresh_revision_update_stays_marked_when_release_version_is_unchanged() {
+        let mut report = ScanReport::ok(vec![pending_package("1.0.0")]);
+
+        apply_update_result(
+            &mut report,
+            Ok("Name Version Rev Tracking Publisher Notes\nfirefox 1.0.0 42 latest/stable publisher -\n".into()),
+        );
+
+        assert!(report.packages[0].has_update);
+        assert_eq!(report.packages[0].version, "1.0.0");
+        assert_eq!(report.packages[0].update_version.as_deref(), Some("1.0.0"));
     }
 }

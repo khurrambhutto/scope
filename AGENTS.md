@@ -78,10 +78,11 @@ docs/                     GitHub Pages site
 
 - Feature logic lives in domain modules. `main.rs` and `app_view.rs` only compose and wire.
 - `backend.rs` is a thin wrapper: look up state, delegate to `domain/scanner/` / `domain/operations/` / `domain/safety/`, return DTOs.
-- Scans publish cached rows, fresh installed inventory, then final update results. Source inventory must not wait for update services. Keep cache reads, serialization, and atomic writes off the UI thread; persist only complete, accepted scans in acceptance order. Preserve footprint inspections when only update state changes.
+- Scans publish cached rows, fresh installed inventory, then final update results. Source inventory must not wait for update services. Enrich installed rows once, then patch update results by stable key. Failed update checks retain inventory and report unavailable state, including failures after partial results. Keep cache reads, serialization, and atomic writes off the UI thread; persist only complete, accepted scans in acceptance order. Preserve footprint inspections when only update state changes.
 - A feature that fits no existing module gets a new small module instead of growing a file past a few hundred lines.
 - Keep screens operational and app-like, never marketing pages.
 - Uninstall/update previews use a modal. Applying and results appear at the bottom only while an operation is active or has a dismissible result, so browsing stays available; only one package operation may apply at a time. There is no idle footer. The app count appears in the search bar only, and Show all sits to its right in the filter bar.
+- Package applies and self-updates are mutually exclusive. Rescan after every package apply result, including failures that may have changed the system. A closed result stream releases the operation and shows an error instead of leaving progress running.
 - Update confirmation uses the same compact layout for every source: package, current version, target version, and size, plus Flatpak scope when applicable. Source-specific paths, commands, resolution details, and effects stay in the backend plan rather than the update modal. Protection errors remain visible.
 - The title-bar hamburger opens Settings with app/version information, project links, issue reporting, and an explicit update check. Self-updates from Settings or the update notice require confirmation before installation; unsupported installations link to a download. Check failures stay distinct from an up-to-date result.
 - The brand mark is a single-colour pure red (`#e10600`) telescope with a white lens glint; `docs/scope-mark.svg` is its source of truth. `assets/scope-logo.svg` places it on a white disc for the title bar and site header, and `assets/scope-icon.svg` places it on a warm white tile for the installed app icon, README, favicon, and `assets/scope.png`. Public copy names the product "Scope for Linux" in titles, headings, metadata, and package descriptions; "Scope" alone is fine in running text.
@@ -132,6 +133,8 @@ Enrichment is a layer on top of package data, not a replacement: visible `.deskt
 
 Snap version labels may use `display_version` from installed app metadata. VS Code reads a bounded `package.json` from the exact scanned revision, falling back to Snap's version when unavailable. Keep `version` unchanged for operation plans, probes, and revalidation; never launch apps to discover their version or invent release numbers for Git-based Snap versions.
 
+Snap update candidates use the `Version` column from `snap refresh --list`, while the installed `version` remains unchanged.
+
 Commands that previews display and apply runs:
 
 | Source | Uninstall | Update |
@@ -159,6 +162,7 @@ Always:
 
 - Preview first for every destructive action. Preview builds an `OperationPlan`; apply accepts only a `plan_id` from `PlanStore` (5-minute TTL, single-use).
 - Revalidate before executing (`operations::probe` plus the operation's `revalidate`): package present, version unchanged for updates, deny-list still clear. Fail closed when state cannot be verified.
+- Command timeouts cover process exit and output collection. Keep the dedicated process-group identity until both finish, so timeout cleanup also stops descendants after their parent exits.
 - Simulate every APT transaction with `LC_ALL=C`, reject indirect protected removals, store its fingerprint in the plan, and require the same simulation immediately before apply.
 - Escalate with `pkexec` through `system::run_elevated`. Scope never handles passwords.
 - Delete files through Trash (`gio trash`, manual `~/.local/share/Trash` fallback).
