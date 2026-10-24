@@ -85,8 +85,10 @@ pub async fn read_version(path: &Path) -> Result<Option<String>> {
             &runtime.payload_offset.to_string(),
             "-p",
             "1",
-            "-mem",
-            "8M",
+            "-da",
+            "4",
+            "-fr",
+            "4",
             "-cat",
         ])
         .arg(path)
@@ -106,7 +108,7 @@ pub async fn read_version(path: &Path) -> Result<Option<String>> {
         )
     })
     .await;
-    let (output, _, status) = match read {
+    let (output, errors, status) = match read {
         Ok(Ok(result)) => result,
         other => {
             let _ = child.kill().await;
@@ -118,7 +120,15 @@ pub async fn read_version(path: &Path) -> Result<Option<String>> {
         }
     };
     if !status.success() {
-        bail!("The AppImage has no readable root launcher metadata");
+        let message = String::from_utf8_lossy(&errors);
+        let message = message
+            .lines()
+            .find(|line| !line.trim().is_empty())
+            .unwrap_or("unsquashfs failed");
+        bail!(
+            "The AppImage has no readable root launcher metadata: {}",
+            message.chars().take(256).collect::<String>()
+        );
     }
     let version = launcher_version(std::str::from_utf8(&output)?)?;
     if super::identity(path)? != identity {
