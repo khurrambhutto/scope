@@ -1,10 +1,7 @@
 //! Compact package operation status embedded in the app footer.
 
 use gpui_kit::assets::IconName;
-use gpui_kit::component::{
-    button::{Button, ButtonVariants},
-    Icon,
-};
+use gpui_kit::component::Icon;
 use gpui_kit::prelude::*;
 use gpui_kit::{div, px, relative, AnyElement, FontWeight, WeakEntity};
 
@@ -14,7 +11,7 @@ use crate::domain::package::InstalledPackage;
 use crate::theme;
 
 use super::app_view::{act, ScopeApp};
-use super::widgets::progress_bar;
+use super::widgets::{dismiss_button, progress_bar};
 
 pub(super) enum OperationStatus {
     Running {
@@ -150,21 +147,16 @@ pub(super) fn operation_footer(
                 .child(theme::format_elapsed(*elapsed)),
         );
     } else {
-        row = row.child(
-            Button::new("operation-dismiss")
-                .ghost()
-                .icon(IconName::Close)
-                .accessibility_label("Dismiss operation result")
-                .size(px(28.))
-                .rounded_full()
-                .text_color(theme::text_dim())
-                .on_click(act(entity, |this, cx| {
-                    if matches!(this.operation_status, Some(OperationStatus::Done { .. })) {
-                        this.operation_status = None;
-                        cx.notify();
-                    }
-                })),
-        );
+        row = row.child(dismiss_button(
+            "operation-dismiss".into(),
+            "Dismiss operation result",
+            act(entity, |this, cx| {
+                if matches!(this.operation_status, Some(OperationStatus::Done { .. })) {
+                    this.operation_status = None;
+                    cx.notify();
+                }
+            }),
+        ));
     }
 
     div()
