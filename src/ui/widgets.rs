@@ -139,7 +139,7 @@ pub(super) enum BannerKind {
     Warn,
 }
 
-pub(super) fn banner(message: &str, kind: BannerKind) -> impl IntoElement {
+pub(super) fn banner(message: &str, kind: BannerKind) -> gpui_kit::Div {
     let (bg, border_c, fg) = match kind {
         BannerKind::Error => (
             theme::selected_surface(),
@@ -157,7 +157,36 @@ pub(super) fn banner(message: &str, kind: BannerKind) -> impl IntoElement {
         .bg(bg)
         .text_size(px(13.))
         .text_color(fg)
-        .child(message.to_string())
+        .child(div().flex_1().min_w(px(0.)).child(message.to_string()))
+}
+
+pub(super) fn dismiss_button(
+    id: gpui_kit::ElementId,
+    label: &'static str,
+    on_dismiss: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> Button {
+    Button::new(id)
+        .ghost()
+        .icon(IconName::Close)
+        .accessibility_label(label)
+        .size(px(28.))
+        .flex_none()
+        .rounded_full()
+        .text_color(text_dim())
+        .on_click(on_dismiss)
+}
+
+pub(super) fn dismissible_banner(
+    id: gpui_kit::ElementId,
+    message: &str,
+    kind: BannerKind,
+    on_dismiss: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    banner(message, kind)
+        .flex()
+        .items_start()
+        .gap(px(12.))
+        .child(dismiss_button(id, "Dismiss notification", on_dismiss))
 }
 
 #[derive(Clone, Copy)]

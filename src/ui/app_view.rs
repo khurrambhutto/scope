@@ -33,10 +33,11 @@ use super::operation_footer::{operation_footer, OperationStatus};
 use super::package_list_model::PackageListModel;
 use super::resize_zones::resize_zones;
 use super::row::row_element;
+use super::scan_notices::ScanNotices;
 use super::smooth_scroll::SmoothScroll;
 use super::title_bar::title_bar;
 use super::updater::{updater_banner, UpdaterStatus, UpdaterUi};
-use super::widgets::{banner, empty_state, loading_state, BannerKind};
+use super::widgets::{dismissible_banner, empty_state, loading_state, BannerKind};
 
 // ---- Keyboard actions ------------------------------------------------------
 
@@ -81,6 +82,7 @@ pub struct ScopeApp {
     pub(super) loading: bool,
     pub(super) refreshing: bool,
     pub(super) error: Option<String>,
+    scan_notices: ScanNotices,
     pub(super) source_filter: SourceFilter,
     pub(super) view_mode: ViewMode,
     pub(super) show_all: bool,
@@ -140,6 +142,7 @@ impl ScopeApp {
             loading: true,
             refreshing: false,
             error: None,
+            scan_notices: ScanNotices::default(),
             source_filter: SourceFilter::All,
             view_mode: ViewMode::Uninstall,
             show_all: false,
@@ -182,6 +185,7 @@ impl ScopeApp {
         let request = self.packages.begin_scan();
         self.refreshing = true;
         self.error = None;
+        self.scan_notices.reset();
         let (tx, mut rx) = mpsc::unbounded();
         backend::spawn_scan(self.scan.is_none(), tx);
         cx.spawn(async move |this, cx| {
@@ -678,16 +682,38 @@ impl ScopeApp {
                 div()
                     .mx(px(32.))
                     .mt(px(10.))
-                    .child(banner(error, BannerKind::Error))
+                    .child(dismissible_banner(
+                        "scan-error-dismiss".into(),
+                        error,
+                        BannerKind::Error,
+                        act(entity, |this, cx| {
+                            this.error = None;
+                            cx.notify();
+                        }),
+                    ))
                     .into_any_element(),
             );
         } else {
-            for (label, message) in self.source_warnings() {
+            for (label, message) in self
+                .scan
+                .as_ref()
+                .map(|scan| self.scan_notices.visible(&scan.availability))
+                .unwrap_or_default()
+            {
+                let dismissed_message = message.to_string();
                 banners.push(
                     div()
                         .mx(px(32.))
                         .mt(px(10.))
-                        .child(banner(&format!("{label}: {message}"), BannerKind::Warn))
+                        .child(dismissible_banner(
+                            format!("source-warning-dismiss-{label}").into(),
+                            &format!("{label}: {message}"),
+                            BannerKind::Warn,
+                            act(entity, move |this, cx| {
+                                this.scan_notices.dismiss(label, dismissed_message.clone());
+                                cx.notify();
+                            }),
+                        ))
                         .into_any_element(),
                 );
             }
@@ -765,31 +791,6 @@ impl ScopeApp {
                 }))
                 .into_any_element()
         }
-    }
-
-    fn source_warnings(&self) -> Vec<(String, String)> {
-        let Some(scan) = &self.scan else {
-            return Vec::new();
-        };
-        let availability = &scan.availability;
-        [
-            ("APT", availability.apt_error.as_ref()),
-            ("Snap", availability.snap_error.as_ref()),
-            ("Flatpak", availability.flatpak_error.as_ref()),
-            ("Steam", availability.steam_error.as_ref()),
-            (
-                "JetBrains Toolbox",
-                availability.jetbrains_toolbox_error.as_ref(),
-            ),
-            ("uv", availability.uv_error.as_ref()),
-            ("pipx", availability.pipx_error.as_ref()),
-            ("Cargo", availability.cargo_error.as_ref()),
-            ("npm", availability.npm_error.as_ref()),
-            ("Bun", availability.bun_error.as_ref()),
-        ]
-        .into_iter()
-        .filter_map(|(label, message)| message.map(|m| (label.to_string(), m.clone())))
-        .collect()
     }
 }
 

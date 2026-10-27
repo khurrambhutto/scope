@@ -14,7 +14,7 @@ use gpui_kit::{div, px, AnyElement, FontWeight, IntoElement, SharedString};
 use crate::domain::operations::OperationResult;
 use crate::domain::updater::{InstallKind, UpdateCheck, RELEASES_URL};
 use crate::theme;
-use crate::ui::widgets::{button, progress_bar, ButtonStyle};
+use crate::ui::widgets::{button, dismiss_button, progress_bar, ButtonStyle};
 
 /// The updater lifecycle. Each phase carries exactly the data it needs, so an
 /// "available" banner cannot render without a check and a finished banner cannot
@@ -202,16 +202,11 @@ pub fn updater_banner(
         }
     }
     if !installing {
-        actions = actions.child(
-            Button::new("updater-dismiss")
-                .ghost()
-                .icon(IconName::Close)
-                .accessibility_label("Dismiss Scope update notice")
-                .size(px(28.))
-                .rounded_full()
-                .text_color(theme::text_dim())
-                .on_click(on_dismiss),
-        );
+        actions = actions.child(dismiss_button(
+            "updater-dismiss".into(),
+            "Dismiss Scope update notice",
+            on_dismiss,
+        ));
     }
 
     div()
