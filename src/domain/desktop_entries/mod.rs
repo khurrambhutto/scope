@@ -827,7 +827,7 @@ mod tests {
         first.executable = Some(executable.clone());
         let mut alias = app("pycharm-alt", "PyCharm", executable.to_str().unwrap());
         alias.file_path = user_apps.join("pycharm-alt.desktop");
-        alias.executable = Some(executable.clone());
+        alias.executable = Some(executable);
         let mut wrong_path = app("unrelated", "PyCharm", unrelated.to_str().unwrap());
         wrong_path.file_path = user_apps.join("unrelated.desktop");
         wrong_path.executable = Some(unrelated);
