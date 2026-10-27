@@ -1,17 +1,21 @@
 //! Package-source scanners.
 //!
 //! One module per supported source. Each scanner implements [`Scanner`] and is
-//! run in parallel by [`scan_all`]. The desktop-entry enrichment layer is
-//! applied afterwards in [`scan_all`] so all sources share one merge path.
+//! run in parallel by [`scan_all_with_inventory`]. Installed rows are enriched
+//! and published while update checks continue, then the final state is emitted.
 
 pub mod appimage;
 pub mod apt;
 pub mod flatpak;
 pub mod jetbrains_toolbox;
+#[cfg(test)]
+mod performance;
+mod pipeline;
 pub mod snap;
 mod snap_version;
 pub mod steam;
 mod tools;
+mod update_status;
 
 use std::future::Future;
 
@@ -175,7 +179,6 @@ mod tests {
         assert!(index.lookup_package(&pkg).is_some());
     }
 }
-use tokio::task::JoinSet;
 
 use crate::domain::desktop_entries::DesktopIndex;
 use crate::domain::package::{AppKind, InstalledPackage, PackageSource};
@@ -188,8 +191,16 @@ pub trait Scanner: Send + Sync {
     /// True when the backing package manager appears installed on this system.
     fn is_available(&self) -> Pin<Box<dyn Future<Output = bool> + Send + '_>>;
 
-    /// List installed packages for this source.
+    /// List installed packages without waiting for update services.
     fn scan(&self) -> Pin<Box<dyn Future<Output = Result<ScanReport>> + Send + '_>>;
+
+    /// Enrich an inventory with update state without delaying its publication.
+    fn check_updates<'a>(
+        &'a self,
+        _report: &'a mut ScanReport,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async {})
+    }
 }
 
 use std::pin::Pin;
@@ -231,139 +242,22 @@ fn scanners() -> Vec<Box<dyn Scanner>> {
     ]
 }
 
-/// One scanner's outcome.
-struct ScanOutcome {
-    source: PackageSource,
-    available: bool,
-    packages: Vec<InstalledPackage>,
-    error: Option<String>,
+/// Scan all sources, including update checks.
+#[cfg(test)]
+pub async fn scan_all() -> (Vec<InstalledPackage>, ScanAvailability) {
+    scan_all_with_inventory(|_| {}).await
 }
 
-/// Scan package sources in parallel, then enrich and append unmanaged desktop apps.
-///
-/// Returns the merged, sorted unified list plus per-source availability. Source
-/// failures are never fatal: a broken/uninstalled source simply contributes zero
-/// packages and reports `available = false`.
-pub async fn scan_all() -> (Vec<InstalledPackage>, ScanAvailability) {
-    // Discover desktop apps on a blocking thread (synchronous fs walk). Started
-    // here, ahead of the package scans, so the walk overlaps them instead of
-    // running serially in front of them.
+/// Publish the installed list before waiting for update services.
+pub async fn scan_all_with_inventory(
+    on_inventory: impl FnOnce((Vec<InstalledPackage>, ScanAvailability)),
+) -> (Vec<InstalledPackage>, ScanAvailability) {
+    // Overlap desktop discovery with source commands, keeping filesystem work
+    // off the shared current-thread async runtime.
     let desktop = tokio::task::spawn_blocking(|| {
         DesktopIndex::from_apps(crate::domain::desktop_entries::discover_desktop_apps())
     });
-
-    let mut join = JoinSet::new();
-    for scanner in scanners() {
-        let source = scanner.source();
-        join.spawn(async move {
-            if scanner.is_available().await {
-                match scanner.scan().await {
-                    Ok(report) => ScanOutcome {
-                        source,
-                        available: true,
-                        packages: report.packages,
-                        error: report.warning,
-                    },
-                    Err(e) => ScanOutcome {
-                        source,
-                        available: true,
-                        packages: Vec::new(),
-                        error: Some(scan_error_message(&e)),
-                    },
-                }
-            } else {
-                ScanOutcome {
-                    source,
-                    available: false,
-                    packages: Vec::new(),
-                    error: None,
-                }
-            }
-        });
-    }
-
-    let mut merged: Vec<InstalledPackage> = Vec::new();
-    let mut availability = ScanAvailability::default();
-    while let Some(res) = join.join_next().await {
-        let Ok(outcome) = res else { continue };
-        match outcome.source {
-            PackageSource::Apt => {
-                availability.apt = outcome.available;
-                availability.apt_error = outcome.error;
-            }
-            PackageSource::Snap => {
-                availability.snap = outcome.available;
-                availability.snap_error = outcome.error;
-            }
-            PackageSource::Flatpak => {
-                availability.flatpak = outcome.available;
-                availability.flatpak_error = outcome.error;
-            }
-            PackageSource::AppImage => {
-                availability.appimage = outcome.available;
-                availability.appimage_dirs = appimage::search_directories();
-            }
-            PackageSource::Steam => {
-                availability.steam = outcome.available;
-                availability.steam_error = outcome.error;
-            }
-            PackageSource::JetBrainsToolbox => {
-                availability.jetbrains_toolbox = outcome.available;
-                availability.jetbrains_toolbox_error = outcome.error;
-            }
-            PackageSource::Uv => {
-                availability.uv = outcome.available;
-                availability.uv_error = outcome.error;
-            }
-            PackageSource::Pipx => {
-                availability.pipx = outcome.available;
-                availability.pipx_error = outcome.error;
-            }
-            PackageSource::Cargo => {
-                availability.cargo = outcome.available;
-                availability.cargo_error = outcome.error;
-            }
-            PackageSource::Npm => {
-                availability.npm = outcome.available;
-                availability.npm_error = outcome.error;
-            }
-            PackageSource::Bun => {
-                availability.bun = outcome.available;
-                availability.bun_error = outcome.error;
-            }
-            PackageSource::Desktop => {
-                // Unmanaged desktop apps are synthesized from visible launchers
-                // below, not reported by a package-manager scanner.
-            }
-        }
-        merged.extend(outcome.packages);
-    }
-
-    // Enrich + classify + resolve icons, then sort apps-first, by display
-    // name. Icon resolution touches the filesystem (theme lookups), so the
-    // whole merge pass runs on a blocking thread to keep the async runtime
-    // responsive. `DesktopIndex` and `InstalledPackage` are both `Send`.
-    let desktop = desktop.await.unwrap_or_else(|_| DesktopIndex::empty());
-    let (merged, availability) = tokio::task::spawn_blocking(move || {
-        for pkg in merged.iter_mut() {
-            enrich(pkg, &desktop);
-        }
-        let unmanaged_apps = desktop.unmanaged_user_apps(&merged);
-        merged.extend(unmanaged_apps);
-        // `sort_by_cached_key` computes the lowercase display name once per
-        // package instead of once per comparison.
-        merged.sort_by_cached_key(|p| {
-            (
-                kind_rank(p.app_kind),
-                p.display_name.as_deref().unwrap_or(&p.name).to_lowercase(),
-            )
-        });
-        (merged, availability)
-    })
-    .await
-    .unwrap_or_else(|_| (Vec::new(), ScanAvailability::default()));
-
-    (merged, availability)
+    pipeline::scan_sources(scanners(), desktop, on_inventory).await
 }
 
 fn kind_rank(k: AppKind) -> u8 {

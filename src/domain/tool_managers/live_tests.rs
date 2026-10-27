@@ -6,9 +6,10 @@ use crate::domain::operations::{self as plans, Operation};
 #[ignore = "reads installed tool inventories and previews; no package changes"]
 async fn live_inventory_and_previews() {
     for source in [PackageSource::Uv, PackageSource::Pipx, PackageSource::Cargo] {
-        let report = scan(source).await.unwrap();
-        assert!(!report.packages.is_empty(), "{source:?}");
-        for pkg in report.packages {
+        let mut packages = inventory(source).await.unwrap();
+        let _ = check_updates(&mut packages).await;
+        assert!(!packages.is_empty(), "{source:?}");
+        for pkg in packages {
             validate(pkg.tool_installation.as_ref().unwrap()).unwrap();
             let plan = plans::uninstall::preview(&pkg).await.unwrap();
             assert!(!plan.requires_auth);
@@ -88,6 +89,7 @@ async fn apply_preview(pkg: &InstalledPackage, operation: Operation) {
     let plan = match operation {
         Operation::Update => plans::update::preview(pkg).await.unwrap(),
         Operation::Uninstall => plans::uninstall::preview(pkg).await.unwrap(),
+        Operation::Install => unreachable!("tools have no install plans"),
     };
     let store = plans::PlanStore::default();
     store.issue(plan.clone());
@@ -102,6 +104,7 @@ async fn apply_preview(pkg: &InstalledPackage, operation: Operation) {
             plans::uninstall::revalidate(&plan, &probed).unwrap();
             plans::uninstall::apply(&plan, &|_| {}).await
         }
+        Operation::Install => unreachable!("tools have no install plans"),
     };
     assert!(result.success, "{}\n{}", result.message, result.logs);
     assert!(store.take(&plan.plan_id).is_none());

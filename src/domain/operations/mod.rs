@@ -7,6 +7,7 @@
 //! before executing — so a stale or tampered plan is rejected.
 
 pub mod apt_transaction;
+pub mod deb_install;
 pub mod probe;
 pub mod uninstall;
 pub mod update;
@@ -31,6 +32,9 @@ pub enum OperationTarget {
     Apt {
         package_id: String,
     },
+    DebInstall {
+        plan: Box<deb_install::DebInstallPlan>,
+    },
     Snap {
         package_id: String,
     },
@@ -40,6 +44,13 @@ pub enum OperationTarget {
     },
     AppImage {
         path: PathBuf,
+        /// Verified integration; without it every phase rejects the target.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        installation: Option<Box<crate::domain::appimage::AppImageInstallation>>,
+    },
+    /// Integrate an opened AppImage file into `~/AppImages`.
+    AppImageInstall {
+        plan: Box<crate::domain::appimage::install::InstallPlan>,
     },
     Desktop {
         desktop_file: PathBuf,
@@ -88,6 +99,7 @@ impl OperationTarget {
             }),
             PackageSource::AppImage => Ok(Self::AppImage {
                 path: PathBuf::from(&package.package_id),
+                installation: package.appimage_installation.clone(),
             }),
             PackageSource::Desktop => Ok(Self::Desktop {
                 desktop_file: PathBuf::from(&package.package_id),
@@ -104,10 +116,10 @@ impl OperationTarget {
     pub fn source(&self) -> PackageSource {
         match self {
             Self::Tool { installation, .. } => installation.source,
-            Self::Apt { .. } => PackageSource::Apt,
+            Self::Apt { .. } | Self::DebInstall { .. } => PackageSource::Apt,
             Self::Snap { .. } => PackageSource::Snap,
             Self::Flatpak { .. } => PackageSource::Flatpak,
-            Self::AppImage { .. } => PackageSource::AppImage,
+            Self::AppImage { .. } | Self::AppImageInstall { .. } => PackageSource::AppImage,
             Self::Desktop { .. } => PackageSource::Desktop,
             Self::Steam { .. } => PackageSource::Steam,
             Self::JetBrainsToolbox { .. } => PackageSource::JetBrainsToolbox,
@@ -119,8 +131,10 @@ impl OperationTarget {
             Self::Tool { package_id, .. }
             | Self::Apt { package_id }
             | Self::Snap { package_id } => package_id,
+            Self::DebInstall { plan } => &plan.package_id,
             Self::Flatpak { app_id, .. } | Self::Steam { app_id } => app_id,
-            Self::AppImage { path } => path.to_str().unwrap_or(""),
+            Self::AppImage { path, .. } => path.to_str().unwrap_or(""),
+            Self::AppImageInstall { plan } => plan.source.to_str().unwrap_or(""),
             Self::Desktop { desktop_file } => desktop_file.to_str().unwrap_or(""),
             Self::JetBrainsToolbox { installation_root } => {
                 installation_root.to_str().unwrap_or("")
@@ -142,6 +156,7 @@ impl OperationTarget {
 pub enum Operation {
     Uninstall,
     Update,
+    Install,
 }
 
 /// How privilege escalation is handled. Scope never touches passwords — `pkexec`
@@ -186,6 +201,10 @@ pub struct OperationPlan {
     /// Informational Snap breakdown captured at preview; never executed as paths.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub snap_details: Option<Box<crate::domain::snap_details::SnapDetails>>,
+    /// AppImage data found by name at preview; removed only when the user
+    /// opts in, and only entries a fresh search still finds.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub app_data: Vec<crate::domain::appimage::app_data::AppData>,
 }
 
 /// Outcome of applying a plan.
@@ -343,6 +362,7 @@ mod tests {
             created_at_ms: 0,
             apt_transaction_fingerprint: None,
             snap_details: None,
+            app_data: Vec::new(),
         }
     }
 

@@ -90,6 +90,8 @@ pub struct ScopeApp {
     pub(super) open_select: Option<OpenSelect>,
     pub(super) dialog: Option<Dialog>,
     operation: OperationController,
+    /// A package file opened while another operation was applying.
+    pending_install: Option<std::path::PathBuf>,
     pub(super) operation_status: Option<OperationStatus>,
     pub(super) plans: PlanStore,
     pub(super) updater: UpdaterUi,
@@ -129,13 +131,12 @@ impl ScopeApp {
             }
         });
 
-        // Paint the previous session's list immediately, then always rescan.
-        let scan = backend::read_cache();
+        // Cache loading starts on the scan worker after the window is created.
 
         let mut app = Self {
             search_input,
             _search_change: search_change,
-            scan,
+            scan: None,
             loading: true,
             refreshing: false,
             error: None,
@@ -148,6 +149,7 @@ impl ScopeApp {
             open_select: None,
             dialog: None,
             operation: OperationController::default(),
+            pending_install: None,
             operation_status: None,
             plans: PlanStore::default(),
             updater: UpdaterUi::default(),
@@ -180,29 +182,43 @@ impl ScopeApp {
         let request = self.packages.begin_scan();
         self.refreshing = true;
         self.error = None;
-        let (tx, rx) = oneshot::channel::<backend::Scan>();
-        std::thread::spawn(move || {
-            let scan = backend::scan_blocking();
-            let _ = tx.send(scan);
-        });
+        let (tx, mut rx) = mpsc::unbounded();
+        backend::spawn_scan(self.scan.is_none(), tx);
         cx.spawn(async move |this, cx| {
-            let scan = rx.await;
-            this.update(cx, |this, cx| {
-                if !this.packages.accepts_scan(request) {
+            while let Some(update) = rx.next().await {
+                let accepted = this
+                    .update(cx, |this, cx| {
+                        if !this.packages.accepts_scan(request) {
+                            return false;
+                        }
+                        if update.complete {
+                            backend::cache_scan(update.scan.clone());
+                        }
+                        this.scan = Some(update.scan);
+                        this.scan_gen += 1;
+                        // The final message changes update state only. Preserve
+                        // in-flight footprint measurements and their short cache.
+                        if !update.complete {
+                            this.package_details.clear();
+                            this.load_package_details(cx);
+                        }
+                        this.loading = false;
+                        this.refreshing = !update.complete;
+                        cx.notify();
+                        true
+                    })
+                    .unwrap_or(false);
+                if !accepted {
                     return;
                 }
-                if let Ok(scan) = scan {
-                    backend::write_cache(&scan);
-                    this.scan = Some(scan);
-                    this.scan_gen += 1;
-                    this.package_details.clear();
-                    this.load_package_details(cx);
+            }
+            let _ = this.update(cx, |this, cx| {
+                if this.packages.accepts_scan(request) {
+                    this.loading = false;
+                    this.refreshing = false;
+                    cx.notify();
                 }
-                this.loading = false;
-                this.refreshing = false;
-                cx.notify();
-            })
-            .ok();
+            });
         })
         .detach();
     }
@@ -306,8 +322,15 @@ impl ScopeApp {
                         this.dialog = Some(match result {
                             Ok(Ok(plan)) => Dialog::Confirm {
                                 kind,
-                                pkg,
+                                pkg: if kind == OpKind::Install {
+                                    let mut pkg = pkg;
+                                    pkg.display_name = Some(plan.display_name.clone());
+                                    pkg
+                                } else {
+                                    pkg
+                                },
                                 plan: Box::new(plan),
+                                remove_app_data: false,
                             },
                             Ok(Err(message)) => Dialog::Failed { kind, pkg, message },
                             Err(_) => Dialog::Failed {
@@ -322,6 +345,17 @@ impl ScopeApp {
                 .ok();
         })
         .detach();
+    }
+
+    /// Preview installing a package file opened from the file manager.
+    pub fn open_package(&mut self, path: std::path::PathBuf, cx: &mut Context<Self>) {
+        if self.operation.is_applying() {
+            self.pending_install = Some(path);
+            return;
+        }
+        self.settings_open = false;
+        self.open_op(OpKind::Install, backend::opened_package(&path), cx);
+        cx.notify();
     }
 
     /// Open the operation dialog for a visible row by its stable key. The row
@@ -351,14 +385,31 @@ impl ScopeApp {
         .detach();
     }
 
+    pub(super) fn set_remove_app_data(&mut self, checked: bool, cx: &mut Context<Self>) {
+        if let Some(Dialog::Confirm {
+            remove_app_data, ..
+        }) = self.dialog.as_mut()
+        {
+            *remove_app_data = checked;
+            cx.notify();
+        }
+    }
+
     pub(super) fn confirm_op(&mut self, cx: &mut Context<Self>) {
-        let Some(Dialog::Confirm { kind, pkg, plan }) = self.dialog.as_ref() else {
+        let Some(Dialog::Confirm {
+            kind,
+            pkg,
+            plan,
+            remove_app_data,
+        }) = self.dialog.as_ref()
+        else {
             return;
         };
         let kind = *kind;
+        let remove_app_data = *remove_app_data;
         let pkg = pkg.clone();
         let plan = plan.clone();
-        let Some(request) = self.operation.begin_apply(&plan.plan_id) else {
+        let Some(request) = self.operation.begin_apply(&plan.plan_id, self.updater_busy) else {
             return;
         };
         self.dialog = None;
@@ -372,7 +423,12 @@ impl ScopeApp {
         cx.notify();
 
         let (tx, mut rx) = mpsc::unbounded::<OpMsg>();
-        backend::spawn_apply(self.plans.clone(), plan.plan_id.clone(), tx);
+        backend::spawn_apply(
+            self.plans.clone(),
+            plan.plan_id.clone(),
+            remove_app_data,
+            tx,
+        );
 
         let entity = cx.entity().downgrade();
         cx.spawn(async move |_this, cx| {
@@ -394,24 +450,42 @@ impl ScopeApp {
                             // Output remains in the backend result for diagnostics.
                             OpMsg::Log(_line) => {}
                             OpMsg::Done(result) => {
-                                if !this.operation.finish_apply(request) {
+                                let Some(result) = this.operation.finish_apply(request, result)
+                                else {
                                     return;
-                                }
-                                let refresh = result.success;
+                                };
                                 this.operation_status = Some(OperationStatus::Done {
                                     kind,
                                     pkg: pkg.clone(),
                                     result,
                                 });
                                 cx.notify();
-                                if refresh {
-                                    this.start_scan(cx);
+                                this.start_scan(cx);
+                                if let Some(path) = this.pending_install.take() {
+                                    this.open_package(path, cx);
                                 }
                             }
                         }
                     })
                     .ok();
             }
+            entity
+                .update(cx, |this, cx| {
+                    let Some(result) = this.operation.fail_apply(request) else {
+                        return;
+                    };
+                    this.operation_status = Some(OperationStatus::Done {
+                        kind,
+                        pkg: pkg.clone(),
+                        result,
+                    });
+                    cx.notify();
+                    this.start_scan(cx);
+                    if let Some(path) = this.pending_install.take() {
+                        this.open_package(path, cx);
+                    }
+                })
+                .ok();
         })
         .detach();
 
@@ -516,7 +590,7 @@ impl ScopeApp {
     }
 
     pub(super) fn start_update(&mut self, cx: &mut Context<Self>) {
-        if self.updater_busy {
+        if !self.operation.can_start_updater(self.updater_busy) {
             return;
         }
         let Some(check) = self.updater.begin_install() else {
@@ -546,6 +620,14 @@ impl ScopeApp {
                     })
                     .ok();
             }
+            entity
+                .update(cx, |this, cx| {
+                    this.updater_busy = false;
+                    if this.updater.fail_install_stream() {
+                        cx.notify();
+                    }
+                })
+                .ok();
         })
         .detach();
     }

@@ -8,6 +8,7 @@ pub mod detail;
 mod detail_transition;
 pub mod dialog;
 pub mod filters;
+mod install_preview;
 mod operation_controller;
 mod operation_footer;
 mod package_list_model;

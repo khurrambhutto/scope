@@ -15,17 +15,20 @@ pub(super) async fn inventory(
             super::query_installation(context, &manager, &["list", "--json"]).await?,
         )
     } else {
-        let mut env = BTreeMap::new();
-        for key in ["PIPX_HOME", "PIPX_BIN_DIR", "PIPX_MAN_DIR"] {
-            env.insert(
-                key.into(),
-                query(&manager, &["environment", "--value", key])
-                    .await?
-                    .trim()
-                    .into(),
-            );
-        }
-        (env, query(&manager, &["list", "--json"]).await?)
+        // These read-only queries share no output or state. Overlap Python
+        // startup instead of paying for four serial interpreter launches.
+        let (root, bin, man, output) = tokio::try_join!(
+            query(&manager, &["environment", "--value", "PIPX_HOME"]),
+            query(&manager, &["environment", "--value", "PIPX_BIN_DIR"]),
+            query(&manager, &["environment", "--value", "PIPX_MAN_DIR"]),
+            query(&manager, &["list", "--json"]),
+        )?;
+        let env = BTreeMap::from([
+            ("PIPX_HOME".into(), root.trim().into()),
+            ("PIPX_BIN_DIR".into(), bin.trim().into()),
+            ("PIPX_MAN_DIR".into(), man.trim().into()),
+        ]);
+        (env, output)
     };
     parse(&output, manager, env)
 }
@@ -141,4 +144,50 @@ fn strings(value: Option<&Value>) -> Result<Vec<String>> {
                 .context("Invalid pipx string list")
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    #[tokio::test]
+    async fn local_inventory_queries_run_concurrently() {
+        let dir = tempfile::tempdir().unwrap();
+        let manager = dir.path().join("pipx");
+        // Each query waits for the other three. Serial discovery cannot pass.
+        let script = format!(
+            r#"#!/bin/sh
+state='{}'
+case "$*" in
+  'environment --value PIPX_HOME') key=PIPX_HOME ;;
+  'environment --value PIPX_BIN_DIR') key=PIPX_BIN_DIR ;;
+  'environment --value PIPX_MAN_DIR') key=PIPX_MAN_DIR ;;
+  'list --json') key=list ;;
+  *) exit 3 ;;
+esac
+: > "$state/$key"
+tries=0
+while [ ! -f "$state/PIPX_HOME" ] || [ ! -f "$state/PIPX_BIN_DIR" ] || [ ! -f "$state/PIPX_MAN_DIR" ] || [ ! -f "$state/list" ]; do
+  tries=$((tries + 1))
+  [ "$tries" -lt 100 ] || exit 4
+  sleep 0.01
+done
+if [ "$key" = list ]; then
+  printf '%s\n' '{{"venvs":{{}}}}'
+else
+  printf '%s\n' "$state/$key-root"
+fi
+"#,
+            dir.path().display()
+        );
+        std::fs::write(&manager, script).unwrap();
+        std::fs::set_permissions(&manager, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let packages =
+            tokio::time::timeout(std::time::Duration::from_secs(3), inventory(manager, None))
+                .await
+                .unwrap()
+                .unwrap();
+        assert!(packages.is_empty());
+    }
 }

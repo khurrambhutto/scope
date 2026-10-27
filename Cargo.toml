@@ -1,6 +1,6 @@
 [package]
 name = "scope-gpui"
-version = "0.3.6"
+version = "0.3.7"
 edition = "2021"
 description = "Scope for Linux: see, update, and uninstall apps in one place"
 
@@ -32,6 +32,7 @@ sha2 = "0.10"
 tempfile = "3"
 minisign-verify = "0.3"
 steam-vdf-parser = "0.1.2"
+sha1 = "0.10"
 
 [lints.rust]
 # The shell is safe, idiomatic Rust; shared backend modules included.

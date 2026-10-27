@@ -34,13 +34,13 @@
       {
         "@type": "HowToStep",
         "name": "Download the .deb",
-        "text": "Download scope_0.3.6_amd64.deb from the Scope v0.3.6 release on GitHub.",
-        "url": "https://github.com/khurrambhutto/scope/releases/tag/v0.3.6"
+        "text": "Download scope_0.3.7_amd64.deb from the Scope v0.3.7 release on GitHub.",
+        "url": "https://github.com/khurrambhutto/scope/releases/tag/v0.3.7"
       },
       {
         "@type": "HowToStep",
         "name": "Install with apt",
-        "text": "Run sudo apt install ./scope_0.3.6_amd64.deb from the folder that holds the download."
+        "text": "Run sudo apt install ./scope_0.3.7_amd64.deb from the folder that holds the download."
       },
       {
         "@type": "HowToStep",
@@ -84,26 +84,26 @@
         <h2 id="install-deb">Install the .deb</h2>
         <p>Scope targets Ubuntu on x86-64. Download the package for the current release, then install it from the folder that holds the file.</p>
         <ol>
-          <li>Download <a href="https://github.com/khurrambhutto/scope/releases/download/v0.3.6/scope_0.3.6_amd64.deb" style="color:var(--coral)">scope_0.3.6_amd64.deb</a> from the <a href="https://github.com/khurrambhutto/scope/releases/tag/v0.3.6" style="color:var(--coral)">v0.3.6 release</a>.</li>
+          <li>Download <a href="https://github.com/khurrambhutto/scope/releases/download/v0.3.7/scope_0.3.7_amd64.deb" style="color:var(--coral)">scope_0.3.7_amd64.deb</a> from the <a href="https://github.com/khurrambhutto/scope/releases/tag/v0.3.7" style="color:var(--coral)">v0.3.7 release</a>.</li>
           <li>Open a terminal in the download folder and run:</li>
         </ol>
         <div class="command">
-          <button class="copy-button" type="button" data-copy="sudo apt install ./scope_0.3.6_amd64.deb">Copy</button>
-          <span class="prompt">$ </span>sudo apt install ./scope_0.3.6_amd64.deb
+          <button class="copy-button" type="button" data-copy="sudo apt install ./scope_0.3.7_amd64.deb">Copy</button>
+          <span class="prompt">$ </span>sudo apt install ./scope_0.3.7_amd64.deb
         </div>
         <p>Start Scope from the application menu or run <code>scope</code> in a terminal. Scope scans your package sources when it opens.</p>
         <p>The <code>./</code> in the command matters. Without it, apt looks for a package in its repositories, not in your download folder.</p>
 
         <h2 id="install-appimage">Run the AppImage</h2>
-        <p>For a portable x86-64 build, download <a href="https://github.com/khurrambhutto/scope/releases/download/v0.3.6/Scope-0.3.6-x86_64.AppImage" class="text-link">Scope-0.3.6-x86_64.AppImage</a>, make it executable, and launch it.</p>
+        <p>For a portable x86-64 build, download <a href="https://github.com/khurrambhutto/scope/releases/download/v0.3.7/Scope-0.3.7-x86_64.AppImage" class="text-link">Scope-0.3.7-x86_64.AppImage</a>, make it executable, and launch it.</p>
         <div class="command">
-          <span class="line"><span class="prompt">$ </span>chmod +x Scope-0.3.6-x86_64.AppImage</span>
-          <span class="line"><span class="prompt">$ </span>./Scope-0.3.6-x86_64.AppImage</span>
+          <span class="line"><span class="prompt">$ </span>chmod +x Scope-0.3.7-x86_64.AppImage</span>
+          <span class="line"><span class="prompt">$ </span>./Scope-0.3.7-x86_64.AppImage</span>
         </div>
 
         <h2 id="updates">Updates to Scope</h2>
         <p>Scope checks GitHub Releases on startup. Official .deb builds from v0.3.4 can install later updates after they verify a signed SHA-256 manifest. The manifest is signed with minisign, and the public key is compiled into the app.</p>
-        <p>If you are upgrading from a build that predates the embedded verification key, install v0.3.6 by hand with the command above. Other install types open the Releases page when no verified package is available.</p>
+        <p>If you are upgrading from a build that predates the embedded verification key, install v0.3.7 by hand with the command above. Other install types open the Releases page when no verified package is available.</p>
 
         <h2 id="build">Build from source</h2>
         <p>Build from source on any Linux distribution where you can install Rust and the GPUI dependencies. Scope needs Rust stable. The first build takes a while because it compiles the GPUI toolkit.</p>

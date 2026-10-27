@@ -5,6 +5,8 @@
 //! typed `std`/`tokio` `Command` invocations with explicit argv — never
 //! `sh -c` with frontend-provided strings.
 
+pub mod trash;
+
 use std::time::Duration;
 
 use tokio::io::AsyncReadExt;
@@ -85,6 +87,7 @@ pub async fn capture_output_context(
 ) -> Result<ProcessOutput, SystemError> {
     let mut command = Command::new(program);
     command
+        .process_group(0)
         .args(args)
         .envs(envs.iter().copied())
         .kill_on_drop(true)
@@ -102,32 +105,53 @@ pub async fn capture_output_context(
     })?;
     let stdout = child.stdout.take().expect("piped stdout is available");
     let stderr = child.stderr.take().expect("piped stderr is available");
-    let stdout_task = tokio::spawn(read_limited(stdout, MAX_CAPTURE_BYTES));
-    let stderr_task = tokio::spawn(read_limited(stderr, MAX_CAPTURE_BYTES));
-    let status = match tokio::time::timeout(timeout, child.wait()).await {
-        Ok(status) => status.map_err(|source| SystemError::Spawn {
-            program: program.to_string(),
-            source,
-        })?,
+    let process_group = child.id();
+    // A descendant can keep inherited pipes open after the command exits.
+    let captured = tokio::time::timeout(timeout, async {
+        tokio::join!(
+            child.wait(),
+            read_limited(stdout, MAX_CAPTURE_BYTES),
+            read_limited(stderr, MAX_CAPTURE_BYTES)
+        )
+    })
+    .await;
+    let (status, stdout, stderr) = match captured {
+        Ok((status, stdout, stderr)) => (
+            status.map_err(|source| SystemError::Spawn {
+                program: program.to_string(),
+                source,
+            })?,
+            stdout,
+            stderr,
+        ),
         Err(_) => {
+            kill_process_group(process_group).await;
             let _ = child.kill().await;
             let _ = child.wait().await;
-            stdout_task.abort();
-            stderr_task.abort();
             return Err(SystemError::Timeout {
                 program: program.to_string(),
                 timeout,
             });
         }
     };
-    let stdout = stdout_task.await.unwrap_or_default();
-    let stderr = stderr_task.await.unwrap_or_default();
     Ok(ProcessOutput {
         success: status.success(),
         exit_code: status.code(),
         stdout,
         stderr,
     })
+}
+
+async fn kill_process_group(process_group: Option<u32>) {
+    if let Some(pid) = process_group {
+        let mut command = Command::new("/bin/kill");
+        command
+            .args(["-KILL", "--", &format!("-{pid}")])
+            .kill_on_drop(true)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+        let _ = tokio::time::timeout(Duration::from_secs(1), command.status()).await;
+    }
 }
 
 async fn read_limited<R>(mut reader: R, limit: usize) -> String
@@ -358,6 +382,7 @@ pub async fn run_prepared(
             };
         }
     };
+    let process_group = child.id();
 
     // Seed the live log so the panel is never blank while the command (or a
     // Polkit password prompt) is pending.
@@ -371,13 +396,14 @@ pub async fn run_prepared(
     }
 
     let (tx, mut rx) = tokio::sync::mpsc::channel::<(bool, String)>(512);
+    let mut readers = Vec::with_capacity(2);
     if let Some(stdout) = child.stdout.take() {
         let tx = tx.clone();
-        tokio::spawn(pump(stdout, false, tx));
+        readers.push(tokio::spawn(pump(stdout, false, tx)));
     }
     if let Some(stderr) = child.stderr.take() {
         let tx = tx.clone();
-        tokio::spawn(pump(stderr, true, tx));
+        readers.push(tokio::spawn(pump(stderr, true, tx)));
     }
     drop(tx);
 
@@ -419,12 +445,9 @@ pub async fn run_prepared(
 
     let timed_out = tokio::time::timeout(timeout, drain).await.is_err();
     if timed_out {
-        if let Some(pid) = child.id() {
-            // Signal only the dedicated group belonging to this operation.
-            let _ = Command::new("/bin/kill")
-                .args(["-KILL", "--", &format!("-{pid}")])
-                .status()
-                .await;
+        kill_process_group(process_group).await;
+        for reader in readers {
+            reader.abort();
         }
         let _ = child.kill().await;
     }
@@ -579,6 +602,32 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn capture_timeout_includes_output_held_open_after_parent_exit() {
+        let directory = tempfile::tempdir().unwrap();
+        let marker = directory.path().join("descendant-finished");
+        let result = capture_output(
+            "sh",
+            &[
+                "-c",
+                "(sleep 0.4; touch \"$1\") & exit 0",
+                "scope-test",
+                marker.to_str().unwrap(),
+            ],
+            Duration::from_millis(100),
+        )
+        .await;
+        assert!(
+            matches!(result, Err(SystemError::Timeout { .. })),
+            "Inherited output pipes must obey the command timeout: {result:?}"
+        );
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        assert!(
+            !marker.exists(),
+            "A captured command descendant outlived its timeout"
+        );
+    }
+
+    #[tokio::test]
     async fn capture_output_bounds_large_stdout() {
         let output = capture_output("seq", &["1", "1000000"], Duration::from_secs(5))
             .await
@@ -620,6 +669,24 @@ mod tests {
         assert!(
             !marker.exists(),
             "A timed-out build descendant kept running"
+        );
+    }
+
+    #[tokio::test]
+    async fn prepared_timeout_stops_descendants_after_parent_exit() {
+        let directory = tempfile::tempdir().unwrap();
+        let marker = directory.path().join("descendant-finished");
+        let mut command = Command::new("sh");
+        command
+            .args(["-c", "(sleep 0.4; touch \"$1\") & exit 0", "scope-test"])
+            .arg(&marker);
+        let result =
+            run_prepared(command, "fixture", &[], Duration::from_millis(100), &|_| {}).await;
+        assert!(!result.success);
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        assert!(
+            !marker.exists(),
+            "A descendant outlived the operation timeout"
         );
     }
 }

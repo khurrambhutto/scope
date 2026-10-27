@@ -19,7 +19,7 @@ pub async fn preview(pkg: &InstalledPackage) -> Result<OperationPlan> {
     if pkg.source == PackageSource::JetBrainsToolbox {
         anyhow::bail!("JetBrains Toolbox manages IDE updates and uninstall.")
     }
-    if pkg.source != PackageSource::Steam
+    if !matches!(pkg.source, PackageSource::Steam | PackageSource::AppImage)
         && (pkg.version.trim().is_empty() || pkg.version.eq_ignore_ascii_case("unknown"))
     {
         anyhow::bail!("Installed version is unknown. Rescan before updating.")
@@ -33,7 +33,7 @@ pub async fn preview(pkg: &InstalledPackage) -> Result<OperationPlan> {
         crate::domain::tool_managers::operations::verify(package_id, installation, &pkg.version)
             .await?;
     }
-    let protection = safety::check_package(pkg.source, &pkg.package_id);
+    let protection = safety::check_target(&target);
     let (auth, mut steps) = if let OperationTarget::Tool {
         package_id,
         installation,
@@ -47,6 +47,19 @@ pub async fn preview(pkg: &InstalledPackage) -> Result<OperationPlan> {
                 Operation::Update,
                 pkg.update_version.as_deref().unwrap_or("latest"),
             )?,
+        )
+    } else if let (
+        OperationTarget::AppImage {
+            installation: Some(installation),
+            ..
+        },
+        false,
+    ) = (&target, protection.protected)
+    {
+        crate::domain::appimage::operations::verify(installation)?;
+        (
+            AuthMethod::None,
+            crate::domain::appimage::operations::steps(installation, Operation::Update)?,
         )
     } else {
         build_steps(pkg, &target, protection.protected)
@@ -83,6 +96,7 @@ pub async fn preview(pkg: &InstalledPackage) -> Result<OperationPlan> {
         created_at_ms: now_ms(),
         apt_transaction_fingerprint: fingerprint,
         snap_details: None,
+        app_data: Vec::new(),
     })
 }
 
@@ -135,7 +149,11 @@ fn build_steps(
                 }],
             )
         }
-        OperationTarget::AppImage { .. } => blocked("AppImage updates are not supported yet."),
+        OperationTarget::AppImage { .. }
+        | OperationTarget::AppImageInstall { .. }
+        | OperationTarget::DebInstall { .. } => {
+            blocked("AppImage integration metadata is missing. Rescan first.")
+        }
         OperationTarget::Desktop { .. } => {
             blocked("This app is not managed by a supported package manager.")
         }
@@ -168,12 +186,24 @@ pub fn revalidate(plan: &OperationPlan, probed: &super::probe::ProbedPackage) ->
             plan.display_name
         )
     }
-    let protection = safety::check_package(plan.target.source(), plan.target.id());
+    let protection = safety::check_target(&plan.target);
     if protection.protected {
         anyhow::bail!(
             "Refusing to update protected package: {}",
             protection.reason.unwrap_or_else(|| "protected".into())
         )
+    }
+    if let OperationTarget::AppImage {
+        installation: Some(installation),
+        ..
+    } = &plan.target
+    {
+        // AppImage identity is the verified file (size and mtime), checked by
+        // the probe; launcher version labels are informational only.
+        if installation.update.is_none() {
+            anyhow::bail!("'{}' no longer has a verified update.", plan.display_name)
+        }
+        return Ok(());
     }
     if probed.has_update == Some(false) {
         anyhow::bail!("'{}' no longer has an update.", plan.display_name)
@@ -218,14 +248,15 @@ pub async fn apply(
             .await
         }
         OperationTarget::Snap { package_id } => {
-            run_elevated(
+            let result = run_elevated(
                 "snap",
                 &["refresh", package_id],
                 AuthMethod::Pkexec,
                 UPDATE_TIMEOUT,
                 on_line,
             )
-            .await
+            .await;
+            snap_update_result(result, package_id, &plan.display_name)
         }
         OperationTarget::Flatpak { app_id, scope } => {
             let (auth, flag) = match scope {
@@ -241,7 +272,14 @@ pub async fn apply(
             )
             .await
         }
-        OperationTarget::AppImage { .. } | OperationTarget::Desktop { .. } => OperationResult {
+        OperationTarget::AppImage {
+            installation: Some(installation),
+            ..
+        } => crate::domain::appimage::operations::update(installation, on_line).await,
+        OperationTarget::AppImage { .. }
+        | OperationTarget::AppImageInstall { .. }
+        | OperationTarget::DebInstall { .. }
+        | OperationTarget::Desktop { .. } => OperationResult {
             success: false,
             message: "This app cannot be updated through Scope.".into(),
             logs: String::new(),
@@ -262,11 +300,97 @@ pub async fn apply(
     }
 }
 
+fn snap_update_result(
+    mut result: OperationResult,
+    package_id: &str,
+    display_name: &str,
+) -> OperationResult {
+    let running_apps = format!("snap \"{package_id}\" has running apps");
+    if !result.success
+        && (result.message.contains(&running_apps) || result.logs.contains(&running_apps))
+    {
+        result.message = format!(
+            "{display_name} is still running. Quit it completely, then try updating again."
+        );
+    }
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::domain::operations::probe::ProbedPackage;
     use crate::domain::package::PackageSource;
+
+    #[test]
+    fn snap_running_app_error_explains_how_to_retry() {
+        let result = OperationResult {
+            success: false,
+            message: "Operation failed (exit Some(1)): error: cannot refresh \"bitwarden\": snap \"bitwarden\" has running apps".into(),
+            logs: "error: cannot refresh \"bitwarden\": snap \"bitwarden\" has running apps".into(),
+            exit_code: Some(1),
+        };
+        let original_logs = result.logs.clone();
+        let result = snap_update_result(result, "bitwarden", "Bitwarden");
+
+        assert_eq!(
+            result.message,
+            "Bitwarden is still running. Quit it completely, then try updating again."
+        );
+        assert!(!result.success);
+        assert_eq!(result.exit_code, Some(1));
+        assert_eq!(result.logs, original_logs);
+    }
+
+    #[test]
+    fn snap_running_app_error_is_found_in_multiline_logs() {
+        let result = OperationResult {
+            success: false,
+            message: "Operation failed (exit Some(1)): error: cannot perform the following tasks:".into(),
+            logs: "error: cannot perform the following tasks:\n- Ensure prerequisites (snap \"bitwarden\" has running apps (bitwarden), pids: 1234)".into(),
+            exit_code: Some(1),
+        };
+
+        assert_eq!(
+            snap_update_result(result, "bitwarden", "Bitwarden").message,
+            "Bitwarden is still running. Quit it completely, then try updating again."
+        );
+    }
+
+    #[test]
+    fn snap_other_failures_keep_the_original_message() {
+        for error in [
+            "error: cannot communicate with server",
+            "error: snap \"another-app\" has running apps",
+        ] {
+            let result = OperationResult {
+                success: false,
+                message: error.into(),
+                logs: error.into(),
+                exit_code: Some(1),
+            };
+
+            assert_eq!(
+                snap_update_result(result, "bitwarden", "Bitwarden").message,
+                error
+            );
+        }
+    }
+
+    #[test]
+    fn snap_success_keeps_the_original_message() {
+        let result = OperationResult {
+            success: true,
+            message: "Operation completed successfully.".into(),
+            logs: "snap \"bitwarden\" has running apps".into(),
+            exit_code: Some(0),
+        };
+
+        assert_eq!(
+            snap_update_result(result, "bitwarden", "Bitwarden").message,
+            "Operation completed successfully."
+        );
+    }
 
     fn plan(version: &str) -> OperationPlan {
         OperationPlan {
@@ -286,6 +410,7 @@ mod tests {
             created_at_ms: 0,
             apt_transaction_fingerprint: Some("fingerprint".into()),
             snap_details: None,
+            app_data: Vec::new(),
         }
     }
 
@@ -319,6 +444,18 @@ mod tests {
         package.name = "GIMP".into();
         package.version = "1.0".into();
         assert!(futures::executor::block_on(preview(&package)).is_err());
+    }
+
+    #[test]
+    fn appimage_preview_allows_unknown_version() {
+        let mut package = InstalledPackage::new(PackageSource::AppImage, "/tmp/tool.AppImage");
+        package.name = "Tool".into();
+        package.version = "unknown".into();
+
+        let plan = futures::executor::block_on(preview(&package)).unwrap();
+
+        assert_eq!(plan.current_version, "unknown");
+        assert!(matches!(plan.target, OperationTarget::AppImage { .. }));
     }
 
     #[test]

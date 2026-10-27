@@ -63,6 +63,31 @@ pub fn check_package(source: PackageSource, package_id: &str) -> Protection {
     }
 }
 
+/// Package protection plus target metadata that operations require: an
+/// AppImage in the managed folder is still protected until a scan has verified
+/// its Scope/Gear Lever integration.
+pub fn check_target(target: &crate::domain::operations::OperationTarget) -> Protection {
+    use crate::domain::operations::OperationTarget;
+    match target {
+        OperationTarget::AppImageInstall { .. } | OperationTarget::DebInstall { .. } => {
+            Protection::denied("Install plans cannot be uninstalled or updated.")
+        }
+        OperationTarget::AppImage {
+            installation: None, ..
+        } => {
+            let protection = check_package(target.source(), target.id());
+            if protection.protected {
+                protection
+            } else {
+                Protection::denied(
+                    "This AppImage has no launcher from Scope or Gear Lever. Open it with Scope to install it.",
+                )
+            }
+        }
+        _ => check_package(target.source(), target.id()),
+    }
+}
+
 fn check_apt(name: &str) -> Protection {
     let lower = name.to_lowercase();
     let stripped = lower
@@ -175,12 +200,24 @@ fn check_flatpak(_app_id: &str) -> Protection {
     Protection::allowed()
 }
 
-/// AppImages are detected by the scanner, but the main list hides them until
-/// uninstall/update support exists (see `operations/update.rs` and AGENTS.md).
-/// Blocking here keeps direct previews protected and apply-time revalidation
-/// fails closed — all from one place.
-fn check_appimage(_path: &str) -> Protection {
-    Protection::denied("AppImage uninstall and update are not supported yet.")
+/// Scope manages only AppImages kept directly in `~/AppImages`, the folder
+/// Scope and Gear Lever install into. Everything else stays discovery-only, and
+/// the running Scope AppImage is never removed or replaced from the list.
+/// Integration ownership (launcher `TryExec`, file owner) is verified
+/// separately by `appimage::managed::verify` at preview and apply.
+fn check_appimage(path: &str) -> Protection {
+    let path = std::path::Path::new(path);
+    if std::env::var_os("APPIMAGE").is_some_and(|own| std::path::Path::new(&own) == path) {
+        return Protection::denied(
+            "This is the running copy of Scope. Update it from Settings instead.",
+        );
+    }
+    match crate::domain::appimage::Roots::current() {
+        Ok(roots) if roots.is_managed_location(path) => Protection::allowed(),
+        _ => Protection::denied(
+            "Scope manages AppImages installed in ~/AppImages by Scope or Gear Lever. Open this file with Scope to install it there.",
+        ),
+    }
 }
 
 fn check_desktop(_desktop_file: &str) -> Protection {
@@ -247,26 +284,39 @@ mod tests {
         }
     }
 
-    /// AppImages are listed but uninstall/update is deliberately not supported
-    /// yet: preview must yield a protected plan for every AppImage path.
+    /// Only direct children of `~/AppImages` (the Scope/Gear Lever folder)
+    /// may be managed; system folders, Downloads, and nested paths stay
+    /// protected at preview and revalidation.
     #[test]
-    fn check_package_blocks_every_appimage_path() {
+    fn check_package_allows_only_the_managed_appimage_folder() {
+        let home = std::env::var("HOME").unwrap();
         for path in [
-            "/opt/Firefox-130.0.AppImage",
-            "/usr/local/bin/Firefox-130.0.AppImage",
-            "/home/user/AppImages/app-1.2.AppImage",
+            "/opt/Firefox-130.0.AppImage".to_string(),
+            "/usr/local/bin/Firefox-130.0.AppImage".to_string(),
+            format!("{home}/Downloads/app-1.2.AppImage"),
+            format!("{home}/AppImages/nested/app.appimage"),
+            format!("{home}/AppImages/.scope-update-x/download.appimage"),
+            format!("{home}/AppImages/../app.appimage"),
+            "AppImages/app.appimage".to_string(),
         ] {
             assert!(
-                check_package(PackageSource::AppImage, path).protected,
+                check_package(PackageSource::AppImage, &path).protected,
                 "expected '{path}' to be protected"
             );
         }
+        assert!(
+            !check_package(
+                PackageSource::AppImage,
+                &format!("{home}/AppImages/app.appimage")
+            )
+            .protected
+        );
     }
 
     #[test]
     fn check_package_explains_appimage_protection() {
         let protection = check_package(PackageSource::AppImage, "/opt/Firefox-130.0.AppImage");
-        assert!(protection.reason.unwrap().contains("yet"));
+        assert!(protection.reason.unwrap().contains("~/AppImages"));
     }
 
     #[test]

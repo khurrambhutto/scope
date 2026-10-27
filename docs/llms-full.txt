@@ -1,6 +1,6 @@
 # Scope for Linux: full text
 
-Scope for Linux (also called Scope) is a free, open-source app manager. It lists apps installed through APT, Snap, Flatpak, and AppImage in one searchable list. Every update or uninstall starts with a plan that shows the exact commands. Scope runs them only after the user confirms. Written in Rust with Zed's GPUI, no webview. Ubuntu is the first target. Current version: 0.3.6. License: MIT. Source: https://github.com/khurrambhutto/scope
+Scope for Linux (also called Scope) is a free, open-source app manager. It lists apps installed through APT, Snap, Flatpak, and AppImage in one searchable list. Every update or uninstall starts with a plan that shows the exact commands. Scope runs them only after the user confirms. Written in Rust with Zed's GPUI, no webview. Ubuntu is the first target. Current version: 0.3.7. License: MIT. Source: https://github.com/khurrambhutto/scope
 
 ## What Scope does
 
@@ -43,10 +43,10 @@ Scope never edits the dpkg or apt databases directly. It always uses the package
 Ubuntu, x86-64:
 
 ```bash
-sudo apt install ./scope_0.3.6_amd64.deb
+sudo apt install ./scope_0.3.7_amd64.deb
 ```
 
-A portable x86-64 build is also available as Scope-0.3.6-x86_64.AppImage. Make it executable with chmod +x, then launch it. Releases include SHA256SUMS and its minisign signature.
+A portable x86-64 build is also available as Scope-0.3.7-x86_64.AppImage. Make it executable with chmod +x, then launch it. Releases include SHA256SUMS and its minisign signature.
 
 The package is named scope and installs the scope command. Remove it with `sudo apt remove scope`. Removing Scope does not remove the apps it lists.
 

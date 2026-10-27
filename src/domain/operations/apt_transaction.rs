@@ -22,7 +22,7 @@ pub struct AptTransaction {
 pub async fn simulate(operation: Operation, package_id: &str) -> anyhow::Result<AptTransaction> {
     let action = match operation {
         Operation::Uninstall => "remove",
-        Operation::Update => "install",
+        Operation::Update | Operation::Install => "install",
     };
     let output = capture_output_env(
         "apt-get",
@@ -52,7 +52,11 @@ pub fn parse(
             }
         } else if let Some(rest) = line.strip_prefix("Inst ") {
             if let Some(name) = rest.split_whitespace().next() {
-                if rest.contains('[') {
+                if rest
+                    .split_whitespace()
+                    .nth(1)
+                    .is_some_and(|value| value.starts_with('['))
+                {
                     upgrades.push(name.to_string());
                 } else {
                     installs.push(name.to_string());
@@ -68,7 +72,7 @@ pub fn parse(
     removals.dedup();
     let target_present = match operation {
         Operation::Uninstall => removals.iter().any(|name| name == package_id),
-        Operation::Update => installs
+        Operation::Install | Operation::Update => installs
             .iter()
             .chain(&upgrades)
             .any(|name| name == package_id),
@@ -85,11 +89,24 @@ pub fn parse(
             )
         }
     }
+    // Include versions and configuration actions, not just package names.
+    let mut actions: Vec<_> = stdout
+        .lines()
+        .map(str::trim)
+        .filter(|line| {
+            ["Inst ", "Remv ", "Conf "]
+                .iter()
+                .any(|prefix| line.starts_with(prefix))
+        })
+        .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
+        .collect();
+    actions.sort();
     let canonical = format!(
-        "install:{}\nupgrade:{}\nremove:{}\n",
+        "install:{}\nupgrade:{}\nremove:{}\nactions:{}\n",
         installs.join(","),
         upgrades.join(","),
-        removals.join(",")
+        removals.join(","),
+        actions.join("\n")
     );
     let fingerprint = format!("{:x}", Sha256::digest(canonical.as_bytes()));
     Ok(AptTransaction {
@@ -103,6 +120,43 @@ pub fn parse(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn distinguishes_new_dependencies_from_upgrades_with_architecture_brackets() {
+        let transaction = parse(
+            "Inst demo (2.0 local-deb [amd64])\nInst libexample1 (1.0 Ubuntu [amd64])\nInst helper [1.0] (2.0 Ubuntu [amd64])\n",
+            Operation::Install, "demo",
+        ).unwrap();
+        assert_eq!(transaction.installs, vec!["demo", "libexample1"]);
+        assert_eq!(transaction.upgrades, vec!["helper"]);
+    }
+
+    #[test]
+    fn fingerprint_changes_when_only_dependency_version_changes() {
+        let first = parse(
+            "Inst demo (1.0 local-deb [all])\nInst helper (1.0 Ubuntu [amd64])\n",
+            Operation::Install,
+            "demo",
+        )
+        .unwrap();
+        let second = parse(
+            "Inst demo (1.0 local-deb [all])\nInst helper (2.0 Ubuntu [amd64])\n",
+            Operation::Install,
+            "demo",
+        )
+        .unwrap();
+        assert_ne!(first.fingerprint, second.fingerprint);
+    }
+
+    #[test]
+    fn install_rejects_indirect_protected_removals() {
+        assert!(parse(
+            "Inst demo (1.0 local-deb [all])\nRemv systemd [255]\n",
+            Operation::Install,
+            "demo"
+        )
+        .is_err());
+    }
 
     #[test]
     fn parses_and_fingerprints_an_update_transaction() {

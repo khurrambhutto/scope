@@ -9,11 +9,14 @@ use std::path::PathBuf;
 
 use futures::channel::{mpsc, oneshot};
 
+mod scan_cache;
+
 use crate::domain::operations::{
-    uninstall, update, Operation, OperationPlan, OperationResult, OperationStage, PlanStore,
+    uninstall, update, Operation, OperationPlan, OperationResult, OperationStage, OperationTarget,
+    PlanStore,
 };
 use crate::domain::package::InstalledPackage;
-use crate::domain::scanner::{scan_all, ScanAvailability};
+use crate::domain::scanner::{scan_all_with_inventory, ScanAvailability};
 
 /// One full scan of every package source, matching the Tauri `CachedScan` DTO.
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
@@ -47,16 +50,44 @@ fn block_on<F: Future>(future: F) -> F::Output {
     runtime().block_on(future)
 }
 
-/// Run a full scan on a background thread.
-pub fn scan_blocking() -> Scan {
-    block_on(async {
-        let (packages, availability) = scan_all().await;
-        Scan {
-            packages,
-            availability,
-            scanned_at_ms: now_ms(),
+/// Installed rows arrive before update checks complete. Only complete scans
+/// should be persisted, so an interrupted check never replaces the cache.
+pub struct ScanUpdate {
+    pub scan: Scan,
+    pub complete: bool,
+}
+
+/// Cache I/O and the scan both run away from the window's event loop.
+pub fn spawn_scan(load_cache: bool, tx: mpsc::UnboundedSender<ScanUpdate>) {
+    std::thread::spawn(move || {
+        if load_cache {
+            if let Some(scan) = read_cache() {
+                let _ = tx.unbounded_send(ScanUpdate {
+                    scan,
+                    complete: false,
+                });
+            }
         }
-    })
+        let (packages, availability) =
+            block_on(scan_all_with_inventory(|(packages, availability)| {
+                let _ = tx.unbounded_send(ScanUpdate {
+                    scan: Scan {
+                        packages,
+                        availability,
+                        scanned_at_ms: now_ms(),
+                    },
+                    complete: false,
+                });
+            }));
+        let _ = tx.unbounded_send(ScanUpdate {
+            scan: Scan {
+                packages,
+                availability,
+                scanned_at_ms: now_ms(),
+            },
+            complete: true,
+        });
+    });
 }
 
 /// Open JetBrains Toolbox through its validated desktop launcher off the UI thread.
@@ -73,41 +104,15 @@ fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
-/// Path of the persisted scan inside the XDG data directory.
-fn cache_path() -> Option<PathBuf> {
-    let base = std::env::var_os("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .or_else(|| {
-            std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share"))
-        })?;
-    Some(base.join("scope").join("scan-cache.json"))
-}
-
-/// Load the previous session's scan, if any, so a cold start paints instantly.
+/// Read the previous session on a background worker.
 pub fn read_cache() -> Option<Scan> {
-    let bytes = std::fs::read(cache_path()?).ok()?;
-    serde_json::from_slice(&bytes).ok()
+    scan_cache::read()
 }
 
-/// Persist a scan for the next launch.
-pub fn write_cache(scan: &Scan) {
-    let Some(path) = cache_path() else { return };
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    if let Ok(bytes) = serde_json::to_vec(scan) {
-        if let Some(parent) = path.parent() {
-            if let Ok(mut temp) = tempfile::Builder::new()
-                .prefix(".scan-cache-")
-                .tempfile_in(parent)
-            {
-                use std::io::Write as _;
-                if temp.write_all(&bytes).is_ok() && temp.as_file().sync_all().is_ok() {
-                    let _ = temp.persist(path);
-                }
-            }
-        }
-    }
+/// Queue complete, accepted scans in UI acceptance order. Disk writes run on a
+/// single worker so an older slow write cannot overwrite a newer scan.
+pub fn cache_scan(scan: Scan) {
+    scan_cache::store(scan);
 }
 
 /// Load source-aware informational details off the UI thread.
@@ -137,6 +142,8 @@ pub fn spawn_package_details(
 pub enum OpKind {
     Uninstall,
     Update,
+    /// Install an opened package file; `pkg.package_id` is the file path.
+    Install,
 }
 
 /// Messages streamed from a running apply task back to the UI.
@@ -179,6 +186,7 @@ pub fn spawn_preview(
                     }
                     update::preview(&pkg).await
                 }
+                OpKind::Install => install_preview(&pkg).await,
             }
         }) {
             Ok(plan) => plan,
@@ -194,22 +202,116 @@ pub fn spawn_preview(
     });
 }
 
+/// A list row standing in for an opened package file before it is installed.
+pub fn opened_package(path: &std::path::Path) -> InstalledPackage {
+    let mut pkg = InstalledPackage::new(
+        if is_deb(path) {
+            crate::domain::package::PackageSource::Apt
+        } else {
+            crate::domain::package::PackageSource::AppImage
+        },
+        path.to_string_lossy(),
+    );
+    pkg.name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "AppImage".into());
+    if let Ok(size) = std::fs::metadata(path).map(|m| m.len()) {
+        pkg.size_bytes = size;
+    }
+    pkg
+}
+
+fn is_deb(path: &std::path::Path) -> bool {
+    path.extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("deb"))
+}
+
+async fn install_preview(pkg: &InstalledPackage) -> anyhow::Result<OperationPlan> {
+    if pkg.source == crate::domain::package::PackageSource::Apt {
+        return crate::domain::operations::deb_install::preview(std::path::Path::new(
+            &pkg.package_id,
+        ))
+        .await;
+    }
+    let install =
+        crate::domain::appimage::install::preview(std::path::Path::new(&pkg.package_id)).await?;
+    Ok(OperationPlan {
+        plan_id: crate::domain::operations::new_plan_id(),
+        operation: Operation::Install,
+        display_name: install.name.clone(),
+        current_version: String::new(),
+        target_version: install.version.clone().unwrap_or_default(),
+        requires_auth: false,
+        auth_method: crate::domain::operations::AuthMethod::None,
+        protected: false,
+        protection_reason: None,
+        steps: install_steps(&install),
+        created_at_ms: crate::domain::operations::now_ms(),
+        apt_transaction_fingerprint: None,
+        snap_details: None,
+        app_data: Vec::new(),
+        target: OperationTarget::AppImageInstall {
+            plan: Box::new(install),
+        },
+    })
+}
+
+fn install_steps(
+    install: &crate::domain::appimage::install::InstallPlan,
+) -> Vec<crate::domain::operations::PlanStep> {
+    use crate::domain::operations::PlanStep;
+    let mut steps = vec![PlanStep {
+        description: if install.move_source {
+            "Move the AppImage into ~/AppImages.".into()
+        } else {
+            "Keep the AppImage in ~/AppImages.".into()
+        },
+        command_summary: install.destination.display().to_string(),
+    }];
+    steps.push(PlanStep {
+        description: "Create its app-menu launcher.".into(),
+        command_summary: install.launcher.display().to_string(),
+    });
+    if let Some(icon) = &install.icon {
+        steps.push(PlanStep {
+            description: "Save its icon.".into(),
+            command_summary: icon.display().to_string(),
+        });
+    }
+    steps
+}
+
 /// Revalidate and apply an issued plan, streaming stage/log messages.
 ///
 /// Mirrors `apply_uninstall` / `apply_update`: take the plan from the store,
 /// probe the live system, re-run the safety revalidation, then execute.
-pub fn spawn_apply(plans: PlanStore, plan_id: String, tx: mpsc::UnboundedSender<OpMsg>) {
+/// `remove_app_data` only selects whether the plan's own `app_data` list is
+/// used; the paths always come from the stored plan.
+pub fn spawn_apply(
+    plans: PlanStore,
+    plan_id: String,
+    remove_app_data: bool,
+    tx: mpsc::UnboundedSender<OpMsg>,
+) {
     std::thread::spawn(move || {
         block_on(async move {
-            let Some(plan) = plans.take(&plan_id) else {
+            let Some(mut plan) = plans.take(&plan_id) else {
                 let _ = tx.unbounded_send(OpMsg::Done(failed(
                     "Stale or unknown plan. Please preview again.",
                 )));
                 return;
             };
+            if !remove_app_data {
+                plan.app_data.clear();
+            }
 
             let _ = tx.unbounded_send(OpMsg::Stage(OperationStage::Verifying));
-            if let Some(expected) = plan.apt_transaction_fingerprint.as_deref() {
+            if let Some(expected) = plan
+                .apt_transaction_fingerprint
+                .as_deref()
+                .filter(|_| !matches!(plan.target, OperationTarget::DebInstall { .. }))
+            {
                 let transaction = match crate::domain::operations::apt_transaction::simulate(
                     plan.operation,
                     plan.target.id(),
@@ -244,6 +346,14 @@ pub fn spawn_apply(plans: PlanStore, plan_id: String, tx: mpsc::UnboundedSender<
             let revalidation = match plan.operation {
                 Operation::Uninstall => uninstall::revalidate(&plan, &probed),
                 Operation::Update => update::revalidate(&plan, &probed),
+                // The probe already ran `install::revalidate` on the file.
+                Operation::Install => match &plan.target {
+                    OperationTarget::AppImageInstall { .. }
+                    | OperationTarget::DebInstall { .. } => Ok(()),
+                    _ => Err(anyhow::anyhow!(
+                        "Only AppImage and Debian package files can be installed."
+                    )),
+                },
             };
             if let Err(e) = revalidation {
                 let _ = tx.unbounded_send(OpMsg::Done(failed(e.to_string())));
@@ -256,9 +366,29 @@ pub fn spawn_apply(plans: PlanStore, plan_id: String, tx: mpsc::UnboundedSender<
                 let _ = line_tx.unbounded_send(OpMsg::Log(line.to_string()));
             };
 
-            let result = match plan.operation {
-                Operation::Uninstall => uninstall::apply(&plan, &on_line).await,
-                Operation::Update => update::apply(&plan, &on_line).await,
+            let result = match (&plan.operation, &plan.target) {
+                (Operation::Uninstall, _) => uninstall::apply(&plan, &on_line).await,
+                (Operation::Update, _) => update::apply(&plan, &on_line).await,
+                (Operation::Install, OperationTarget::DebInstall { .. }) => {
+                    match crate::domain::operations::deb_install::apply(&plan, &on_line).await {
+                        Ok(result) => result,
+                        Err(error) => failed(format!("Install failed: {error}")),
+                    }
+                }
+                (Operation::Install, OperationTarget::AppImageInstall { plan: install }) => {
+                    match crate::domain::appimage::install::apply(install, &on_line).await {
+                        Ok(message) => OperationResult {
+                            success: true,
+                            message,
+                            logs: String::new(),
+                            exit_code: Some(0),
+                        },
+                        Err(error) => failed(format!("Install failed: {error}")),
+                    }
+                }
+                (Operation::Install, _) => {
+                    failed("Only AppImage and Debian package files can be installed.")
+                }
             };
             let _ = tx.unbounded_send(OpMsg::Done(result));
         });
@@ -406,6 +536,18 @@ mod tests {
         let mut pkg = InstalledPackage::new(PackageSource::Apt, id);
         pkg.name = id.to_string();
         pkg
+    }
+
+    #[test]
+    fn opened_files_route_debs_to_apt_and_appimages_to_appimage() {
+        assert_eq!(
+            opened_package(std::path::Path::new("/tmp/an app.DEB")).source,
+            PackageSource::Apt
+        );
+        assert_eq!(
+            opened_package(std::path::Path::new("/tmp/an app.AppImage")).source,
+            PackageSource::AppImage
+        );
     }
 
     #[test]
