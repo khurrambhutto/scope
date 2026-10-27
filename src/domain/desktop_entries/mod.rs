@@ -12,7 +12,7 @@ mod parser;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 pub use parser::DesktopApp;
@@ -53,7 +53,7 @@ pub fn discover_desktop_apps() -> Vec<DesktopApp> {
     apps
 }
 
-fn application_dirs() -> Vec<PathBuf> {
+pub(crate) fn application_dirs() -> Vec<PathBuf> {
     let mut dirs = Vec::new();
 
     if let Some(user_applications) = user_application_dir() {
@@ -257,6 +257,11 @@ impl DesktopIndex {
                     .map(Arc::as_ref)
                     .or_else(|| self.lookup_stripped(package_id))
             }
+            crate::domain::package::PackageSource::JetBrainsToolbox => self
+                .apps
+                .iter()
+                .find(|app| jetbrains_toolbox_owns_launcher(package_id, app))
+                .map(Arc::as_ref),
             crate::domain::package::PackageSource::Uv
             | crate::domain::package::PackageSource::Pipx
             | crate::domain::package::PackageSource::Cargo
@@ -350,6 +355,14 @@ impl DesktopIndex {
             .iter()
             .filter(|app| app.file_path.starts_with(user_applications))
             .filter(|app| !matched.contains(app.id.as_str()))
+            .filter(|app| {
+                !packages
+                    .iter()
+                    .filter(|package| {
+                        package.source == crate::domain::package::PackageSource::JetBrainsToolbox
+                    })
+                    .any(|package| jetbrains_toolbox_owns_launcher(&package.package_id, app))
+            })
             .filter(|app| {
                 !packages
                     .iter()
@@ -491,6 +504,62 @@ fn tool_owns_launcher(
                 })
         })
     })
+}
+
+/// True when a visible launcher executes an exact Linux launcher declared by
+/// this canonical JetBrains Toolbox installation. Product names never take
+/// part in the ownership decision: versions and editions are not stable IDs.
+fn jetbrains_toolbox_owns_launcher(installation_root: &str, app: &DesktopApp) -> bool {
+    const MAX_PRODUCT_INFO_BYTES: u64 = 1024 * 1024;
+
+    let Some(executable) = app.executable.as_ref() else {
+        return false;
+    };
+    let Ok(root) = Path::new(installation_root).canonicalize() else {
+        return false;
+    };
+    let product_info = root.join("product-info.json");
+    let Ok(metadata) = fs::metadata(&product_info) else {
+        return false;
+    };
+    if !metadata.is_file() || metadata.len() > MAX_PRODUCT_INFO_BYTES {
+        return false;
+    }
+    let Ok(contents) = fs::read(product_info) else {
+        return false;
+    };
+    let Ok(info) = serde_json::from_slice::<serde_json::Value>(&contents) else {
+        return false;
+    };
+    let Ok(executable) = executable.canonicalize() else {
+        return false;
+    };
+
+    info.get("launch")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|launch| {
+            launch
+                .get("os")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|os| os.eq_ignore_ascii_case("linux"))
+        })
+        .filter_map(|launch| {
+            launch
+                .get("launcherPath")
+                .and_then(serde_json::Value::as_str)
+                .map(Path::new)
+        })
+        .filter(|path| {
+            !path.is_absolute()
+                && !path
+                    .components()
+                    .any(|component| matches!(component, Component::ParentDir))
+        })
+        .filter_map(|path| root.join(path).canonicalize().ok())
+        .filter(|path| path.starts_with(&root))
+        .any(|path| path == executable)
 }
 
 #[cfg(test)]
@@ -734,5 +803,53 @@ mod tests {
         pkg.tool_installation.as_mut().unwrap().protection_reason =
             Some("Conflicting command ownership".into());
         assert!(index.lookup_package(&pkg).is_none());
+    }
+    #[test]
+    fn toolbox_owns_every_exact_launcher_but_not_same_name_elsewhere() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("Toolbox/apps/pycharm");
+        let executable = root.join("bin/pycharm");
+        let unrelated = directory.path().join("other/bin/pycharm");
+        let user_apps = directory.path().join("applications");
+        fs::create_dir_all(executable.parent().unwrap()).unwrap();
+        fs::create_dir_all(unrelated.parent().unwrap()).unwrap();
+        fs::create_dir_all(&user_apps).unwrap();
+        fs::write(&executable, "").unwrap();
+        fs::write(&unrelated, "").unwrap();
+        fs::write(
+            root.join("product-info.json"),
+            r#"{"launch":[{"os":"Linux","launcherPath":"bin/pycharm"}]}"#,
+        )
+        .unwrap();
+
+        let mut first = app("pycharm", "PyCharm", executable.to_str().unwrap());
+        first.file_path = user_apps.join("pycharm.desktop");
+        first.executable = Some(executable.clone());
+        let mut alias = app("pycharm-alt", "PyCharm", executable.to_str().unwrap());
+        alias.file_path = user_apps.join("pycharm-alt.desktop");
+        alias.executable = Some(executable);
+        let mut wrong_path = app("unrelated", "PyCharm", unrelated.to_str().unwrap());
+        wrong_path.file_path = user_apps.join("unrelated.desktop");
+        wrong_path.executable = Some(unrelated);
+
+        let index = DesktopIndex::from_apps(vec![first, alias, wrong_path]);
+        let package = crate::domain::package::InstalledPackage::new(
+            PackageSource::JetBrainsToolbox,
+            root.to_string_lossy().to_string(),
+        );
+
+        assert_eq!(
+            index
+                .lookup_package(&package)
+                .map(|launcher| launcher.id.as_str()),
+            Some("pycharm")
+        );
+        let unmanaged = index.unmanaged_apps_in(&[package], &user_apps);
+        assert_eq!(unmanaged.len(), 1);
+        assert_eq!(unmanaged[0].display_name.as_deref(), Some("PyCharm"));
+        assert_eq!(
+            unmanaged[0].package_id,
+            user_apps.join("unrelated.desktop").display().to_string()
+        );
     }
 }

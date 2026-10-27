@@ -371,6 +371,24 @@ impl ScopeApp {
         self.open_op(kind, pkg, cx);
     }
 
+    pub(super) fn open_jetbrains_toolbox(&mut self, cx: &mut Context<Self>) {
+        let (tx, rx) = oneshot::channel::<Result<(), String>>();
+        backend::spawn_open_jetbrains_toolbox(tx);
+        cx.spawn(async move |this, cx| {
+            let result = rx.await;
+            this.update(cx, |this, cx| {
+                if let Err(message) = result.unwrap_or_else(|_| {
+                    Err("Could not open JetBrains Toolbox. Please try again.".to_string())
+                }) {
+                    this.error = Some(message);
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
     pub(super) fn set_remove_app_data(&mut self, checked: bool, cx: &mut Context<Self>) {
         if let Some(Dialog::Confirm {
             remove_app_data, ..

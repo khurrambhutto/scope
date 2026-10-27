@@ -27,6 +27,10 @@ impl ScanNotices {
             ("Snap", availability.snap_error.as_deref()),
             ("Flatpak", availability.flatpak_error.as_deref()),
             ("Steam", availability.steam_error.as_deref()),
+            (
+                "JetBrains Toolbox",
+                availability.jetbrains_toolbox_error.as_deref(),
+            ),
             ("uv", availability.uv_error.as_deref()),
             ("pipx", availability.pipx_error.as_deref()),
             ("Cargo", availability.cargo_error.as_deref()),
@@ -54,6 +58,7 @@ mod tests {
             snap_error: Some("snap failed".into()),
             flatpak_error: Some("flatpak failed".into()),
             steam_error: Some("steam failed".into()),
+            jetbrains_toolbox_error: Some("toolbox failed".into()),
             uv_error: Some("uv failed".into()),
             pipx_error: Some("pipx failed".into()),
             cargo_error: Some("cargo failed".into()),
@@ -63,11 +68,11 @@ mod tests {
         };
         let mut notices = ScanNotices::default();
         let warnings = notices.visible(&availability);
-        assert_eq!(warnings.len(), 9);
+        assert_eq!(warnings.len(), 10);
         for (index, (source, message)) in warnings.into_iter().enumerate() {
             notices.dismiss(source, message.to_string());
             let remaining = notices.visible(&availability);
-            assert_eq!(remaining.len(), 8 - index);
+            assert_eq!(remaining.len(), 9 - index);
             assert!(!remaining.iter().any(|(label, _)| *label == source));
         }
         assert_eq!(availability.snap_error.as_deref(), Some("snap failed"));
@@ -81,7 +86,7 @@ mod tests {
         };
         let mut notices = ScanNotices::default();
         notices.dismiss("Snap", "Store timed out".into());
-        assert!(notices.visible(&availability.clone()).is_empty());
+        assert!(notices.visible(&availability).is_empty());
     }
 
     #[test]

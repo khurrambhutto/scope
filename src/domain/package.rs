@@ -21,6 +21,9 @@ pub enum PackageSource {
     AppImage,
     /// A locally discovered Steam application. Steam content is read-only in Scope.
     Steam,
+    /// An IDE installed by JetBrains Toolbox. Toolbox manages its lifecycle.
+    #[serde(rename = "jetbrains-toolbox")]
+    JetBrainsToolbox,
     /// A user-visible desktop launcher not owned by a supported package manager.
     Desktop,
 }
@@ -39,6 +42,7 @@ impl PackageSource {
             PackageSource::Flatpak => "flatpak",
             PackageSource::AppImage => "appimage",
             PackageSource::Steam => "steam",
+            PackageSource::JetBrainsToolbox => "jetbrains-toolbox",
             PackageSource::Desktop => "desktop",
         }
     }
@@ -102,8 +106,8 @@ pub struct InstalledPackage {
     /// Package manager or local desktop-launcher source.
     pub source: PackageSource,
     /// Package id as the package manager knows it (dpkg name, snap name,
-    /// Flatpak application id, AppImage absolute path, Steam AppID, or
-    /// desktop-entry path.
+    /// Flatpak application id, AppImage absolute path, Steam AppID, canonical
+    /// JetBrains Toolbox installation root, or desktop-entry path.
     pub package_id: String,
     /// Install scope for package managers that can install the same id in more
     /// than one place, such as Flatpak user/system installations.
@@ -363,6 +367,19 @@ mod tests {
         assert_eq!(
             InstalledPackage::new(PackageSource::Apt, "42").steam_library_url(),
             None
+        );
+    }
+
+    #[test]
+    fn jetbrains_toolbox_source_uses_its_stable_protocol_id() {
+        assert_eq!(PackageSource::JetBrainsToolbox.id(), "jetbrains-toolbox");
+        assert_eq!(
+            serde_json::to_string(&PackageSource::JetBrainsToolbox).unwrap(),
+            "\"jetbrains-toolbox\""
+        );
+        assert_eq!(
+            serde_json::from_str::<PackageSource>("\"jetbrains-toolbox\"").unwrap(),
+            PackageSource::JetBrainsToolbox
         );
     }
 }

@@ -16,6 +16,9 @@ use super::{
 const UPDATE_TIMEOUT: Duration = Duration::from_secs(300);
 
 pub async fn preview(pkg: &InstalledPackage) -> Result<OperationPlan> {
+    if pkg.source == PackageSource::JetBrainsToolbox {
+        anyhow::bail!("JetBrains Toolbox manages IDE updates and uninstall.")
+    }
     if !matches!(pkg.source, PackageSource::Steam | PackageSource::AppImage)
         && (pkg.version.trim().is_empty() || pkg.version.eq_ignore_ascii_case("unknown"))
     {
@@ -157,6 +160,9 @@ fn build_steps(
         OperationTarget::Steam { .. } => {
             blocked("Steam items are read-only in Scope. Manage updates in Steam.")
         }
+        OperationTarget::JetBrainsToolbox { .. } => {
+            blocked("JetBrains Toolbox manages IDE updates and uninstall.")
+        }
     }
 }
 
@@ -171,6 +177,9 @@ fn blocked(message: &str) -> (AuthMethod, Vec<PlanStep>) {
 }
 
 pub fn revalidate(plan: &OperationPlan, probed: &super::probe::ProbedPackage) -> Result<()> {
+    if matches!(plan.target, OperationTarget::JetBrainsToolbox { .. }) {
+        anyhow::bail!("JetBrains Toolbox manages IDE updates and uninstall.")
+    }
     if !probed.present {
         anyhow::bail!(
             "This update plan is stale: '{}' is no longer installed.",
@@ -279,6 +288,12 @@ pub async fn apply(
         OperationTarget::Steam { .. } => OperationResult {
             success: false,
             message: "Steam items are read-only in Scope. Manage updates in Steam.".into(),
+            logs: String::new(),
+            exit_code: None,
+        },
+        OperationTarget::JetBrainsToolbox { .. } => OperationResult {
+            success: false,
+            message: "JetBrains Toolbox manages IDE updates and uninstall.".into(),
             logs: String::new(),
             exit_code: None,
         },
@@ -432,6 +447,18 @@ mod tests {
     }
 
     #[test]
+    fn appimage_preview_allows_unknown_version() {
+        let mut package = InstalledPackage::new(PackageSource::AppImage, "/tmp/tool.AppImage");
+        package.name = "Tool".into();
+        package.version = "unknown".into();
+
+        let plan = futures::executor::block_on(preview(&package)).unwrap();
+
+        assert_eq!(plan.current_version, "unknown");
+        assert!(matches!(plan.target, OperationTarget::AppImage { .. }));
+    }
+
+    #[test]
     fn steam_preview_is_protected() {
         let package = InstalledPackage::new(PackageSource::Steam, "570");
         let plan = futures::executor::block_on(preview(&package)).unwrap();
@@ -448,6 +475,30 @@ mod tests {
         };
 
         assert!(revalidate(&plan, &present(Some("1"), Some(true))).is_err());
+        let result = futures::executor::block_on(apply(&plan, &|_| {}));
+        assert!(!result.success);
+    }
+    #[test]
+    fn toolbox_preview_rejects_even_when_has_update_is_forged() {
+        let mut package = InstalledPackage::new(
+            PackageSource::JetBrainsToolbox,
+            "/home/user/.local/share/JetBrains/Toolbox/apps/pycharm",
+        );
+        package.version = "2026.2 (build)".into();
+        package.has_update = true;
+        package.update_version = Some("forged".into());
+
+        assert!(futures::executor::block_on(preview(&package)).is_err());
+    }
+
+    #[test]
+    fn toolbox_forged_target_revalidation_and_apply_fail_closed() {
+        let mut plan = plan("2026.2 (build)");
+        plan.target = OperationTarget::JetBrainsToolbox {
+            installation_root: "/home/user/.local/share/JetBrains/Toolbox/apps/pycharm".into(),
+        };
+
+        assert!(revalidate(&plan, &present(Some("2026.2 (build)"), Some(true))).is_err());
         let result = futures::executor::block_on(apply(&plan, &|_| {}));
         assert!(!result.success);
     }

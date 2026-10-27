@@ -97,6 +97,18 @@ pub async fn inspect_progressive(
             discovery.unknown("User data", "Steam manages game data and saves");
             Ok(discovery)
         }
+        PackageSource::JetBrainsToolbox => {
+            let mut discovery = targets::Discovery::default();
+            discovery.unknown(
+                "IDE files",
+                "JetBrains Toolbox manages the IDE installation",
+            );
+            discovery.unknown(
+                "User data",
+                "IDE settings and projects are not inspected by Scope",
+            );
+            Ok(discovery)
+        }
         PackageSource::Snap => unreachable!("Snap inspection dispatched above"),
     };
     let discovery = match discovery {
@@ -143,6 +155,20 @@ mod tests {
         let pkg = InstalledPackage::new(PackageSource::Steam, "570");
         let details = inspect_progressive(pkg, Arc::new(AtomicBool::new(false)), |_| {}).await;
         assert_eq!(details.items.len(), 2);
+        assert!(details
+            .items
+            .iter()
+            .all(|item| item.effect == DetailEffect::Informational && item.size.bytes.is_none()));
+        assert_eq!(details.removal_size().bytes, None);
+    }
+
+    #[tokio::test]
+    async fn toolbox_details_are_informational_and_do_not_claim_removal() {
+        let pkg = InstalledPackage::new(PackageSource::JetBrainsToolbox, "/toolbox/apps/pycharm");
+        let details = inspect_progressive(pkg, Arc::new(AtomicBool::new(false)), |_| {}).await;
+        assert_eq!(details.items.len(), 2);
+        assert_eq!(details.items[0].label, "IDE files");
+        assert_eq!(details.items[1].label, "User data");
         assert!(details
             .items
             .iter()

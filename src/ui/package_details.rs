@@ -308,6 +308,7 @@ fn loading_labels(source: PackageSource) -> &'static [&'static str] {
         PackageSource::AppImage => &["AppImage", "User data"],
         PackageSource::Desktop => &["Launcher", "Executable", "User data"],
         PackageSource::Steam => &["Game files", "User data"],
+        PackageSource::JetBrainsToolbox => &["IDE files", "User data"],
     }
 }
 

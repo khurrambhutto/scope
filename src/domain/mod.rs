@@ -8,6 +8,7 @@ pub mod appimage;
 pub mod desktop_entries;
 pub mod icons;
 pub mod install_metadata;
+pub mod jetbrains_toolbox;
 pub mod listing;
 pub mod operations;
 pub mod package;

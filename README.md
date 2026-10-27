@@ -54,8 +54,11 @@ To install a downloaded `.deb` or AppImage, choose **Open With → Scope** and r
 | AppImage in `~/AppImages` (installed by Scope or Gear Lever) | Yes | Yes, when the AppImage publishes update information |
 | Other AppImages, unmanaged desktop launchers | Discovery only | Discovery only |
 | Steam games | Read-only | Open in Steam |
+| JetBrains Toolbox IDEs | Read-only | Open Toolbox |
 
 Tool management supports verified installations in your home directory. Update availability depends on the package source and installation method. AppImage integration requires `squashfs-tools`; most AppImages also need `libfuse2t64` to run.
+
+JetBrains Toolbox IDEs are discovered read-only from local Toolbox metadata. **Open Toolbox** starts the installed Toolbox launcher only when selected; IDE updates, uninstalls, and footprint measurement are unavailable in Scope.
 
 ## Build from source
 

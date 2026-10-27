@@ -129,7 +129,9 @@ pub(super) fn loading_state() -> impl IntoElement {
         .py(px(48.))
         .text_color(text_faint())
         .text_size(px(14.))
-        .child("Scanning installed apps across APT, Snap, Flatpak, AppImage, and Steam…")
+        .child(
+            "Scanning installed apps across APT, Snap, Flatpak, AppImage, Steam, and JetBrains Toolbox…",
+        )
 }
 
 pub(super) enum BannerKind {

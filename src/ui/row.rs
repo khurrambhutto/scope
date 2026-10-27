@@ -58,6 +58,8 @@ pub(super) fn row_element(
     let action: Option<AnyElement> = if pkg.source == PackageSource::Steam {
         pkg.steam_library_url()
             .map(|url| steam_action_button(url, selected))
+    } else if pkg.source == PackageSource::JetBrainsToolbox {
+        Some(jetbrains_toolbox_action_button(entity, selected))
     } else if view_mode == ViewMode::Updates && pkg.has_update {
         Some(action_button(
             entity,
@@ -99,7 +101,10 @@ pub(super) fn row_element(
         .when(has_action, |this| {
             this.pr(px(if show_removal_size {
                 330.
-            } else if pkg.source == PackageSource::Steam {
+            } else if matches!(
+                pkg.source,
+                PackageSource::Steam | PackageSource::JetBrainsToolbox
+            ) {
                 170.
             } else {
                 132.
@@ -246,6 +251,25 @@ fn steam_action_button(url: String, selected: bool) -> AnyElement {
     )
     .tooltip("Manage updates in Steam")
     .accessibility_label("Open this item in Steam")
+    .tab_stop(selected)
+    .into_any_element()
+}
+
+fn jetbrains_toolbox_action_button(entity: &WeakEntity<ScopeApp>, selected: bool) -> AnyElement {
+    let entity = entity.clone();
+    button(
+        "action-open-jetbrains-toolbox",
+        "Open Toolbox",
+        ButtonStyle::Neutral,
+        move |_ev, _window, cx| {
+            cx.stop_propagation();
+            entity
+                .update(cx, |this, cx| this.open_jetbrains_toolbox(cx))
+                .ok();
+        },
+    )
+    .tooltip("Open JetBrains Toolbox")
+    .accessibility_label("Open JetBrains Toolbox")
     .tab_stop(selected)
     .into_any_element()
 }

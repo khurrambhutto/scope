@@ -59,6 +59,11 @@ pub enum OperationTarget {
     Steam {
         app_id: String,
     },
+    /// JetBrains Toolbox manages IDE updates and uninstall outside Scope.
+    #[serde(rename = "jetbrains-toolbox")]
+    JetBrainsToolbox {
+        installation_root: PathBuf,
+    },
 }
 
 impl OperationTarget {
@@ -102,6 +107,9 @@ impl OperationTarget {
             PackageSource::Steam => Ok(Self::Steam {
                 app_id: package.package_id.clone(),
             }),
+            PackageSource::JetBrainsToolbox => {
+                anyhow::bail!("JetBrains Toolbox manages IDE updates and uninstall.")
+            }
         }
     }
 
@@ -114,6 +122,7 @@ impl OperationTarget {
             Self::AppImage { .. } | Self::AppImageInstall { .. } => PackageSource::AppImage,
             Self::Desktop { .. } => PackageSource::Desktop,
             Self::Steam { .. } => PackageSource::Steam,
+            Self::JetBrainsToolbox { .. } => PackageSource::JetBrainsToolbox,
         }
     }
 
@@ -127,6 +136,9 @@ impl OperationTarget {
             Self::AppImage { path, .. } => path.to_str().unwrap_or(""),
             Self::AppImageInstall { plan } => plan.source.to_str().unwrap_or(""),
             Self::Desktop { desktop_file } => desktop_file.to_str().unwrap_or(""),
+            Self::JetBrainsToolbox { installation_root } => {
+                installation_root.to_str().unwrap_or("")
+            }
         }
     }
 
@@ -422,5 +434,15 @@ mod tests {
 
         assert_eq!(target.source(), PackageSource::Steam);
         assert_eq!(target.id(), "570");
+    }
+
+    #[test]
+    fn toolbox_target_validation_rejects_a_forged_ide_package() {
+        let package = InstalledPackage::new(
+            PackageSource::JetBrainsToolbox,
+            "/home/user/.local/share/JetBrains/Toolbox/apps/pycharm",
+        );
+
+        assert!(OperationTarget::from_package(&package).is_err());
     }
 }

@@ -191,6 +191,10 @@ fn set_source_availability(availability: &mut ScanAvailability, outcome: &ScanOu
             availability.steam = outcome.available;
             availability.steam_error = outcome.error.clone();
         }
+        PackageSource::JetBrainsToolbox => {
+            availability.jetbrains_toolbox = outcome.available;
+            availability.jetbrains_toolbox_error = outcome.error.clone();
+        }
         PackageSource::Uv => {
             availability.uv = outcome.available;
             availability.uv_error = outcome.error.clone();
@@ -322,6 +326,10 @@ mod tests {
                     source: PackageSource::Snap,
                     available: false,
                 }),
+                Box::new(FailedSource {
+                    source: PackageSource::JetBrainsToolbox,
+                    available: true,
+                }),
             ],
             tokio::task::spawn_blocking(DesktopIndex::empty),
             |(packages, state)| {
@@ -330,6 +338,11 @@ mod tests {
                 assert_eq!(state.apt_error.as_deref(), Some("inventory unavailable"));
                 assert!(!state.snap);
                 assert!(state.snap_error.is_none());
+                assert!(state.jetbrains_toolbox);
+                assert_eq!(
+                    state.jetbrains_toolbox_error.as_deref(),
+                    Some("inventory unavailable")
+                );
             },
         )
         .await;
@@ -340,6 +353,11 @@ mod tests {
         );
         assert!(!final_state.snap);
         assert!(final_state.snap_error.is_none());
+        assert!(final_state.jetbrains_toolbox);
+        assert_eq!(
+            final_state.jetbrains_toolbox_error.as_deref(),
+            Some("inventory unavailable")
+        );
     }
 
     struct PanickingUpdates {
