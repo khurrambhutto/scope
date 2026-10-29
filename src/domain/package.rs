@@ -113,6 +113,9 @@ pub struct InstalledPackage {
     /// than one place, such as Flatpak user/system installations.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub install_scope: Option<InstallScope>,
+    /// Whether APT installed this package automatically.
+    #[serde(default)]
+    pub apt_automatic: bool,
     /// Verified manager context; never reconstructed from a display name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_installation: Option<Box<crate::domain::tool_managers::ToolInstallation>>,
@@ -177,6 +180,7 @@ impl InstalledPackage {
             source,
             package_id,
             install_scope: None,
+            apt_automatic: false,
             tool_installation: None,
             appimage_installation: None,
             update_note: None,
@@ -208,6 +212,7 @@ impl InstalledPackage {
             source,
             package_id,
             install_scope: Some(scope),
+            apt_automatic: false,
             tool_installation: None,
             appimage_installation: None,
             update_note: None,
@@ -249,6 +254,15 @@ impl InstalledPackage {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cached_packages_without_automatic_provenance_default_to_manual() {
+        let pkg = InstalledPackage::new(PackageSource::Apt, "example");
+        let mut cached = serde_json::to_value(pkg).unwrap();
+        cached.as_object_mut().unwrap().remove("apt_automatic");
+        let restored: InstalledPackage = serde_json::from_value(cached).unwrap();
+        assert!(!restored.apt_automatic);
+    }
 
     #[test]
     fn cached_packages_without_display_version_keep_the_package_version() {

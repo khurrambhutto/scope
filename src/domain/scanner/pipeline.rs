@@ -17,10 +17,15 @@ pub(super) async fn scan_sources(
     desktop: tokio::task::JoinHandle<DesktopIndex>,
     on_inventory: impl FnOnce((Vec<InstalledPackage>, ScanAvailability)),
 ) -> (Vec<InstalledPackage>, ScanAvailability) {
+    let desktop =
+        async move { std::sync::Arc::new(desktop.await.unwrap_or_else(|_| DesktopIndex::empty())) }
+            .boxed()
+            .shared();
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     let mut join = JoinSet::new();
     for scanner in scanners {
         let tx = tx.clone();
+        let desktop = desktop.clone();
         join.spawn(async move {
             let source = scanner.source();
             let available = scanner.is_available().await;
@@ -30,10 +35,20 @@ pub(super) async fn scan_sources(
                 Ok(ScanReport::default())
             };
             let succeeded = result.is_ok() && available;
-            let report = result.unwrap_or_else(|error| ScanReport {
+            let mut report = result.unwrap_or_else(|error| ScanReport {
                 packages: Vec::new(),
                 warning: Some(scan_error_message(&error)),
             });
+            if succeeded {
+                let desktop = desktop.await;
+                if let Err(error) = scanner.scan_desktop_apps(&mut report, &desktop).await {
+                    let message = format!("Desktop app discovery failed: {error}");
+                    report.warning = Some(match report.warning.take() {
+                        Some(warning) => format!("{warning}; {message}"),
+                        None => message,
+                    });
+                }
+            }
             let inventory = ScanOutcome {
                 source,
                 available,
@@ -87,7 +102,7 @@ pub(super) async fn scan_sources(
     while let Some(inventory) = rx.recv().await {
         inventories.push(inventory);
     }
-    let desktop = std::sync::Arc::new(desktop.await.unwrap_or_else(|_| DesktopIndex::empty()));
+    let desktop = desktop.await;
     let (mut packages, mut availability) = merge(inventories, desktop).await;
     for package in &mut packages {
         if matches!(
@@ -227,6 +242,63 @@ mod tests {
     use super::*;
     use std::sync::Arc;
     use tokio::sync::{oneshot, Notify};
+
+    struct DesktopInventory;
+    impl Scanner for DesktopInventory {
+        fn source(&self) -> PackageSource {
+            PackageSource::Apt
+        }
+        fn is_available(&self) -> Pin<Box<dyn Future<Output = bool> + Send + '_>> {
+            Box::pin(async { true })
+        }
+        fn scan(&self) -> Pin<Box<dyn Future<Output = Result<ScanReport>> + Send + '_>> {
+            Box::pin(async { Ok(ScanReport::default()) })
+        }
+        fn scan_desktop_apps<'a>(
+            &'a self,
+            report: &'a mut ScanReport,
+            _: &'a DesktopIndex,
+        ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> {
+            Box::pin(async move {
+                let mut package = InstalledPackage::new(PackageSource::Apt, "desktop-fixture");
+                package.apt_automatic = true;
+                package.app_kind = AppKind::Gui;
+                report.packages.push(package);
+                anyhow::bail!("partial ownership failure")
+            })
+        }
+        fn check_updates<'a>(
+            &'a self,
+            report: &'a mut ScanReport,
+        ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+            Box::pin(async move {
+                report.packages[0].has_update = true;
+                report.packages[0].update_version = Some("2".into());
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn desktop_inventory_is_published_and_updated_even_after_partial_discovery_failure() {
+        let (packages, availability) = scan_sources(
+            vec![Box::new(DesktopInventory)],
+            tokio::task::spawn_blocking(DesktopIndex::empty),
+            |(packages, availability)| {
+                assert!(packages[0].apt_automatic);
+                assert!(!packages[0].has_update);
+                assert!(availability
+                    .apt_error
+                    .unwrap()
+                    .contains("partial ownership failure"));
+            },
+        )
+        .await;
+        assert!(packages[0].has_update);
+        assert!(availability
+            .apt_error
+            .unwrap()
+            .contains("partial ownership failure"));
+    }
 
     struct GatedUpdates(Arc<Notify>);
 

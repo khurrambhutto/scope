@@ -99,6 +99,8 @@ fn check_apt(name: &str) -> Protection {
     // Core system packages whose removal would break the OS or the GUI session.
     const CRITICAL: &[&str] = &[
         "ubuntu-desktop",
+        "ubuntu-desktop-minimal",
+        "ubuntu-session",
         "ubuntu-standard",
         "ubuntu-minimal",
         "ubuntu-release-upgrader-core",

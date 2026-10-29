@@ -22,146 +22,206 @@
 
 use std::collections::{HashMap, HashSet};
 use std::env;
+use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock};
 
-/// Size directories searched, largest-useful first. `scalable` covers SVGs.
+/// Prefer scalable artwork, then raster sizes suitable for list and dialog icons.
 const ICON_SIZES: &[&str] = &[
-    "512x512", "256x256", "128x128", "64x64", "48x48", "32x32", "24x24", "22x22", "16x16",
-    "scalable",
+    "scalable", "128x128", "64x64", "48x48", "32x32", "24x24", "22x22", "16x16", "256x256",
+    "512x512",
 ];
 
 /// File extensions tried, in priority order. SVG renders crisply at any size.
 const ICON_EXTENSIONS: &[&str] = &["svg", "png", "xpm"];
 
-static RESOLVED_CACHE: OnceLock<Mutex<HashMap<String, Option<PathBuf>>>> = OnceLock::new();
-static THEME_NAME: OnceLock<Option<String>> = OnceLock::new();
-static BASE_DIRS: OnceLock<Vec<PathBuf>> = OnceLock::new();
-static THEME_PARENTS: OnceLock<Mutex<HashMap<PathBuf, Vec<String>>>> = OnceLock::new();
-
-fn cache() -> &'static Mutex<HashMap<String, Option<PathBuf>>> {
-    RESOLVED_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+/// Icon lookup state for one inventory scan.
+pub struct IconResolver {
+    roots: Vec<PathBuf>,
+    theme: Option<String>,
+    detect_theme: bool,
+    resolved: HashMap<String, Option<PathBuf>>,
+    private: HashMap<(String, PathBuf), Option<PathBuf>>,
+    themes: HashMap<PathBuf, (Vec<PathBuf>, Vec<String>)>,
+    directory_entries: HashMap<PathBuf, Option<HashSet<OsString>>>,
 }
 
-/// Lock the icon cache, recovering from poisoning instead of panicking.
-///
-/// Icon resolution is best-effort enrichment: a panic elsewhere while the lock
-/// was held must not turn every later lookup into a panic and take down the
-/// whole scan.
-fn lock_cache() -> std::sync::MutexGuard<'static, HashMap<String, Option<PathBuf>>> {
-    cache()
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+impl Default for IconResolver {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
-fn theme_name() -> &'static Option<String> {
-    THEME_NAME.get_or_init(detect_icon_theme)
-}
-
-fn base_dirs() -> &'static Vec<PathBuf> {
-    BASE_DIRS.get_or_init(collect_base_dirs)
-}
-
-fn theme_parents(theme_root: &Path) -> Vec<String> {
-    let cache = THEME_PARENTS.get_or_init(|| Mutex::new(HashMap::new()));
-    let mut cache = cache
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    cache
-        .entry(theme_root.to_path_buf())
-        .or_insert_with(|| parse_theme_parents(&theme_root.join("index.theme")))
-        .clone()
-}
-
-/// Resolve an `Icon=` value to an absolute file path, or `None` if not found.
-///
-/// Results are memoized in a process-global cache; repeated lookups for the
-/// same icon name are O(1).
-pub fn resolve(icon_value: &str) -> Option<PathBuf> {
-    if icon_value.is_empty() {
-        return None;
+impl IconResolver {
+    pub fn new() -> Self {
+        let mut resolver = Self::with_config(collect_base_dirs(), None);
+        resolver.detect_theme = true;
+        resolver
     }
 
-    if let Some(cached) = lock_cache().get(icon_value) {
-        return cached.clone();
+    fn with_config(mut roots: Vec<PathBuf>, theme: Option<String>) -> Self {
+        let mut seen = HashSet::new();
+        roots.retain(|root| seen.insert(root.clone()));
+        Self {
+            roots,
+            theme,
+            detect_theme: false,
+            resolved: HashMap::new(),
+            private: HashMap::new(),
+            themes: HashMap::new(),
+            directory_entries: HashMap::new(),
+        }
     }
 
-    let result = resolve_uncached(icon_value);
-    lock_cache().insert(icon_value.to_string(), result.clone());
-    result
-}
-
-/// Resolve an app icon using the global theme first, then the executable's
-/// private installation prefix (common for user-local tarball installs).
-pub fn resolve_for_app(icon_value: &str, executable: Option<&Path>) -> Option<PathBuf> {
-    if let Some(icon) = resolve(icon_value) {
-        return Some(icon);
-    }
-    let executable = executable?;
-    let executable = fs::canonicalize(executable).unwrap_or_else(|_| executable.to_path_buf());
-
-    for prefix in executable.ancestors().take(8) {
-        let icons_root = prefix.join("share/icons");
-        if icons_root.is_dir() {
-            let mut themes = Vec::new();
-            if let Some(theme) = theme_name() {
-                themes.push(theme.as_str());
+    pub fn resolve(&mut self, icon: &str) -> Option<PathBuf> {
+        if icon.is_empty() {
+            return None;
+        }
+        if let Some(result) = self.resolved.get(icon) {
+            return result.clone();
+        }
+        let result = if Path::new(icon).is_absolute() {
+            resolve_absolute_icon(Path::new(icon))
+        } else {
+            if self.detect_theme {
+                self.theme = detect_icon_theme(&self.roots);
+                self.detect_theme = false;
             }
-            themes.push("hicolor");
-            for theme in themes {
-                let theme_root = icons_root.join(theme);
-                if theme_root.is_dir() {
-                    if let Some(icon) = lookup_in_theme(
-                        &theme_root,
-                        icon_value,
-                        std::slice::from_ref(&icons_root),
-                        &mut HashSet::new(),
-                    ) {
-                        return Some(icon);
-                    }
+            let roots = self.roots.clone();
+            self.search_roots(icon, &roots)
+                .or_else(|| lookup_in_pixmaps(icon))
+        };
+        self.resolved.insert(icon.to_owned(), result.clone());
+        result
+    }
+
+    pub fn resolve_for_app(&mut self, icon: &str, executable: Option<&Path>) -> Option<PathBuf> {
+        if let Some(found) = self.resolve(icon) {
+            return Some(found);
+        }
+        let executable = executable?;
+        let key = (icon.to_owned(), executable.to_path_buf());
+        if let Some(result) = self.private.get(&key) {
+            return result.clone();
+        }
+        let executable = fs::canonicalize(executable).unwrap_or_else(|_| executable.to_path_buf());
+        let mut result = None;
+        for prefix in executable.ancestors().take(8) {
+            let roots = [prefix.join("share/icons")];
+            result = self
+                .search_roots(icon, &roots)
+                .or_else(|| lookup_in_pixmaps_at(icon, &prefix.join("share/pixmaps")));
+            if result.is_some() {
+                break;
+            }
+        }
+        self.private.insert(key, result.clone());
+        result
+    }
+
+    fn search_roots(&mut self, icon: &str, roots: &[PathBuf]) -> Option<PathBuf> {
+        let mut names = Vec::new();
+        if let Some(theme) = &self.theme {
+            names.push(theme.clone());
+        }
+        if !names.iter().any(|name| name == "hicolor") {
+            names.push("hicolor".into());
+        }
+        for name in names {
+            for root in roots {
+                if let Some(found) =
+                    self.lookup(&root.join(&name), icon, roots, &mut HashSet::new())
+                {
+                    return Some(found);
                 }
             }
         }
-
-        if let Some(icon) = lookup_in_pixmaps_at(icon_value, &prefix.join("share/pixmaps")) {
-            return Some(icon);
-        }
+        None
     }
-    None
+
+    fn lookup(
+        &mut self,
+        root: &Path,
+        icon: &str,
+        roots: &[PathBuf],
+        visited: &mut HashSet<PathBuf>,
+    ) -> Option<PathBuf> {
+        if !visited.insert(root.to_path_buf()) {
+            return None;
+        }
+        let (dirs, parents) = self
+            .themes
+            .entry(root.to_path_buf())
+            .or_insert_with(|| {
+                if !root.is_dir() {
+                    return (Vec::new(), Vec::new());
+                }
+                let mut dirs = Vec::new();
+                for size in ICON_SIZES {
+                    for context in ["apps", ""] {
+                        let dir = root.join(size).join(context);
+                        if dir.is_dir() {
+                            dirs.push(dir);
+                        }
+                    }
+                }
+                let content = fs::read_to_string(root.join("index.theme")).unwrap_or_default();
+                let (declared, parents) = theme_metadata(&content);
+                for name in declared {
+                    let path = Path::new(&name);
+                    if path
+                        .components()
+                        .all(|part| matches!(part, std::path::Component::Normal(_)))
+                    {
+                        let dir = root.join(path);
+                        if !dirs.contains(&dir) && dir.is_dir() {
+                            dirs.push(dir);
+                        }
+                    }
+                }
+                (dirs, parents)
+            })
+            .clone();
+        for dir in dirs {
+            let names = self
+                .directory_entries
+                .entry(dir.clone())
+                .or_insert_with(|| directory_names(&dir));
+            for ext in ICON_EXTENSIONS {
+                let filename = format!("{icon}.{ext}");
+                if names
+                    .as_ref()
+                    .is_some_and(|names| !names.contains(std::ffi::OsStr::new(&filename)))
+                {
+                    continue;
+                }
+                let path = dir.join(filename);
+                if path.is_file() {
+                    return Some(path);
+                }
+            }
+        }
+        for parent in parents {
+            for base in roots {
+                if let Some(found) = self.lookup(&base.join(&parent), icon, roots, visited) {
+                    return Some(found);
+                }
+            }
+        }
+        None
+    }
 }
 
-fn resolve_uncached(icon_value: &str) -> Option<PathBuf> {
-    let path = Path::new(icon_value);
-    if path.is_absolute() {
-        return resolve_absolute_icon(path);
-    }
-
-    // Search the active theme first, then the universal `hicolor` fallback.
-    // Parent themes declared via `Inherits=` are walked recursively inside
-    // `lookup_in_theme`.
-    let mut themes = Vec::new();
-    if let Some(current) = theme_name() {
-        themes.push(current.as_str());
-    }
-    themes.push("hicolor");
-
-    let basedirs = base_dirs();
-    for theme in &themes {
-        for basedir in basedirs {
-            let theme_root = basedir.join(theme);
-            if !theme_root.is_dir() {
-                continue;
-            }
-            if let Some(found) =
-                lookup_in_theme(&theme_root, icon_value, basedirs, &mut HashSet::new())
-            {
-                return Some(found);
-            }
+// If a directory cannot be fully indexed, retain direct lookup as a fallback.
+fn directory_names(path: &Path) -> Option<HashSet<OsString>> {
+    let mut names = HashSet::new();
+    for (index, entry) in fs::read_dir(path).ok()?.enumerate() {
+        if index >= 25_000 {
+            return None;
         }
+        names.insert(entry.ok()?.file_name());
     }
-
-    lookup_in_pixmaps(icon_value)
+    Some(names)
 }
 
 /// Absolute `Icon=` values: use the file as-is, or try common extensions when
@@ -212,7 +272,7 @@ fn collect_base_dirs() -> Vec<PathBuf> {
 
 /// Detect the active GTK icon theme name. Best-effort: falls back to none
 /// (which leaves `hicolor` as the only searched theme).
-fn detect_icon_theme() -> Option<String> {
+fn detect_icon_theme(base_dirs: &[PathBuf]) -> Option<String> {
     if let Ok(output) = std::process::Command::new("gsettings")
         .args(["get", "org.gnome.desktop.interface", "icon-theme"])
         .output()
@@ -222,7 +282,7 @@ fn detect_icon_theme() -> Option<String> {
                 .trim()
                 .trim_matches('\'')
                 .to_string();
-            if !value.is_empty() && base_dirs().iter().any(|dir| dir.join(&value).is_dir()) {
+            if !value.is_empty() && base_dirs.iter().any(|dir| dir.join(&value).is_dir()) {
                 return Some(value);
             }
         }
@@ -245,90 +305,48 @@ fn detect_icon_theme() -> Option<String> {
     None
 }
 
-/// Search one theme directory for `icon_name`, then recurse into inherited
-/// parent themes. The visited set stops malformed inheritance cycles.
-fn lookup_in_theme(
-    theme_root: &Path,
-    icon_name: &str,
-    basedirs: &[PathBuf],
-    visited: &mut HashSet<PathBuf>,
-) -> Option<PathBuf> {
-    if !visited.insert(theme_root.to_path_buf()) {
-        return None;
-    }
-    let parents = theme_parents(theme_root);
-
-    // Prefer the `apps` subdirectory (where application icons live), then a
-    // bare size-directory match for themes that don't categorize by context.
-    for size in ICON_SIZES {
-        for context in ["apps", ""] {
-            let dir = if context.is_empty() {
-                theme_root.join(size)
-            } else {
-                theme_root.join(size).join(context)
-            };
-            if !dir.is_dir() {
-                continue;
-            }
-            for ext in ICON_EXTENSIONS {
-                let path = dir.join(format!("{icon_name}.{ext}"));
-                if path.is_file() {
-                    return Some(path);
+/// Application directories and inherited themes from one metadata read.
+fn theme_metadata(content: &str) -> (Vec<String>, Vec<String>) {
+    let mut section = "";
+    let mut declared = Vec::new();
+    let mut parents = Vec::new();
+    let mut contexts = HashMap::new();
+    for line in content.lines().map(str::trim) {
+        if let Some(name) = line
+            .strip_prefix('[')
+            .and_then(|name| name.strip_suffix(']'))
+        {
+            section = name;
+        } else if let Some((key, value)) = line.split_once('=') {
+            match (section, key.trim()) {
+                ("Icon Theme", "Directories" | "ScaledDirectories") => {
+                    declared.extend(value.split(',').map(str::trim))
                 }
-            }
-        }
-    }
-
-    for parent_name in &parents {
-        for basedir in basedirs {
-            let parent_root = basedir.join(parent_name);
-            if parent_root.is_dir() && parent_root != theme_root {
-                if let Some(found) = lookup_in_theme(&parent_root, icon_name, basedirs, visited) {
-                    return Some(found);
+                ("Icon Theme", "Inherits") => parents.extend(
+                    value
+                        .split(',')
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty())
+                        .map(str::to_string),
+                ),
+                (_, "Context") => {
+                    contexts.insert(section, value.trim());
                 }
+                _ => {}
             }
         }
     }
-
-    None
-}
-
-/// Parse the `Inherits=` line from a theme's `index.theme` `[Icon Theme]` table.
-fn parse_theme_parents(index_theme_path: &Path) -> Vec<String> {
-    let Ok(content) = fs::read_to_string(index_theme_path) else {
-        return Vec::new();
-    };
-
-    let mut in_icon_theme = false;
-    for line in content.lines() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        if line.eq_ignore_ascii_case("[Icon Theme]") {
-            in_icon_theme = true;
-            continue;
-        }
-        if line.starts_with('[') && line.ends_with(']') {
-            // A new section ends the [Icon Theme] table.
-            if in_icon_theme {
-                break;
-            }
-            continue;
-        }
-        if !in_icon_theme {
-            continue;
-        }
-        if let Some(value) = line.strip_prefix("Inherits=") {
-            return value
-                .split(',')
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty())
-                .collect();
-        }
-    }
-
-    Vec::new()
+    let declared = declared
+        .into_iter()
+        .filter(|name| {
+            !name.is_empty()
+                && contexts
+                    .get(name)
+                    .is_none_or(|context| *context == "Applications")
+        })
+        .map(str::to_string)
+        .collect();
+    (declared, parents)
 }
 
 /// Last-resort fallback: legacy `/usr/share/pixmaps/<name>.<ext>` icons.
@@ -413,12 +431,14 @@ mod tests {
 
     #[test]
     fn empty_input_resolves_to_none() {
-        assert!(resolve("").is_none());
+        assert!(IconResolver::new().resolve("").is_none());
     }
 
     #[test]
     fn absolute_missing_path_is_none() {
-        assert!(resolve("/this/does/not/exist/anywhere.png").is_none());
+        assert!(IconResolver::new()
+            .resolve("/this/does/not/exist/anywhere.png")
+            .is_none());
     }
 
     #[test]
@@ -434,9 +454,70 @@ mod tests {
         fs::write(&executable, "test executable").unwrap();
         fs::write(&icon, "<svg/>").unwrap();
 
-        assert_eq!(resolve_for_app(&name, Some(&executable)), Some(icon));
+        assert_eq!(
+            IconResolver::new().resolve_for_app(&name, Some(&executable)),
+            Some(icon)
+        );
 
         let _ = fs::remove_dir_all(prefix);
+    }
+
+    #[test]
+    fn fresh_resolvers_observe_icon_and_inheritance_changes() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let active = root.join("active");
+        let parent = root.join("parent");
+        let dir = parent.join("custom/apps");
+        fs::create_dir_all(&active).unwrap();
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            active.join("index.theme"),
+            "[Icon Theme]\nInherits=parent\n",
+        )
+        .unwrap();
+        fs::write(
+            parent.join("index.theme"),
+            "[Icon Theme]\nDirectories=custom/apps\n",
+        )
+        .unwrap();
+        let config =
+            || IconResolver::with_config(vec![root.into(), root.into()], Some("active".into()));
+        let icon = dir.join("sample.png");
+        let mut old_scan = config();
+        assert_eq!(old_scan.resolve("sample"), None);
+        fs::write(&icon, "first").unwrap();
+        assert_eq!(old_scan.resolve("sample"), None);
+        assert_eq!(config().resolve("sample"), Some(icon.clone()));
+        fs::remove_file(&icon).unwrap();
+        let replacement = dir.join("sample.svg");
+        fs::write(&replacement, "second").unwrap();
+        assert_eq!(config().resolve("sample"), Some(replacement));
+        fs::write(active.join("index.theme"), "[Icon Theme]\nInherits=other\n").unwrap();
+        assert_eq!(config().resolve("sample"), None);
+    }
+
+    #[test]
+    fn theme_directories_keep_application_context_and_skip_unrelated_artwork() {
+        let (dirs, parents) = theme_metadata("[Icon Theme]\nDirectories=custom/apps,custom/status,legacy\nScaledDirectories=custom/hires\nInherits=parent,hicolor\n[custom/apps]\nContext=Applications\n[custom/status]\nContext=Status\n[custom/hires]\nContext=Applications\n");
+        assert_eq!(dirs, vec!["custom/apps", "legacy", "custom/hires"]);
+        assert_eq!(parents, vec!["parent", "hicolor"]);
+    }
+
+    #[test]
+    fn private_cache_distinguishes_executable_prefixes() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut resolver = IconResolver::with_config(vec![], None);
+        let first = temp.path().join("one/bin/app");
+        let second = temp.path().join("two/bin/app");
+        let icon = temp.path().join("two/share/pixmaps/private.png");
+        fs::create_dir_all(icon.parent().unwrap()).unwrap();
+        fs::write(&icon, "icon").unwrap();
+        assert_eq!(resolver.resolve_for_app("private", Some(&first)), None);
+        assert_eq!(
+            resolver.resolve_for_app("private", Some(&second)),
+            Some(icon)
+        );
     }
 
     #[test]
@@ -465,12 +546,10 @@ mod tests {
         fs::create_dir_all(&b).unwrap();
         fs::write(a.join("index.theme"), "[Icon Theme]\nInherits=b\n").unwrap();
         fs::write(b.join("index.theme"), "[Icon Theme]\nInherits=a\n").unwrap();
-        assert!(lookup_in_theme(
-            &a,
-            "missing",
-            &[root.path().to_path_buf()],
-            &mut HashSet::new()
-        )
-        .is_none());
+        assert!(
+            IconResolver::with_config(vec![root.path().to_path_buf()], Some("a".into()))
+                .resolve("missing")
+                .is_none()
+        );
     }
 }

@@ -129,6 +129,8 @@ mod tests {
     fn executable(root: &Path, name: &str) -> PathBuf {
         let path = root.join(name);
         fs::write(&path, "").unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).unwrap();
         path
     }
 

@@ -1,9 +1,8 @@
 //! APT/dpkg scanner.
 //!
-//! Strategy: use `apt-mark showmanual` as the candidate set, then fetch metadata
-//! for those names with one `dpkg-query` call. The main-list policy later keeps
-//! only recognizable apps and public CLI tools, not every manually marked
-//! package or the dependencies pulled in automatically.
+//! Read manual packages first, then add installed owners of the shared visible
+//! desktop catalog before checking updates. Automatic desktop apps retain their
+//! installation provenance; other dependencies stay outside this inventory.
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -32,6 +31,17 @@ impl Scanner for AptScanner {
 
     fn scan(&self) -> Pin<Box<dyn Future<Output = Result<ScanReport>> + Send + '_>> {
         Box::pin(async { scan().await.map(ScanReport::ok) })
+    }
+
+    fn scan_desktop_apps<'a>(
+        &'a self,
+        report: &'a mut ScanReport,
+        desktop: &'a crate::domain::desktop_entries::DesktopIndex,
+    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> {
+        Box::pin(async move {
+            let apps: Vec<_> = desktop.visible_apps().collect();
+            super::apt_desktop::extend(report, &apps).await
+        })
     }
 
     fn check_updates<'a>(
@@ -213,8 +223,10 @@ fn apply_update_result(report: &mut ScanReport, result: Result<String, SystemErr
         if let Some(caps) = re.captures(line) {
             let name = &caps[1];
             let candidate = &caps[3];
+            let architecture = line.split_whitespace().nth(2).unwrap_or("");
             if let Some(pkg) = indexes
-                .get(name)
+                .get(&format!("{name}:{architecture}"))
+                .or_else(|| indexes.get(name))
                 .and_then(|index| report.packages.get_mut(*index))
             {
                 pkg.has_update = true;
@@ -317,6 +329,25 @@ mod tests {
         assert_eq!(report.packages[0].update_note, None);
         assert!(!report.packages[0].has_update);
         assert_eq!(report.warning, None);
+    }
+
+    #[test]
+    fn automatic_desktop_apps_receive_native_update_candidates() {
+        let mut package = InstalledPackage::new(PackageSource::Apt, "gnome-calculator:amd64");
+        package.apt_automatic = true;
+        package.app_kind = AppKind::Gui;
+        package.version = "1.0".into();
+        let mut report = ScanReport::ok(vec![package]);
+        apply_update_result(
+            &mut report,
+            Ok("gnome-calculator/stable 2.0 amd64 [upgradable from: 1.0]\n".into()),
+        );
+        assert!(report.packages[0].has_update);
+        assert_eq!(report.packages[0].update_version.as_deref(), Some("2.0"));
+        assert!(report.packages[0].apt_automatic);
+        assert!(
+            crate::domain::operations::OperationTarget::from_package(&report.packages[0]).is_ok()
+        );
     }
 
     #[test]

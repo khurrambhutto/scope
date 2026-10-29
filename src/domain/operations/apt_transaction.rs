@@ -149,6 +149,15 @@ mod tests {
     }
 
     #[test]
+    fn desktop_app_removal_cannot_remove_the_ubuntu_session() {
+        for protected in ["ubuntu-session", "ubuntu-desktop-minimal"] {
+            let output = format!("Remv nautilus [1.0]\nRemv {protected} [1.0]\n");
+            let error = parse(&output, Operation::Uninstall, "nautilus").unwrap_err();
+            assert!(error.to_string().contains(protected));
+        }
+    }
+
+    #[test]
     fn install_rejects_indirect_protected_removals() {
         assert!(parse(
             "Inst demo (1.0 local-deb [all])\nRemv systemd [255]\n",

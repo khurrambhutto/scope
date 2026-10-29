@@ -107,9 +107,9 @@ docs/                     GitHub Pages site
 Scanner and list filters are deliberate product choices:
 
 - The default list shows user-relevant apps and tools, not OS internals; `Show all` is the explicit inventory override.
-- APT scans manual installs only (`apt-mark showmanual`), then the main list keeps recognizable GUI apps and public CLI tools from user-facing package sections. Libraries, development-library packages, metapackages, service-only packages, CLI-only admin/database components, and unclassified packages stay hidden.
-- The main list omits protected APT/Snap packages. Detected AppImages and user-local desktop apps remain visible; uninstall is enabled only for AppImages integrated into `~/AppImages` by Scope or Gear Lever. Safety checks still run independently at preview and apply time.
-- The filter bar's `Show all` toggle bypasses app/tool classification and reveals every row returned by package scanners plus discovered user-local desktop apps. It never bypasses `safety/`; protected rows have a disabled uninstall action. APT still scans manual packages only and Snap/Flatpak runtimes remain excluded at scan time.
+- APT includes manually installed packages (`apt-mark showmanual`) and installed packages that own visible app-menu launchers, including automatically installed desktop apps. Reuse the scan's desktop index and resolve exact launcher ownership through dpkg. Keep automatic-install provenance in cached rows and show one short dependency warning in their uninstall confirmation. Automatically installed GUI apps remain visible even when protected; protected actions stay blocked. Libraries, development-library packages, metapackages, service-only packages, CLI-only admin/database components, and unclassified packages stay hidden unless Show all is enabled.
+- The main list omits protected APT/Snap packages except automatically installed APT apps with visible GUI launchers. Detected AppImages and user-local desktop apps remain visible; uninstall is enabled only for AppImages integrated into `~/AppImages` by Scope or Gear Lever. Safety checks still run independently at preview and apply time.
+- The filter bar's `Show all` toggle bypasses app/tool classification and reveals every row returned by package scanners plus discovered user-local desktop apps. It never bypasses `safety/`; protected rows have a disabled uninstall action. APT includes manual packages and installed owners of visible desktop launchers; Snap/Flatpak runtimes remain excluded at scan time.
 - Snap hides runtimes and bases (`core*`, `snapd`, `bare`, `gtk-*`, `gnome-*`, `*-gtk3`). A matching visible `.desktop` entry classifies a snap as GUI/CLI according to its `Terminal` flag; a `/snap/bin/<snap-name>` command can classify it as CLI.
 - Flatpak scans user and system as separate installs. Keys are `flatpak:user:<id>` and `flatpak:system:<id>`, and the DTO's `install_scope` is the single source of truth for which scope every later command uses. Never re-guess scope at preview or apply time.
 - Missing Flatpak scope is an error at preview, probe, and apply. Never default it to system scope.
@@ -159,7 +159,7 @@ Commands that previews display and apply runs:
 
 Snap removal details use compact type/path/size rows grouped by removal effect inside the expanded app row and preview modal. Removed rows have no tick marks or "Ready to remove" heading. Inline details ease their measured height when opening and closing, including after lazy Snap inspection finishes, and respect reduced-motion settings. Other markers describe effects and are not file-selection controls. Snap details have no size-column header or empty heading row. Confirmation metadata and Snap details share label-column widths, row padding, and spacing, without per-row dividers. Omit the empty recovery-snapshot message and the generic backup and size footnotes; keep inspection warnings and incomplete-size notes. Snap removal details are informational. Load them lazily from the local snapd API, measure only managed data directories with bounded workers, and refresh them at uninstall preview. Show incomplete or unavailable sizes explicitly. Never sum them into guaranteed freed space, treat paths as deletion targets, or enable purge/snapshot deletion. Normal `snap remove` may create a recovery snapshot; existing snapshots remain.
 
-Icon contract: icons load only from `scope-icon://localhost/<path>` URLs produced by `icons::icon_url`, decoded by `backend::icon_path` into on-disk paths GPUI renders directly.
+Icon contract: icons load only from `scope-icon://localhost/<path>` URLs produced by `icons::icon_url`, decoded by `backend::icon_path` into on-disk paths GPUI renders directly. Icon resolution belongs to each scan's desktop index: cache theme metadata, positive and negative lookups, and app-private prefixes only for that scan. Deduplicate search roots while preserving precedence. A new scan must observe installed, removed, and changed icons and theme metadata. Desktop discovery respects locale fallback, executable permissions, hidden overrides, and bounded traversal; matching reuses scan-local ownership and executable indexes.
 
 ## Safety
 
@@ -178,7 +178,7 @@ Never:
 - Pass frontend-provided strings to `sh -c` or any shell. Typed `Command` argv only.
 - Edit dpkg/apt databases directly. Always go through package-manager commands.
 - Bypass `safety/`. The deny-list runs at preview and again at revalidation.
-- Remove or update a package the deny-list protects (critical APT packages, kernel images, `lib*` heuristics, Snap runtimes, AppImage paths outside `~/AppImages`).
+- Remove or update a package the deny-list protects (critical APT packages (including Ubuntu desktop metapackages and the Ubuntu session), kernel images, `lib*` heuristics, Snap runtimes, AppImage paths outside `~/AppImages`).
 
 Ask first:
 
