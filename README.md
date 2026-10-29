@@ -21,17 +21,17 @@ Scope for Linux brings installed apps, command-line tools, and Steam games into 
 
 ## Install
 
-Download the `.deb` or AppImage from [Releases](https://github.com/khurrambhutto/scope/releases). For the v0.3.7 `.deb`, run:
+Download the `.deb` or AppImage from [Releases](https://github.com/khurrambhutto/scope/releases). For the v0.3.8 `.deb`, run:
 
 ```bash
-sudo apt install ./scope_0.3.7_amd64.deb
+sudo apt install ./scope_0.3.8_amd64.deb
 ```
 
 For the portable AppImage:
 
 ```bash
-chmod +x Scope-0.3.7-x86_64.AppImage
-./Scope-0.3.7-x86_64.AppImage
+chmod +x Scope-0.3.8-x86_64.AppImage
+./Scope-0.3.8-x86_64.AppImage
 ```
 
 Official `.deb` builds support verified self-updates.
