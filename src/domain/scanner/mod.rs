@@ -6,6 +6,7 @@
 
 pub mod appimage;
 pub mod apt;
+mod apt_desktop;
 pub mod flatpak;
 pub mod jetbrains_toolbox;
 #[cfg(test)]
@@ -194,6 +195,15 @@ pub trait Scanner: Send + Sync {
     /// List installed packages without waiting for update services.
     fn scan(&self) -> Pin<Box<dyn Future<Output = Result<ScanReport>> + Send + '_>>;
 
+    /// Add installed owners of the shared desktop catalog before update discovery.
+    fn scan_desktop_apps<'a>(
+        &'a self,
+        _report: &'a mut ScanReport,
+        _desktop: &'a DesktopIndex,
+    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> {
+        Box::pin(async { Ok(()) })
+    }
+
     /// Enrich an inventory with update state without delaying its publication.
     fn check_updates<'a>(
         &'a self,
@@ -303,9 +313,7 @@ fn enrich(pkg: &mut InstalledPackage, desktop: &DesktopIndex) {
             // load directly. Unresolved names stay `None` and the frontend
             // falls back to initials.
             if let Some(name) = app.icon.as_deref() {
-                if let Some(path) =
-                    crate::domain::icons::resolve_for_app(name, app.executable.as_deref())
-                {
+                if let Some(path) = desktop.resolve_icon_for_app(name, app.executable.as_deref()) {
                     pkg.icon = Some(crate::domain::icons::icon_url(&path));
                 }
             }

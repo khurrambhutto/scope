@@ -359,6 +359,20 @@ fn confirm_body(
         confirm_style,
         div()
             .child(plan_rows(rows))
+            .when_some(
+                (kind == OpKind::Uninstall)
+                    .then(|| crate::domain::listing::uninstall_warning(pkg))
+                    .flatten(),
+                |this, warning| {
+                    this.child(
+                        div()
+                            .mt(px(12.))
+                            .text_size(px(13.))
+                            .text_color(text_dim())
+                            .child(warning),
+                    )
+                },
+            )
             .when_some(plan.snap_details.as_ref(), |this, details| {
                 this.child(super::package_details::breakdown(
                     Some(&crate::domain::package_details::PackageDetails::from(

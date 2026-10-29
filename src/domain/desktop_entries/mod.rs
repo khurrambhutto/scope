@@ -13,7 +13,7 @@ use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 pub use parser::DesktopApp;
 
@@ -46,7 +46,16 @@ pub fn discover_desktop_apps() -> Vec<DesktopApp> {
         if !directory.is_dir() {
             continue;
         }
-        collect(&directory, &directory, &mut seen, &mut apps);
+        let mut remaining = 100_000;
+        collect(
+            &directory,
+            &directory,
+            &mut seen,
+            &mut apps,
+            0,
+            &mut remaining,
+            &mut HashSet::new(),
+        );
     }
 
     apps.sort_by_cached_key(|a| a.name.to_lowercase());
@@ -77,6 +86,8 @@ pub(crate) fn application_dirs() -> Vec<PathBuf> {
     // Snap-installed apps expose desktop entries here.
     dirs.push(PathBuf::from("/var/lib/snapd/desktop/applications"));
 
+    let mut seen = HashSet::new();
+    dirs.retain(|dir| seen.insert(fs::canonicalize(dir).unwrap_or_else(|_| dir.clone())));
     dirs
 }
 
@@ -88,17 +99,41 @@ fn user_application_dir() -> Option<PathBuf> {
     }
 }
 
-fn collect(root: &Path, dir: &Path, seen: &mut HashSet<String>, out: &mut Vec<DesktopApp>) {
+fn collect(
+    root: &Path,
+    dir: &Path,
+    seen: &mut HashSet<String>,
+    out: &mut Vec<DesktopApp>,
+    depth: usize,
+    remaining: &mut usize,
+    ancestors: &mut HashSet<PathBuf>,
+) {
+    if depth > 32 || *remaining == 0 {
+        return;
+    }
     let Ok(entries) = fs::read_dir(dir) else {
         return;
     };
+    let Ok(identity) = dir.canonicalize() else {
+        return;
+    };
+    if !ancestors.insert(identity.clone()) {
+        return;
+    }
     for entry in entries.flatten() {
+        if *remaining == 0 {
+            break;
+        }
+        *remaining -= 1;
         let path = entry.path();
-        if path.is_dir() {
+        if entry
+            .file_type()
+            .is_ok_and(|kind| kind.is_dir() || (kind.is_symlink() && path.is_dir()))
+        {
             if is_blacklisted(&path) {
                 continue;
             }
-            collect(root, &path, seen, out);
+            collect(root, &path, seen, out, depth + 1, remaining, ancestors);
             continue;
         }
         if path.extension().and_then(|e| e.to_str()) != Some("desktop") {
@@ -122,6 +157,7 @@ fn collect(root: &Path, dir: &Path, seen: &mut HashSet<String>, out: &mut Vec<De
             out.push(app);
         }
     }
+    ancestors.remove(&identity);
 }
 
 fn desktop_id(root: &Path, path: &Path) -> Option<String> {
@@ -133,7 +169,7 @@ fn desktop_id(root: &Path, path: &Path) -> Option<String> {
         }
         id.push_str(&comp.as_os_str().to_string_lossy());
     }
-    Some(id.trim_end_matches(".desktop").to_string())
+    Some(id.strip_suffix(".desktop").unwrap_or(&id).to_string())
 }
 
 fn is_blacklisted(path: &Path) -> bool {
@@ -158,6 +194,10 @@ pub struct DesktopIndex {
     by_steam_app_id: HashMap<String, Vec<Arc<DesktopApp>>>,
     by_path: HashMap<PathBuf, Arc<DesktopApp>>,
     apps: Vec<Arc<DesktopApp>>,
+    icon_resolver: Mutex<crate::domain::icons::IconResolver>,
+    apt_files: Mutex<HashMap<String, Vec<PathBuf>>>,
+    canonical_paths: Mutex<HashMap<PathBuf, Option<PathBuf>>>,
+    toolbox_paths: Mutex<HashMap<String, HashSet<PathBuf>>>,
 }
 
 impl DesktopIndex {
@@ -203,6 +243,10 @@ impl DesktopIndex {
             by_steam_app_id,
             by_path,
             apps: indexed_apps,
+            icon_resolver: Mutex::new(crate::domain::icons::IconResolver::new()),
+            apt_files: Mutex::new(HashMap::new()),
+            canonical_paths: Mutex::new(HashMap::new()),
+            toolbox_paths: Mutex::new(HashMap::new()),
         }
     }
     pub fn empty() -> Self {
@@ -214,7 +258,63 @@ impl DesktopIndex {
             by_steam_app_id: HashMap::new(),
             by_path: HashMap::new(),
             apps: Vec::new(),
+            icon_resolver: Mutex::new(crate::domain::icons::IconResolver::new()),
+            apt_files: Mutex::new(HashMap::new()),
+            canonical_paths: Mutex::new(HashMap::new()),
+            toolbox_paths: Mutex::new(HashMap::new()),
         }
+    }
+
+    pub fn visible_apps(&self) -> impl Iterator<Item = &DesktopApp> {
+        self.apps.iter().map(Arc::as_ref)
+    }
+
+    pub fn resolve_icon_for_app(&self, icon: &str, executable: Option<&Path>) -> Option<PathBuf> {
+        self.icon_resolver
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .resolve_for_app(icon, executable)
+    }
+
+    fn canonical_path(&self, path: &Path) -> Option<PathBuf> {
+        self.canonical_paths
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .entry(path.to_path_buf())
+            .or_insert_with(|| path.canonicalize().ok())
+            .clone()
+    }
+
+    fn tool_owns_launcher(
+        &self,
+        installation: &crate::domain::tool_managers::ToolInstallation,
+        app: &DesktopApp,
+    ) -> bool {
+        if installation.protection_reason.is_some() {
+            return false;
+        }
+        app.executable.as_ref().is_some_and(|path| {
+            let resolved = self.canonical_path(path);
+            installation.executables.iter().any(|executable| {
+                path == executable
+                    || resolved.as_ref().is_some_and(|resolved| {
+                        self.canonical_path(executable).as_ref() == Some(resolved)
+                    })
+            })
+        })
+    }
+
+    fn toolbox_owns_launcher(&self, root: &str, app: &DesktopApp) -> bool {
+        let Some(executable) = app.executable.as_ref().and_then(|p| self.canonical_path(p)) else {
+            return false;
+        };
+        let Ok(mut cache) = self.toolbox_paths.lock() else {
+            return false;
+        };
+        cache
+            .entry(root.to_owned())
+            .or_insert_with(|| toolbox_executables(root))
+            .contains(&executable)
     }
 
     /// Try to find a desktop app for a package given the source and id/name.
@@ -260,7 +360,7 @@ impl DesktopIndex {
             crate::domain::package::PackageSource::JetBrainsToolbox => self
                 .apps
                 .iter()
-                .find(|app| jetbrains_toolbox_owns_launcher(package_id, app))
+                .find(|app| self.toolbox_owns_launcher(package_id, app))
                 .map(Arc::as_ref),
             crate::domain::package::PackageSource::Uv
             | crate::domain::package::PackageSource::Pipx
@@ -282,7 +382,7 @@ impl DesktopIndex {
             return self
                 .apps
                 .iter()
-                .find(|app| tool_owns_launcher(installation, app))
+                .find(|app| self.tool_owns_launcher(installation, app))
                 .map(Arc::as_ref);
         }
         self.lookup(pkg.source, &pkg.package_id, &pkg.name)
@@ -293,8 +393,11 @@ impl DesktopIndex {
         if let Some(app) = self.by_id.get(&lc).or_else(|| self.by_exec.get(&lc)) {
             return Some(app.as_ref());
         }
-        let owned_files = crate::domain::package_files::list(package_id);
-        self.lookup_apt_fallback(package_id, name, &owned_files)
+        let mut cache = self.apt_files.lock().ok()?;
+        let owned_files = cache
+            .entry(package_id.to_string())
+            .or_insert_with(|| crate::domain::package_files::list(package_id));
+        self.lookup_apt_fallback(package_id, name, owned_files)
     }
 
     fn lookup_apt_fallback(
@@ -351,6 +454,18 @@ impl DesktopIndex {
             }
         }
 
+        let tool_paths: HashSet<PathBuf> = packages
+            .iter()
+            .filter_map(|pkg| pkg.tool_installation.as_ref())
+            .filter(|installation| installation.protection_reason.is_none())
+            .flat_map(|installation| installation.executables.iter())
+            .flat_map(|path| {
+                [Some(path.clone()), self.canonical_path(path)]
+                    .into_iter()
+                    .flatten()
+            })
+            .collect();
+
         self.apps
             .iter()
             .filter(|app| app.file_path.starts_with(user_applications))
@@ -361,13 +476,15 @@ impl DesktopIndex {
                     .filter(|package| {
                         package.source == crate::domain::package::PackageSource::JetBrainsToolbox
                     })
-                    .any(|package| jetbrains_toolbox_owns_launcher(&package.package_id, app))
+                    .any(|package| self.toolbox_owns_launcher(&package.package_id, app))
             })
             .filter(|app| {
-                !packages
-                    .iter()
-                    .filter_map(|pkg| pkg.tool_installation.as_ref())
-                    .any(|installation| tool_owns_launcher(installation, app))
+                !app.executable.as_ref().is_some_and(|path| {
+                    tool_paths.contains(path)
+                        || self
+                            .canonical_path(path)
+                            .is_some_and(|path| tool_paths.contains(&path))
+                })
             })
             .map(|app| {
                 use crate::domain::package::{AppKind, InstalledPackage, PackageSource};
@@ -387,9 +504,7 @@ impl DesktopIndex {
                     AppKind::Gui
                 };
                 if let Some(icon) = app.icon.as_deref() {
-                    if let Some(path) =
-                        crate::domain::icons::resolve_for_app(icon, app.executable.as_deref())
-                    {
+                    if let Some(path) = self.resolve_icon_for_app(icon, app.executable.as_deref()) {
                         pkg.icon = Some(crate::domain::icons::icon_url(&path));
                     }
                 }
@@ -488,51 +603,27 @@ fn steam_app_id_from_exec(exec: &str) -> Option<&str> {
     app_id
 }
 
-fn tool_owns_launcher(
-    installation: &crate::domain::tool_managers::ToolInstallation,
-    app: &DesktopApp,
-) -> bool {
-    if installation.protection_reason.is_some() {
-        return false;
-    }
-    app.executable.as_ref().is_some_and(|path| {
-        let resolved = path.canonicalize().ok();
-        installation.executables.iter().any(|executable| {
-            path == executable
-                || resolved.as_ref().is_some_and(|resolved| {
-                    executable.canonicalize().ok().as_ref() == Some(resolved)
-                })
-        })
-    })
-}
-
 /// True when a visible launcher executes an exact Linux launcher declared by
 /// this canonical JetBrains Toolbox installation. Product names never take
 /// part in the ownership decision: versions and editions are not stable IDs.
-fn jetbrains_toolbox_owns_launcher(installation_root: &str, app: &DesktopApp) -> bool {
+fn toolbox_executables(installation_root: &str) -> HashSet<PathBuf> {
     const MAX_PRODUCT_INFO_BYTES: u64 = 1024 * 1024;
 
-    let Some(executable) = app.executable.as_ref() else {
-        return false;
-    };
     let Ok(root) = Path::new(installation_root).canonicalize() else {
-        return false;
+        return HashSet::new();
     };
     let product_info = root.join("product-info.json");
     let Ok(metadata) = fs::metadata(&product_info) else {
-        return false;
+        return HashSet::new();
     };
     if !metadata.is_file() || metadata.len() > MAX_PRODUCT_INFO_BYTES {
-        return false;
+        return HashSet::new();
     }
     let Ok(contents) = fs::read(product_info) else {
-        return false;
+        return HashSet::new();
     };
     let Ok(info) = serde_json::from_slice::<serde_json::Value>(&contents) else {
-        return false;
-    };
-    let Ok(executable) = executable.canonicalize() else {
-        return false;
+        return HashSet::new();
     };
 
     info.get("launch")
@@ -559,7 +650,7 @@ fn jetbrains_toolbox_owns_launcher(installation_root: &str, app: &DesktopApp) ->
         })
         .filter_map(|path| root.join(path).canonicalize().ok())
         .filter(|path| path.starts_with(&root))
-        .any(|path| path == executable)
+        .collect()
 }
 
 #[cfg(test)]
@@ -580,6 +671,47 @@ mod tests {
             terminal: false,
             menu_visible: true,
         }
+    }
+
+    #[test]
+    fn desktop_id_removes_only_one_suffix() {
+        assert_eq!(
+            desktop_id(Path::new("/apps"), Path::new("/apps/foo.desktop.desktop")).as_deref(),
+            Some("foo.desktop")
+        );
+    }
+
+    #[test]
+    fn traversal_does_not_follow_directory_symlink_cycles() {
+        use std::os::unix::fs::symlink;
+        let root = tempfile::tempdir().unwrap();
+        symlink(root.path(), root.path().join("cycle")).unwrap();
+        fs::write(
+            root.path().join("app.desktop"),
+            "[Desktop Entry]\nName=App\nExec=/bin/true\n",
+        )
+        .unwrap();
+        let linked = tempfile::tempdir().unwrap();
+        fs::write(
+            linked.path().join("linked.desktop"),
+            "[Desktop Entry]\nName=Linked\nExec=/bin/true\n",
+        )
+        .unwrap();
+        symlink(linked.path(), root.path().join("linked")).unwrap();
+        let mut seen = HashSet::new();
+        let mut apps = Vec::new();
+        let mut remaining = 100;
+        collect(
+            root.path(),
+            root.path(),
+            &mut seen,
+            &mut apps,
+            0,
+            &mut remaining,
+            &mut HashSet::new(),
+        );
+        assert_eq!(apps.len(), 2);
+        assert!(apps.iter().any(|app| app.name == "Linked"));
     }
 
     #[test]
@@ -625,6 +757,8 @@ mod tests {
         fs::create_dir_all(&user_applications).unwrap();
         fs::create_dir_all(executable.parent().unwrap()).unwrap();
         fs::write(&executable, "test binary").unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
         fs::write(
             &desktop_file,
             format!(

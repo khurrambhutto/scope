@@ -21,7 +21,9 @@ pub fn is_listable(pkg: &InstalledPackage) -> bool {
     }
     // Keep discovered AppImages and unmanaged desktop apps visible, but their
     // row action and detail panel explain why Scope cannot remove them.
-    matches!(pkg.source, PackageSource::AppImage | PackageSource::Desktop) || can_uninstall(pkg)
+    matches!(pkg.source, PackageSource::AppImage | PackageSource::Desktop)
+        || (pkg.source == PackageSource::Apt && pkg.apt_automatic && pkg.app_kind == AppKind::Gui)
+        || can_uninstall(pkg)
 }
 
 /// Apply the optional all-packages override to the default app/tool list policy.
@@ -39,6 +41,12 @@ pub fn can_uninstall(pkg: &InstalledPackage) -> bool {
                 .as_ref()
                 .is_some_and(|i| i.protection_reason.is_none()))
         && !safety::check_package(pkg.source, &pkg.package_id).protected
+}
+
+/// A short caution shown only when confirming removal of an automatic APT app.
+pub fn uninstall_warning(pkg: &InstalledPackage) -> Option<&'static str> {
+    (pkg.source == PackageSource::Apt && pkg.apt_automatic)
+        .then_some("Other apps or desktop features may depend on this app.")
 }
 
 /// Why the backend currently blocks uninstalling this package, if applicable.
@@ -106,6 +114,29 @@ mod tests {
             "systemd",
             AppKind::Cli
         )));
+    }
+
+    #[test]
+    fn uninstall_caution_is_specific_to_automatic_apt_packages() {
+        let mut app = package(PackageSource::Apt, "gnome-calculator", AppKind::Gui);
+        assert!(uninstall_warning(&app).is_none());
+        app.apt_automatic = true;
+        assert_eq!(
+            uninstall_warning(&app),
+            Some("Other apps or desktop features may depend on this app.")
+        );
+        app.source = PackageSource::Snap;
+        assert!(uninstall_warning(&app).is_none());
+    }
+
+    #[test]
+    fn automatically_installed_protected_gui_is_visible_but_not_removable() {
+        let mut app = package(PackageSource::Apt, "systemd", AppKind::Gui);
+        app.apt_automatic = true;
+        assert!(is_listable(&app));
+        assert!(!can_uninstall(&app));
+        app.app_kind = AppKind::Unknown;
+        assert!(!is_listable(&app));
     }
 
     #[test]

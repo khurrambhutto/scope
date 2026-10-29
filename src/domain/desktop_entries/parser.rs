@@ -4,6 +4,7 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::fs;
 use std::io::Read;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 /// A parsed launcher visible in the current desktop's app list.
@@ -61,21 +62,18 @@ pub fn parse(id: &str, path: &Path) -> Option<DesktopApp> {
         .find(|(name, _)| name.as_str() == "Desktop Entry")
         .map(|(_, kv)| kv)?;
 
-    // Locale-suffixed keys (e.g. `Name[en]`) — pick the bare one, else the first
-    // locale variant as a fallback.
     fn field<'a>(entry: &'a [(String, String)], key: &str) -> Option<&'a str> {
-        if let Some((_, v)) = entry.iter().find(|(k, _)| k == key) {
-            return Some(v.as_str());
-        }
-        for (k, v) in entry {
-            if let Some(rest) = k.strip_prefix(&format!("{key}[")) {
-                if rest.ends_with(']') {
-                    return Some(v.as_str());
-                }
-            }
-        }
-        None
+        entry
+            .iter()
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| v.as_str())
     }
+    let locale = std::env::var("LC_ALL")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .or_else(|| std::env::var("LC_MESSAGES").ok().filter(|s| !s.is_empty()))
+        .or_else(|| std::env::var("LANG").ok());
+    let localized = |key: &str| localized_field(entry, key, locale.as_deref());
 
     let type_ = field(entry, "Type").unwrap_or("Application");
     if type_ != "Application" {
@@ -112,8 +110,8 @@ pub fn parse(id: &str, path: &Path) -> Option<DesktopApp> {
     Some(DesktopApp {
         id: id.to_string(),
         file_path: path.to_path_buf(),
-        name: field(entry, "Name").unwrap_or(id).to_string(),
-        comment: field(entry, "Comment").map(str::to_string),
+        name: localized("Name").unwrap_or(id).to_string(),
+        comment: localized("Comment").map(str::to_string),
         exec: exec_raw,
         executable,
         icon: field(entry, "Icon").map(str::to_string),
@@ -128,6 +126,48 @@ pub fn parse(id: &str, path: &Path) -> Option<DesktopApp> {
             .unwrap_or(false),
         menu_visible,
     })
+}
+
+fn localized_field<'a>(
+    entry: &'a [(String, String)],
+    key: &str,
+    locale: Option<&str>,
+) -> Option<&'a str> {
+    let mut candidates = Vec::new();
+    if let Some(locale) = locale.filter(|l| *l != "C" && *l != "POSIX") {
+        let (base, modifier) = locale
+            .split_once('@')
+            .map_or((locale, None), |(b, m)| (b, Some(m)));
+        let base = base.split('.').next().unwrap_or(base);
+        let language = base.split('_').next().unwrap_or(base);
+        if let Some(m) = modifier {
+            candidates.push(format!("{base}@{m}"));
+        }
+        candidates.push(base.to_string());
+        if let Some(m) = modifier {
+            candidates.push(format!("{language}@{m}"));
+        }
+        candidates.push(language.to_string());
+    }
+    candidates
+        .iter()
+        .find_map(|locale| {
+            let localized_key = format!("{key}[{locale}]");
+            entry
+                .iter()
+                .find(|(k, _)| k == &localized_key)
+                .map(|(_, v)| v.as_str())
+        })
+        .or_else(|| {
+            entry
+                .iter()
+                .find(|(k, _)| k == key)
+                .map(|(_, v)| v.as_str())
+        })
+}
+
+fn executable_file(path: &Path) -> bool {
+    fs::metadata(path).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
 }
 
 fn desktop_visibility_matches(only_show_in: &str, not_show_in: &str, desktops: &[String]) -> bool {
@@ -158,10 +198,11 @@ fn desktop_list(value: &str) -> Vec<&str> {
 fn try_exec_exists(command: &str) -> bool {
     let path = Path::new(command);
     if path.is_absolute() {
-        return path.is_file();
+        return executable_file(path);
     }
-    std::env::var_os("PATH")
-        .is_some_and(|paths| std::env::split_paths(&paths).any(|dir| dir.join(command).is_file()))
+    std::env::var_os("PATH").is_some_and(|paths| {
+        std::env::split_paths(&paths).any(|dir| executable_file(&dir.join(command)))
+    })
 }
 
 fn exec_program(exec: &str) -> Option<&str> {
@@ -191,7 +232,7 @@ fn exec_program_path(exec: &str) -> Option<PathBuf> {
     std::env::var_os("PATH").and_then(|paths| {
         std::env::split_paths(&paths)
             .map(|dir| dir.join(program))
-            .find(|candidate| candidate.is_file())
+            .find(|candidate| executable_file(candidate))
     })
 }
 
@@ -213,6 +254,36 @@ mod tests {
         file.write_all(body.as_bytes())
             .expect("write temp desktop file");
         path
+    }
+
+    #[test]
+    fn locale_fallback_prefers_matching_translation_then_bare() {
+        let fields = vec![
+            ("Name".into(), "Default".into()),
+            ("Name[sr]".into(), "Language".into()),
+            ("Name[sr_RS@latin]".into(), "Exact".into()),
+        ];
+        assert_eq!(
+            localized_field(&fields, "Name", Some("sr_RS.UTF-8@latin")),
+            Some("Exact")
+        );
+        assert_eq!(
+            localized_field(&fields, "Name", Some("sr_BA")),
+            Some("Language")
+        );
+        assert_eq!(
+            localized_field(&fields, "Name", Some("fr_FR")),
+            Some("Default")
+        );
+    }
+
+    #[test]
+    fn executable_requires_permission_bits() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        fs::set_permissions(file.path(), fs::Permissions::from_mode(0o644)).unwrap();
+        assert!(!executable_file(file.path()));
+        fs::set_permissions(file.path(), fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(executable_file(file.path()));
     }
 
     #[test]

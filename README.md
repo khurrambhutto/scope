@@ -42,6 +42,8 @@ Search or filter by source, select an app, then choose **Update** or **Uninstall
 
 Use **Updates** to see available updates and **Show all** to include packages hidden from the default app list. Protected packages remain locked.
 
+APT apps with visible app-menu launchers appear even when installed automatically. They use the same update and uninstall previews as other APT apps. Uninstall previews warn when other apps or desktop features may depend on them.
+
 To install a downloaded `.deb` or AppImage, choose **Open With → Scope** and review the installation preview. AppImages are added to your app menu and stored in `~/AppImages`.
 
 ## Supported sources
