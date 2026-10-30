@@ -12,6 +12,7 @@ skills-lock.json
 
 # Showreel
 /showreel/
+/brag-output/
 
 # IDE
 .idea/
