@@ -94,7 +94,7 @@ docs/                     GitHub Pages site
 - Use bundled Work Sans for all UI text, including paths and commands. Regular, Medium, Semibold, and Bold fonts and their OFL license live in `assets/fonts/`; `theme::init` registers them. Breakdown labels are semibold, paths are quieter, and sizes align right. Confirmation metadata shares the breakdown's label width, row padding, and spacing tokens in `theme.rs`.
 - List app names use Work Sans Medium. Expanded removable rows show an estimated `Removes ~<size>` summary beside Uninstall, excluding retained, unverified, and informational items. Partial estimates carry `+`; unavailable measurements stay explicit. Omit the generic classic-Snap coverage note from the breakdown, while retaining actual inspection warnings and incomplete-size notes.
 - Every source uses the same inline details panel, immediate source-appropriate placeholders, streaming measurements, 30-second cache, and measured-height easing. Expired complete details stay visible during refresh. Request identity includes the stable package key and raw version; Flatpak user/system keys remain distinct. Share a two-inspection worker limit, preserve cancellation and reduced motion, and keep Snap uninstall previews on fresh complete inspection.
-- Inspect only attributable installed footprints. APT measures dpkg-listed files individually, groups them by location, and marks conffiles kept by normal remove; never walk their shared parent directories or guess home-directory data. Flatpak resolves the deployment with the DTO's explicit scope, excludes shared runtimes, and reports current-user `~/.var/app/<id>` data as kept. AppImage reports its file and existing exact `.home`/`.config` portable sidecars; for Scope/Gear Lever integrations the file, every launcher that runs it, and its `~/AppImages/.icons` entries are removed and the sidecars are kept; app data found by name is offered only in the uninstall preview. Desktop reports its launcher and resolved executable. Other local-source rows are informational and never enable uninstall/update. Unattributable data stays explicitly unknown; no inspection launches apps, elevates privileges, or changes package-manager state.
+- Inspect only attributable installed footprints. APT measures dpkg-listed files individually, groups them by location, and marks conffiles removed by purge; never walk their shared parent directories or guess home-directory data. Flatpak resolves the deployment with the DTO's explicit scope, excludes shared runtimes, and reports current-user `~/.var/app/<id>` data as kept. AppImage reports its file and existing exact `.home`/`.config` portable sidecars; for Scope/Gear Lever integrations the file, every launcher that runs it, and its `~/AppImages/.icons` entries are removed and the sidecars are kept; app data found by name is offered only in the uninstall preview. Desktop reports its launcher and resolved executable. Other local-source rows are informational and never enable uninstall/update. Unattributable data stays explicitly unknown; no inspection launches apps, elevates privileges, or changes package-manager state.
 
 ## GPUI notes
 
@@ -143,7 +143,7 @@ Commands that previews display and apply runs:
 
 | Source | Uninstall | Update |
 | --- | --- | --- |
-| APT | `pkexec env DEBIAN_FRONTEND=noninteractive apt remove -y <pkg>` | `pkexec env DEBIAN_FRONTEND=noninteractive apt install -y <pkg>` |
+| APT | `pkexec env DEBIAN_FRONTEND=noninteractive apt-get -o APT::Get::AutomaticRemove=false purge -y -- <pkg>` | `pkexec env DEBIAN_FRONTEND=noninteractive apt install -y <pkg>` |
 | Snap | `pkexec snap remove <pkg>` | `pkexec snap refresh <pkg>` |
 | Flatpak user | `flatpak uninstall -y --user <id>` | `flatpak update -y --user <id>` |
 | Flatpak system | `pkexec flatpak uninstall -y --system <id>` | `pkexec flatpak update -y --system <id>` |
@@ -168,7 +168,7 @@ Always:
 - Preview first for every destructive action. Preview builds an `OperationPlan`; apply accepts only a `plan_id` from `PlanStore` (5-minute TTL, single-use).
 - Revalidate before executing (`operations::probe` plus the operation's `revalidate`): package present, version unchanged for updates, deny-list still clear. Fail closed when state cannot be verified.
 - Command timeouts cover process exit and output collection. Keep the dedicated process-group identity until both finish, so timeout cleanup also stops descendants after their parent exits.
-- Simulate every APT transaction with `LC_ALL=C`, reject indirect protected removals, store its fingerprint in the plan, and require the same simulation immediately before apply.
+- Simulate every APT transaction with `LC_ALL=C`, reject indirect protected removals and purges, store its fingerprint in the plan, and require the same simulation immediately before apply. Normal APT uninstall purges package configuration with autoremove disabled; personal settings and data remain. Include `Purg` actions in protection checks and transaction fingerprints.
 - Escalate with `pkexec` through `system::run_elevated`. Scope never handles passwords.
 - Delete files through Trash (`gio trash`, manual `~/.local/share/Trash` fallback).
 - Install self-updates only after verifying a minisign-signed SHA-256 manifest. Keep downloads in a private temporary directory.
@@ -188,7 +188,7 @@ Ask first:
 
 Done: unified package view, uninstall (preview + apply, all sources), update (preview + apply for APT/Snap/Flatpak, verified user uv/pipx/Cargo/npm/Bun installs, and Scope/Gear Lever AppImages), AppImage and .deb install from an opened file, self-updater.
 
-Until updates are complete and tested, do not build whole-system clean, disk analyze, purge, leftover removal, or status dashboards. The only exception is the opt-in, per-app AppImage data removal in the uninstall preview. Those wait behind this fence.
+Until updates are complete and tested, do not build whole-system clean, disk analyze, purge, leftover removal, or status dashboards. Exceptions are normal per-app APT uninstall using purge and the opt-in, per-app AppImage data removal in the uninstall preview. Those wait behind this fence.
 
 ## Definition of done
 

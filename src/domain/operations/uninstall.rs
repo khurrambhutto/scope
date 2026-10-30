@@ -63,10 +63,13 @@ pub async fn preview(pkg: &InstalledPackage) -> Result<OperationPlan> {
         let transaction = apt_transaction::simulate(Operation::Uninstall, target.id()).await?;
         steps.push(PlanStep {
             description: format!(
-                "APT simulation removes {} package(s), including dependencies.",
+                "APT simulation removes {} package(s), including package configuration.",
                 transaction.removals.len()
             ),
-            command_summary: "apt-get -s remove (verified again before apply)".into(),
+            command_summary: format!(
+                "apt-get -s {} (verified again before apply)",
+                apt_transaction::uninstall_args(target.id()).join(" ")
+            ),
         });
         Some(transaction.fingerprint)
     } else {
@@ -128,9 +131,12 @@ fn build_steps(target: &OperationTarget, protected: bool) -> (AuthMethod, Vec<Pl
         OperationTarget::Apt { package_id } => (
             AuthMethod::Pkexec,
             vec![PlanStep {
-                description: format!("Remove the APT package '{package_id}' via apt."),
+                description: format!(
+                    "Purge the APT package '{package_id}' and its package configuration. Personal settings and data are kept."
+                ),
                 command_summary: format!(
-                    "pkexec env DEBIAN_FRONTEND=noninteractive apt remove -y {package_id}"
+                    "pkexec env DEBIAN_FRONTEND=noninteractive apt-get {}",
+                    apt_transaction::uninstall_args(package_id).join(" ")
                 ),
             }],
         ),
@@ -217,8 +223,8 @@ pub async fn apply(
         }
         OperationTarget::Apt { package_id } => {
             run_elevated(
-                "apt",
-                &["remove", "-y", package_id],
+                "apt-get",
+                &apt_transaction::uninstall_args(package_id),
                 AuthMethod::Pkexec,
                 UNINSTALL_TIMEOUT,
                 on_line,
@@ -312,6 +318,22 @@ mod tests {
             version: Some("1.0".into()),
             has_update: None,
         }
+    }
+
+    #[test]
+    fn apt_preview_purges_package_configuration_without_autoremove() {
+        let target = OperationTarget::Apt {
+            package_id: "gimp".into(),
+        };
+        let (auth, steps) = build_steps(&target, false);
+        assert_eq!(auth, AuthMethod::Pkexec);
+        assert_eq!(
+            steps[0].command_summary,
+            "pkexec env DEBIAN_FRONTEND=noninteractive apt-get -o APT::Get::AutomaticRemove=false purge -y -- gimp"
+        );
+        assert!(steps[0]
+            .description
+            .contains("Personal settings and data are kept"));
     }
 
     #[test]

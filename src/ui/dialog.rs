@@ -318,6 +318,17 @@ fn confirm_body(
         return confirm_actions(entity, ButtonStyle::Update, div().child(plan_rows(rows)));
     }
 
+    if matches!(
+        plan.target,
+        crate::domain::operations::OperationTarget::Apt { .. }
+    ) {
+        rows.push((
+            "Effects",
+            "Removes the app and its package configuration. Personal settings and data are kept."
+                .into(),
+        ));
+    }
+
     if let crate::domain::operations::OperationTarget::Tool { installation, .. } = &plan.target {
         rows.push(("Installation", installation.root.display().to_string()));
         if let Some(environment) = &installation.environment {

@@ -58,27 +58,32 @@ fn conffiles(output: &str) -> Result<HashSet<PathBuf>> {
 
 fn group_files(files: &str, configs: &str) -> Result<Discovery> {
     let configs = conffiles(configs)?;
-    let mut groups: BTreeMap<(String, String, bool), Vec<PathBuf>> = BTreeMap::new();
+    let mut groups: BTreeMap<(String, String), Vec<PathBuf>> = BTreeMap::new();
     let deadline = Instant::now() + Duration::from_secs(2);
-    for (count, path) in files.lines().map(PathBuf::from).enumerate() {
+    let mut seen = HashSet::new();
+    for (count, path) in files
+        .lines()
+        .map(PathBuf::from)
+        .chain(configs.iter().cloned())
+        .enumerate()
+    {
         if count >= 20_000 || Instant::now() >= deadline {
             bail!("Package file list exceeds the inspection limit");
         }
-        if !path.is_absolute() || path.symlink_metadata().is_ok_and(|m| m.is_dir()) {
+        if !path.is_absolute()
+            || !seen.insert(path.clone())
+            || path.symlink_metadata().is_ok_and(|m| m.is_dir())
+        {
             continue;
         }
-        let kept = configs.contains(&path);
-        let (label, root) = group(&path, kept);
-        groups
-            .entry((label.into(), root, kept))
-            .or_default()
-            .push(path);
+        let (label, root) = group(&path, configs.contains(&path));
+        groups.entry((label.into(), root)).or_default().push(path);
     }
     if groups.is_empty() {
         bail!("No package-owned files could be identified");
     }
     let mut discovery = Discovery::default();
-    for ((label, root, kept), paths) in groups {
+    for ((label, root), paths) in groups {
         let count = paths.len();
         let location = format!(
             "{root} · {count} package file{}",
@@ -87,11 +92,7 @@ fn group_files(files: &str, configs: &str) -> Result<Discovery> {
         discovery.add(
             &label,
             location,
-            if kept {
-                DetailEffect::Kept
-            } else {
-                DetailEffect::Removed
-            },
+            DetailEffect::Removed,
             Target::OwnedFiles(paths),
         );
     }
@@ -99,8 +100,8 @@ fn group_files(files: &str, configs: &str) -> Result<Discovery> {
     Ok(discovery)
 }
 
-fn group(path: &Path, kept: bool) -> (&'static str, String) {
-    let (label, depth) = if kept {
+fn group(path: &Path, is_config: bool) -> (&'static str, String) {
+    let (label, depth) = if is_config {
         ("Configuration", 2)
     } else if path.starts_with("/etc") {
         ("System files", 3)
@@ -140,7 +141,7 @@ fn group(path: &Path, kept: bool) -> (&'static str, String) {
 mod tests {
     use super::*;
     #[test]
-    fn configurations_are_retained_and_paths_with_spaces_are_preserved() {
+    fn purge_removes_configuration_and_preserves_paths_with_spaces() {
         let configs = " /etc/test app.conf 0123456789abcdef0123456789abcdef obsolete\n";
         assert!(conffiles(configs)
             .unwrap()
@@ -150,12 +151,39 @@ mod tests {
             .details
             .items
             .iter()
-            .any(|i| i.label == "Configuration" && i.effect == DetailEffect::Kept));
+            .any(|i| i.label == "Configuration" && i.effect == DetailEffect::Removed));
         assert!(result
             .details
             .items
             .iter()
             .any(|i| i.label == "Application" && i.effect == DetailEffect::Removed));
+    }
+
+    #[test]
+    fn purge_includes_obsolete_conffiles_not_in_the_package_file_list() {
+        let result = group_files(
+            "/usr/share/example/app\n",
+            " /etc/obsolete.conf 0123456789abcdef0123456789abcdef obsolete\n",
+        )
+        .unwrap();
+        assert!(result
+            .details
+            .items
+            .iter()
+            .any(|item| { item.label == "Configuration" && item.effect == DetailEffect::Removed }));
+    }
+
+    #[test]
+    fn purge_counts_configuration_listed_in_both_metadata_queries_once() {
+        let result = group_files(
+            "/etc/example.conf\n",
+            " /etc/example.conf 0123456789abcdef0123456789abcdef\n",
+        )
+        .unwrap();
+        assert_eq!(
+            result.details.items[0].location.as_deref(),
+            Some("/etc · 1 package file")
+        );
     }
 
     #[test]
