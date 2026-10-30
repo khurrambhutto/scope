@@ -168,6 +168,7 @@ Always:
 - Preview first for every destructive action. Preview builds an `OperationPlan`; apply accepts only a `plan_id` from `PlanStore` (5-minute TTL, single-use).
 - Revalidate before executing (`operations::probe` plus the operation's `revalidate`): package present, version unchanged for updates, deny-list still clear. Fail closed when state cannot be verified.
 - Command timeouts cover process exit and output collection. Keep the dedicated process-group identity until both finish, so timeout cleanup also stops descendants after their parent exits.
+- Background commands use closed stdin so inherited terminal job control cannot stop package operations. Authentication stays with Polkit.
 - Simulate every APT transaction with `LC_ALL=C`, reject indirect protected removals and purges, store its fingerprint in the plan, and require the same simulation immediately before apply. Normal APT uninstall purges package configuration with autoremove disabled; personal settings and data remain. Include `Purg` actions in protection checks and transaction fingerprints.
 - Escalate with `pkexec` through `system::run_elevated`. Scope never handles passwords.
 - Delete files through Trash (`gio trash`, manual `~/.local/share/Trash` fallback).
