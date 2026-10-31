@@ -44,6 +44,8 @@ Use **Updates** to see available updates and **Show all** to include packages hi
 
 APT apps with visible app-menu launchers appear even when installed automatically. They use the same update and uninstall previews as other APT apps. Uninstall previews warn when other apps or desktop features may depend on them.
 
+APT uninstall, including apps installed from `.deb` files, removes the app and its package configuration using purge. Personal settings, profiles, caches, and other data in your home directory remain. Scope does not run autoremove.
+
 To install a downloaded `.deb` or AppImage, choose **Open With → Scope** and review the installation preview. AppImages are added to your app menu and stored in `~/AppImages`.
 
 ## Supported sources

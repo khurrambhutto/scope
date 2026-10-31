@@ -7,6 +7,9 @@
 
 pub mod trash;
 
+#[cfg(test)]
+mod terminal_tests;
+
 use std::time::Duration;
 
 use tokio::io::AsyncReadExt;
@@ -91,6 +94,7 @@ pub async fn capture_output_context(
         .args(args)
         .envs(envs.iter().copied())
         .kill_on_drop(true)
+        .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
     if let Some(directory) = directory {
@@ -367,6 +371,9 @@ pub async fn run_prepared(
 ) -> OperationResult {
     cmd.process_group(0);
     cmd.kill_on_drop(true)
+        // APT changes terminal modes when stdin is a TTY, which can stop this
+        // background process group with SIGTTOU. Polkit owns authentication.
+        .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
 
