@@ -69,6 +69,14 @@ pub fn check_package(source: PackageSource, package_id: &str) -> Protection {
 pub fn check_target(target: &crate::domain::operations::OperationTarget) -> Protection {
     use crate::domain::operations::OperationTarget;
     match target {
+        OperationTarget::Extracted { installation } => {
+            match crate::domain::extracted_app::verify(installation) {
+                Ok(()) => Protection::allowed(),
+                Err(error) => {
+                    Protection::denied(format!("Cannot verify extracted installation: {error}"))
+                }
+            }
+        }
         OperationTarget::AppImageInstall { .. } | OperationTarget::DebInstall { .. } => {
             Protection::denied("Install plans cannot be uninstalled or updated.")
         }

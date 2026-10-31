@@ -24,9 +24,42 @@ use super::{AppImageInstallation, Roots};
 pub struct AppData {
     pub path: PathBuf,
     pub kind: AppDataKind,
+    /// Filesystem identity captured by the preview; absent legacy identities fail closed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub identity: Option<Identity>,
     /// Allocated bytes when a bounded measurement finished.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bytes: Option<u64>,
+}
+
+/// Identity deliberately excludes size and timestamps: app data may still be in use.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Identity {
+    device: u64,
+    inode: u64,
+    owner: u32,
+    directory: bool,
+}
+
+impl Identity {
+    fn read(path: &Path) -> Option<Self> {
+        let metadata = path.symlink_metadata().ok()?;
+        if !(metadata.is_file() || metadata.is_dir()) || !unlinked_ancestors(path) {
+            return None;
+        }
+        Some(Self {
+            device: metadata.dev(),
+            inode: metadata.ino(),
+            owner: metadata.uid(),
+            directory: metadata.is_dir(),
+        })
+    }
+}
+
+// A plain child below a replaced/symlinked XDG base is not the previewed target.
+fn unlinked_ancestors(path: &Path) -> bool {
+    path.parent()
+        .is_some_and(|parent| std::path::absolute(parent).ok() == parent.canonicalize().ok())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -165,6 +198,27 @@ pub fn find(
     installation: &AppImageInstallation,
     others: &OtherLaunchers,
 ) -> Vec<AppData> {
+    discover(roots, bases, installation, others, true)
+}
+
+/// Discover candidates without walking them for size. The shared preview
+/// measures and validates candidates under its own request budget.
+pub fn find_paths(
+    roots: &Roots,
+    bases: &Bases,
+    installation: &AppImageInstallation,
+    others: &OtherLaunchers,
+) -> Vec<AppData> {
+    discover(roots, bases, installation, others, false)
+}
+
+fn discover(
+    roots: &Roots,
+    bases: &Bases,
+    installation: &AppImageInstallation,
+    others: &OtherLaunchers,
+    measure_sizes: bool,
+) -> Vec<AppData> {
     let launchers: Vec<DesktopFile> = installation
         .launchers
         .iter()
@@ -194,7 +248,8 @@ pub fn find(
             let path = entry.path();
             if names.contains(&name) && owned(&path, owner) {
                 found.push(AppData {
-                    bytes: measure(&path),
+                    identity: Identity::read(&path),
+                    bytes: if measure_sizes { measure(&path) } else { None },
                     path,
                     kind,
                 });
@@ -204,7 +259,8 @@ pub fn find(
     for path in icons(roots, bases, installation, &launchers, &names, others) {
         if owned(&path, owner) && !found.iter().any(|data| data.path == path) {
             found.push(AppData {
-                bytes: measure(&path),
+                identity: Identity::read(&path),
+                bytes: if measure_sizes { measure(&path) } else { None },
                 path,
                 kind: AppDataKind::Icon,
             });
@@ -219,12 +275,20 @@ pub fn still_found(planned: &[AppData], fresh: &[AppData]) -> Vec<AppData> {
     planned
         .iter()
         .filter(|data| {
-            fresh
-                .iter()
-                .any(|now| now.path == data.path && now.kind == data.kind)
+            fresh.iter().any(|now| {
+                now.path == data.path
+                    && now.kind == data.kind
+                    && data.identity.is_some()
+                    && now.identity == data.identity
+            })
         })
         .cloned()
         .collect()
+}
+
+/// Verify a selected target again immediately before moving it.
+pub fn unchanged(data: &AppData) -> bool {
+    data.identity.is_some() && Identity::read(&data.path) == data.identity
 }
 
 /// Lowercased names this app answers to that no other launcher claims.
@@ -337,7 +401,7 @@ fn is_plain_file(path: &Path) -> bool {
 fn owned(path: &Path, owner: u32) -> bool {
     path.symlink_metadata().is_ok_and(|m| {
         let kind = m.file_type();
-        (kind.is_dir() || kind.is_file()) && m.uid() == owner
+        (kind.is_dir() || kind.is_file()) && m.uid() == owner && unlinked_ancestors(path)
     })
 }
 
@@ -511,9 +575,31 @@ mod tests {
             path: PathBuf::from(p),
             kind: AppDataKind::Config,
             bytes: None,
+            identity: Some(Identity {
+                device: 1,
+                inode: 1,
+                owner: 1,
+                directory: true,
+            }),
         };
         let planned = vec![data("/h/.config/a"), data("/h/.config/b")];
         let fresh = vec![data("/h/.config/b"), data("/h/.config/c")];
         assert_eq!(still_found(&planned, &fresh), vec![data("/h/.config/b")]);
+    }
+
+    #[test]
+    fn symlinked_xdg_ancestors_are_not_proposed() {
+        let f = fixture(LAUNCHER);
+        let real_base = f.roots.home.join("real-config");
+        std::fs::create_dir_all(real_base.join("openresearch")).unwrap();
+        std::fs::remove_dir(&f.bases.config).unwrap();
+        std::os::unix::fs::symlink(real_base, &f.bases.config).unwrap();
+        let found = find(
+            &f.roots,
+            &f.bases,
+            &f.installation,
+            &OtherLaunchers::default(),
+        );
+        assert!(found.is_empty(), "{found:?}");
     }
 }

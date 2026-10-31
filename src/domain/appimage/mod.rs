@@ -244,3 +244,5 @@ mod tests {
         assert!(roots.verify_owned_file(&app).is_err());
     }
 }
+
+mod uninstall_cleanup;

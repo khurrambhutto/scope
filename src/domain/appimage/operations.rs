@@ -100,59 +100,31 @@ pub async fn uninstall(
     if let Err(error) = managed::verify(&roots, installation) {
         return failed(error.to_string());
     }
-    // Search again while the launchers still exist; drop anything that changed.
-    let app_data = if app_data.is_empty() {
+    // Search while the original launchers exist, so shared-data checks retain context.
+    let fresh = if app_data.is_empty() {
         Vec::new()
     } else {
-        let fresh = installation.clone();
-        let fresh = tokio::task::spawn_blocking(move || find_app_data(&fresh))
+        let installation = installation.clone();
+        tokio::task::spawn_blocking(move || find_app_data(&installation))
             .await
-            .unwrap_or_default();
-        app_data::still_found(app_data, &fresh)
+            .unwrap_or_default()
     };
-    if let Err(error) = crate::domain::system::trash::trash(&installation.path).await {
-        return failed(format!("Could not move the AppImage to Trash: {error}"));
+    // Discovery and measurements can take time; repeat integration checks afterwards.
+    if let Err(error) = managed::verify(&roots, installation) {
+        return failed(error.to_string());
     }
-    on_line(&format!(
-        "[scope] moved {} to Trash",
-        installation.path.display()
-    ));
-    let mut problems = Vec::new();
-    for path in installation
-        .launchers
-        .iter()
-        .chain(&installation.icons)
-        .chain(app_data.iter().map(|data| &data.path))
-    {
-        match crate::domain::system::trash::trash(path).await {
-            Ok(()) => on_line(&format!("[scope] moved {} to Trash", path.display())),
-            Err(error) => problems.push(format!("{}: {error}", path.display())),
-        }
+    let result = super::uninstall_cleanup::remove(
+        installation,
+        app_data,
+        &fresh,
+        |path| async move { crate::domain::system::trash::trash(&path).await },
+        on_line,
+    )
+    .await;
+    if result.success {
+        super::refresh_launchers(&roots, on_line).await;
     }
-    super::refresh_launchers(&roots, on_line).await;
-    if problems.is_empty() {
-        OperationResult {
-            success: true,
-            message: if app_data.is_empty() {
-                "The AppImage, its launchers, and its icon were moved to Trash.".into()
-            } else {
-                "The AppImage, its launchers, its icon, and its app data were moved to Trash."
-                    .into()
-            },
-            logs: String::new(),
-            exit_code: Some(0),
-        }
-    } else {
-        OperationResult {
-            success: true,
-            message: format!(
-                "The AppImage was moved to Trash, but some files remain: {}",
-                problems.join("; ")
-            ),
-            logs: String::new(),
-            exit_code: Some(0),
-        }
-    }
+    result
 }
 
 pub async fn update(
@@ -161,10 +133,12 @@ pub async fn update(
 ) -> OperationResult {
     match update_inner(installation, on_line).await {
         Ok(message) => OperationResult {
+            cleanup: Vec::new(),
             success: true,
             message,
             logs: String::new(),
             exit_code: Some(0),
+            warnings: Vec::new(),
         },
         Err(error) => failed(error.to_string()),
     }
@@ -248,10 +222,12 @@ async fn update_inner(
 
 fn failed(message: impl Into<String>) -> OperationResult {
     OperationResult {
+        cleanup: Vec::new(),
         success: false,
         message: message.into(),
         logs: String::new(),
         exit_code: None,
+        warnings: Vec::new(),
     }
 }
 

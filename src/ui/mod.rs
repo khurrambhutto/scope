@@ -18,6 +18,7 @@ mod scan_notices;
 mod settings;
 mod smooth_scroll;
 pub mod title_bar;
+mod uninstall_preview;
 pub mod updater;
 pub mod widgets;
 

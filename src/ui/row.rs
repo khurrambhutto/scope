@@ -80,7 +80,7 @@ pub(super) fn row_element(
                 operation_busy,
             )
         } else {
-            unavailable_action_button()
+            unavailable_action_button(pkg)
         })
     } else {
         None
@@ -274,9 +274,13 @@ fn jetbrains_toolbox_action_button(entity: &WeakEntity<ScopeApp>, selected: bool
     .into_any_element()
 }
 
-fn unavailable_action_button() -> AnyElement {
+fn unavailable_action_button(pkg: &InstalledPackage) -> AnyElement {
     Button::new("action-unavailable")
         .label("Not supported")
+        .tooltip(
+            listing::uninstall_block_reason(pkg)
+                .unwrap_or_else(|| "This installation cannot be removed by Scope.".into()),
+        )
         .rounded(px(18.))
         .h(px(34.))
         .px(px(12.))

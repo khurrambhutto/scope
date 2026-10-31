@@ -269,9 +269,11 @@ pub async fn apply(
         Ok::<_, anyhow::Error>(result)
     }.await;
     result.unwrap_or_else(|error| OperationResult {
+        cleanup: Vec::new(),
         success: false,
         message: error.to_string(),
         logs: String::new(),
         exit_code: None,
+        warnings: Vec::new(),
     })
 }

@@ -21,6 +21,7 @@ anyhow = "1"
 thiserror = "2"
 tokio = { version = "1", features = ["process", "fs", "rt", "time", "macros", "sync", "io-util"] }
 walkdir = "2"
+rustix = { version = "1", features = ["fs"] }
 regex = "1"
 futures = "0.3"
 unicode-segmentation = "1"

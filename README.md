@@ -44,7 +44,9 @@ Use **Updates** to see available updates and **Show all** to include packages hi
 
 APT apps with visible app-menu launchers appear even when installed automatically. They use the same update and uninstall previews as other APT apps. Uninstall previews warn when other apps or desktop features may depend on them.
 
-APT uninstall, including apps installed from `.deb` files, removes the app and its package configuration using purge. Personal settings, profiles, caches, and other data in your home directory remain. Scope does not run autoremove.
+Uninstall previews show app files, app data, and anything kept or unverified in one place. Reviewed app-data rules can select settings, profiles, caches and state for removal; exact-name associations and mixed-content folders require separate review. Choose **Keep app data** to retain it. Files inside selected folders move to Trash, including any personal content there, and remain recoverable until Trash is emptied. Shared or unverifiable data stays in place and appears in the result.
+
+APT uninstall, including apps installed from `.deb` files, purges the package and its package configuration without autoremove. APT, Snap and Flatpak removal is checked before selected app-data cleanup starts. Flatpak profiles and saved permissions have separate choices. Snap recovery snapshots remain; normal Snap removal may create a new snapshot.
 
 To install a downloaded `.deb` or AppImage, choose **Open With → Scope** and review the installation preview. AppImages are added to your app menu and stored in `~/AppImages`.
 
@@ -56,11 +58,14 @@ To install a downloaded `.deb` or AppImage, choose **Open With → Scope** and r
 | uv tools, pipx, Cargo | Yes | Yes |
 | npm global, Bun global | Yes | Yes |
 | AppImage in `~/AppImages` (installed by Scope or Gear Lever) | Yes | Yes, when the AppImage publishes update information |
+| Verified extracted AppDir under `~/.local/opt` | Yes, after ownership and launcher checks | No |
 | Other AppImages, unmanaged desktop launchers | Discovery only | Discovery only |
 | Steam games | Read-only | Open in Steam |
 | JetBrains Toolbox IDEs | Read-only | Open Toolbox |
 
 Tool management supports verified installations in your home directory. Update availability depends on the package source and installation method. AppImage integration requires `squashfs-tools`; most AppImages also need `libfuse2t64` to run.
+
+App-data coverage is evidence-based, not a guarantee that every file an app ever created is known. Current reviewed identities include Paperling's retained `com.saqla.marklite` profile, Handy's app namespace, VS Code's configuration and Ruff's global cache. Other managed apps can offer exact package/command/launcher-name matches for review. Projects, shared manager caches, cloud data and other users' data are outside that cleanup coverage. A known running app or incomplete ownership check blocks selected cleanup. If Linux hides background-process metadata, the preview warns and leaves data unchecked; deliberate selections acknowledge only the displayed gaps, and changed process state requires a fresh preview. Background writers may recreate data; remaining paths stay visible after the app leaves the list.
 
 JetBrains Toolbox IDEs are discovered read-only from local Toolbox metadata. **Open Toolbox** starts the installed Toolbox launcher only when selected; IDE updates, uninstalls, and footprint measurement are unavailable in Scope.
 

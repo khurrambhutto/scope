@@ -5875,6 +5875,7 @@ dependencies = [
  "minisign-verify",
  "pep440_rs",
  "regex",
+ "rustix",
  "semver",
  "serde",
  "serde_json",

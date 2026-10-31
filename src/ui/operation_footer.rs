@@ -60,6 +60,9 @@ pub(super) fn operation_footer(
             let title = theme::display_title(pkg);
             if result.success {
                 let heading = match kind {
+                    OpKind::Uninstall if !result.warnings.is_empty() => {
+                        format!("{title} was uninstalled with cleanup warnings")
+                    }
                     OpKind::Uninstall => format!("{title} was uninstalled"),
                     OpKind::Update => format!("{title} was updated"),
                     OpKind::Install => format!("{title} was installed"),
@@ -84,13 +87,42 @@ pub(super) fn operation_footer(
     let cancelled = matches!(status, OperationStatus::Done { result, .. } if is_cancelled(result));
     let failed = matches!(status, OperationStatus::Done { result, .. } if !result.success && !is_cancelled(result));
 
+    let mut warnings = match status {
+        OperationStatus::Done { result, .. } => result.warnings.clone(),
+        OperationStatus::Running { .. } => Vec::new(),
+    };
+
+    if let OperationStatus::Done { result, .. } = status {
+        for outcome in &result.cleanup {
+            let status = match outcome.status {
+                crate::domain::app_data::CleanupStatus::Included => "Included in parent removal",
+                crate::domain::app_data::CleanupStatus::Trashed => "Moved to Trash",
+                crate::domain::app_data::CleanupStatus::Removed => "Removed",
+                crate::domain::app_data::CleanupStatus::Kept => "Kept",
+                crate::domain::app_data::CleanupStatus::Shared => "Shared — kept",
+                crate::domain::app_data::CleanupStatus::Changed => "Changed — kept",
+                crate::domain::app_data::CleanupStatus::Failed => "Cleanup failed",
+                crate::domain::app_data::CleanupStatus::Unknown => "Could not verify",
+            };
+            warnings.push(format!(
+                "{status}: {} — {}",
+                if outcome.path.as_os_str().is_empty() {
+                    outcome.label.clone()
+                } else {
+                    outcome.path.display().to_string()
+                },
+                outcome.message
+            ));
+        }
+    }
+
     let mut row = div()
         .flex()
         .items_center()
         .gap(px(12.))
         .when(!running, |this| {
             this.child(
-                Icon::new(if failed {
+                Icon::new(if failed || matches!(status, OperationStatus::Done { result, .. } if !result.warnings.is_empty()) {
                     IconName::CircleAlert
                 } else if cancelled {
                     IconName::Close
@@ -173,6 +205,21 @@ pub(super) fn operation_footer(
         .justify_center()
         .flex_col()
         .child(row)
+        .when(!warnings.is_empty(), |this| {
+            this.child(
+                div()
+                    .id("operation-warnings")
+                    .max_h(px(140.))
+                    .overflow_y_scroll()
+                    .mt(px(8.))
+                    .flex()
+                    .flex_col()
+                    .gap(px(6.))
+                    .text_size(px(12.))
+                    .text_color(theme::text_dim())
+                    .children(warnings.into_iter().map(|warning| div().child(warning))),
+            )
+        })
         .into_any_element()
 }
 

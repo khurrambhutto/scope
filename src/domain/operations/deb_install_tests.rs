@@ -279,7 +279,7 @@ async fn install_target_rejects_update_and_uninstall_routes() {
         created_at_ms: 0,
         apt_transaction_fingerprint: None,
         snap_details: None,
-        app_data: vec![],
+        cleanup: Default::default(),
     };
     let state = probe::ProbedPackage {
         present: true,

@@ -333,8 +333,8 @@ impl ScopeApp {
                                 } else {
                                     pkg
                                 },
+                                selected_cleanup: plan.cleanup.default_selection(),
                                 plan: Box::new(plan),
-                                remove_app_data: false,
                             },
                             Ok(Err(message)) => Dialog::Failed { kind, pkg, message },
                             Err(_) => Dialog::Failed {
@@ -389,12 +389,45 @@ impl ScopeApp {
         .detach();
     }
 
-    pub(super) fn set_remove_app_data(&mut self, checked: bool, cx: &mut Context<Self>) {
+    pub(super) fn set_cleanup_item(&mut self, id: &str, checked: bool, cx: &mut Context<Self>) {
         if let Some(Dialog::Confirm {
-            remove_app_data, ..
+            selected_cleanup,
+            plan,
+            ..
         }) = self.dialog.as_mut()
         {
-            *remove_app_data = checked;
+            if plan
+                .cleanup
+                .items
+                .iter()
+                .any(|item| item.id == id && item.selectable())
+            {
+                selected_cleanup.retain(|selected| selected != id);
+                if checked {
+                    selected_cleanup.push(id.to_string());
+                }
+                cx.notify();
+            }
+        }
+    }
+
+    pub(super) fn keep_app_data(&mut self, keep: bool, cx: &mut Context<Self>) {
+        if let Some(Dialog::Confirm {
+            selected_cleanup,
+            plan,
+            ..
+        }) = self.dialog.as_mut()
+        {
+            *selected_cleanup = if keep {
+                Vec::new()
+            } else {
+                plan.cleanup
+                    .items
+                    .iter()
+                    .filter(|item| item.selectable())
+                    .map(|item| item.id.clone())
+                    .collect()
+            };
             cx.notify();
         }
     }
@@ -404,13 +437,13 @@ impl ScopeApp {
             kind,
             pkg,
             plan,
-            remove_app_data,
+            selected_cleanup,
         }) = self.dialog.as_ref()
         else {
             return;
         };
         let kind = *kind;
-        let remove_app_data = *remove_app_data;
+        let selected_cleanup = selected_cleanup.clone();
         let pkg = pkg.clone();
         let plan = plan.clone();
         let Some(request) = self.operation.begin_apply(&plan.plan_id, self.updater_busy) else {
@@ -430,7 +463,7 @@ impl ScopeApp {
         backend::spawn_apply(
             self.plans.clone(),
             plan.plan_id.clone(),
-            remove_app_data,
+            selected_cleanup,
             tx,
         );
 

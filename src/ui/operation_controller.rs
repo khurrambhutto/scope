@@ -68,6 +68,8 @@ impl OperationController {
         self.finish_apply(
             request,
             OperationResult {
+                cleanup: Vec::new(),
+                warnings: Vec::new(),
                 success: false,
                 message: "Operation ended before Scope received a result. The system may have changed; Scope will rescan.".into(),
                 logs: String::new(),
@@ -156,6 +158,27 @@ mod tests {
     }
 
     #[test]
+    fn cleanup_warnings_remain_available_after_the_apply_finishes() {
+        let mut controller = OperationController::default();
+        let preview = controller.begin_preview().unwrap();
+        controller.accept_preview(preview, Some("plan".into()));
+        let apply = controller.begin_apply("plan", false).unwrap();
+        let mut result = successful_result();
+        result
+            .warnings
+            .push("/home/user/.config/app: permission denied".into());
+
+        let completed = controller.finish_apply(apply, result).unwrap();
+
+        assert!(completed.success);
+        assert_eq!(
+            completed.warnings,
+            ["/home/user/.config/app: permission denied"]
+        );
+        assert!(!controller.is_applying());
+    }
+
+    #[test]
     fn apply_stream_ending_without_a_result_releases_the_operation() {
         let mut controller = OperationController::default();
         let preview = controller.begin_preview().unwrap();
@@ -186,6 +209,8 @@ mod tests {
 
     fn successful_result() -> OperationResult {
         OperationResult {
+            cleanup: Vec::new(),
+            warnings: Vec::new(),
             success: true,
             message: String::new(),
             logs: String::new(),
@@ -195,6 +220,8 @@ mod tests {
 
     fn failed_result() -> OperationResult {
         OperationResult {
+            cleanup: Vec::new(),
+            warnings: Vec::new(),
             success: false,
             message: "The package manager reported an error.".into(),
             logs: String::new(),

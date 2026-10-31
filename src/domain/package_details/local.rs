@@ -1,4 +1,4 @@
-//! Discovery-only local files. Never launch programs or infer data ownership.
+//! Verified local installation footprints and informational discovery-only files.
 
 use anyhow::{bail, Result};
 use std::path::Path;
@@ -79,6 +79,28 @@ pub(super) fn discover(pkg: &InstalledPackage) -> Result<Discovery> {
             );
         }
         PackageSource::Desktop => {
+            if let Some(installation) = pkg.extracted_installation.as_deref() {
+                crate::domain::extracted_app::verify(installation)?;
+                discovery.add(
+                    "Installation",
+                    installation.root.display().to_string(),
+                    DetailEffect::Removed,
+                    Target::Directory(installation.root.clone()),
+                );
+                for launcher in &installation.launchers {
+                    discovery.add(
+                        "Launcher",
+                        launcher.display().to_string(),
+                        DetailEffect::Removed,
+                        Target::File(launcher.clone()),
+                    );
+                }
+                discovery.unknown(
+                    "User data",
+                    "App data is reviewed separately in the uninstall preview",
+                );
+                return Ok(discovery);
+            }
             discovery.add(
                 "Launcher",
                 path.display().to_string(),

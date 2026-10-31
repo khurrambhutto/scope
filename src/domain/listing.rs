@@ -40,7 +40,11 @@ pub fn can_uninstall(pkg: &InstalledPackage) -> bool {
                 .tool_installation
                 .as_ref()
                 .is_some_and(|i| i.protection_reason.is_none()))
-        && !safety::check_package(pkg.source, &pkg.package_id).protected
+        && (if pkg.source == PackageSource::Desktop {
+            pkg.extracted_installation.is_some()
+        } else {
+            !safety::check_package(pkg.source, &pkg.package_id).protected
+        })
 }
 
 /// A short caution shown only when confirming removal of an automatic APT app.
@@ -60,6 +64,9 @@ pub fn uninstall_block_reason(pkg: &InstalledPackage) -> Option<String> {
         .and_then(|i| i.protection_reason.clone())
     {
         return Some(reason);
+    }
+    if pkg.source == PackageSource::Desktop && pkg.extracted_installation.is_some() {
+        return None;
     }
     let protection = safety::check_package(pkg.source, &pkg.package_id);
     if protection.reason.is_none()

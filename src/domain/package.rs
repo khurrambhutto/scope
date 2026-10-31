@@ -122,6 +122,9 @@ pub struct InstalledPackage {
     /// Verified Scope/Gear Lever integration of an AppImage in `~/AppImages`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub appimage_installation: Option<Box<crate::domain::appimage::AppImageInstallation>>,
+    /// Dedicated extracted AppDir whose rooted installation and launchers are verified.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extracted_installation: Option<Box<crate::domain::extracted_app::ExtractedInstallation>>,
     /// An unavailable update check or source-specific update limitation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub update_note: Option<String>,
@@ -183,6 +186,7 @@ impl InstalledPackage {
             apt_automatic: false,
             tool_installation: None,
             appimage_installation: None,
+            extracted_installation: None,
             update_note: None,
             name: String::new(),
             display_name: None,
@@ -215,6 +219,7 @@ impl InstalledPackage {
             apt_automatic: false,
             tool_installation: None,
             appimage_installation: None,
+            extracted_installation: None,
             update_note: None,
             name: String::new(),
             display_name: None,

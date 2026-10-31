@@ -231,7 +231,7 @@ pub async fn preview(source: &Path) -> Result<OperationPlan> {
         created_at_ms: super::now_ms(),
         apt_transaction_fingerprint: Some(transaction.fingerprint),
         snap_details: None,
-        app_data: vec![],
+        cleanup: Default::default(),
         target: OperationTarget::DebInstall {
             plan: Box::new(DebInstallPlan {
                 source,
