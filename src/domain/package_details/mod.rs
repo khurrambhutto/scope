@@ -1,6 +1,7 @@
 //! Source-aware, read-only installed footprints. Rows never authorize deletion.
 
 mod apt;
+mod cleanup;
 mod flatpak;
 mod inspection;
 mod local;
@@ -22,6 +23,8 @@ pub const MEASURING_NOTE: &str = "Measuring…";
 pub enum DetailEffect {
     Removed,
     Kept,
+    /// Detected user data that requires the fresh uninstall review.
+    Review,
     Unverified,
     /// A detected file or footprint without an uninstall ownership claim.
     Informational,
@@ -49,15 +52,23 @@ impl PackageDetails {
         }
     }
 
+    pub fn review_size(&self) -> Measurement {
+        self.effect_size(DetailEffect::Review)
+    }
+
     /// Only sizes of affected package-owned items, never net freed disk space.
     pub fn removal_size(&self) -> Measurement {
+        self.effect_size(DetailEffect::Removed)
+    }
+
+    fn effect_size(&self, effect: DetailEffect) -> Measurement {
         let mut bytes = None::<u64>;
         let mut complete = self.warnings.is_empty();
-        for item in self
-            .items
-            .iter()
-            .filter(|item| item.effect == DetailEffect::Removed)
-        {
+        for item in self.items.iter().filter(|item| item.effect == effect) {
+            if effect == DetailEffect::Review && item.size.status == MeasurementStatus::NotMeasured
+            {
+                continue;
+            }
             complete &= item.size.complete;
             if let Some(size) = item.size.bytes {
                 let Some(total) = bytes.unwrap_or(0).checked_add(size) else {

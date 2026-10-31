@@ -44,7 +44,7 @@ cargo test --locked disposable_ -- --ignored --nocapture
 
 The standard suite is hermetic. The optional disposable tests install/update/remove local fixture tools in private roots: Cargo from a dependency-free local Git repository, npm/Bun through a loopback fixture registry, and uv/pipx through fixture wheels. Python fixtures now use a private HOME/cache and pin underlying configured runtimes rather than requiring a mise shim to resolve in an empty HOME. No existing installed user tool is selected by these fixtures.
 
-Final standard verification: **502 passed, 17 ignored, 0 failed**. Check, build, strict all-target/all-feature Clippy, formatting and whitespace checks pass. The three optional disposable lifecycle tests also pass on the normal test-thread stack.
+Initial cleanup verification: **502 passed, 17 ignored, 0 failed**. Check, build, strict all-target/all-feature Clippy, formatting and whitespace checks pass. The three optional disposable lifecycle tests also pass on the normal test-thread stack.
 
 Additional checks:
 
@@ -54,6 +54,15 @@ Additional checks:
 - The optional AppImage install/remove round trip uses a copy of a real AppImage under a temporary HOME. It never executes the AppImage or modifies its original.
 
 Verification logs are retained in `/tmp/scope-unified-disposable-tests.log`, `/tmp/scope-unified-python-tools.log` and `/tmp/scope-unified-appimage-lifecycle.log`. Stack diagnosis is retained in `/tmp/scope-unified-gdb-current.log`; a regression guards against inlining manager inventories back into the worker futures.
+
+## Compact details and preview follow-up
+
+- XDG profile/config roots are labeled **User data**; cache and state retain their distinct categories.
+- Expanded details stream the native footprint first, then append detected data through the same bounded discovery used by uninstall preview. Inline rows remain informational; a fresh stored uninstall plan still authorizes removal.
+- The header separates the native removal estimate from optional data **to review**. Exact/native-parent overlaps are deduplicated, and Flatpak permission records do not count as unknown storage.
+- Inline and modal rows share label/path/size alignment and HOME abbreviation. The modal uses direct user-data selection instead of the inverted Keep app data control. Repeated discovery explanations and duplicate native-effect paragraphs are removed; retained-path reasons, coverage warnings and Snap snapshot behavior remain visible.
+- Follow-up verification: **506 passed, 18 ignored, 0 failed**, plus strict Clippy, build, formatting and whitespace checks. Live read-only checks found Hex's current data directory (25,378,816 measured bytes) and Cursor's two configuration roots plus state directory in the expanded inspection result. No app or user data was changed by those checks.
+- Native GUI screenshot/interaction automation is unavailable in this session; the new layout has compiled but has not been visually exercised here.
 
 ## Explicit limits
 

@@ -44,7 +44,7 @@ Use **Updates** to see available updates and **Show all** to include packages hi
 
 APT apps with visible app-menu launchers appear even when installed automatically. They use the same update and uninstall previews as other APT apps. Uninstall previews warn when other apps or desktop features may depend on them.
 
-Uninstall previews show app files, app data, and anything kept or unverified in one place. Reviewed app-data rules can select settings, profiles, caches and state for removal; exact-name associations and mixed-content folders require separate review. Choose **Keep app data** to retain it. Files inside selected folders move to Trash, including any personal content there, and remain recoverable until Trash is emptied. Shared or unverifiable data stays in place and appears in the result.
+Uninstall previews show app files, app data, and anything kept or unverified in one place. Reviewed app-data rules can select settings, profiles, caches and state for removal; exact-name associations and mixed-content folders require separate review. Uncheck user-data rows to retain them. Expanded app details show the same detected folders under **Review**, separately from the native removal estimate. Files inside selected folders move to Trash, including any personal content there, and remain recoverable until Trash is emptied. Shared or unverifiable data stays in place and appears in the result.
 
 APT uninstall, including apps installed from `.deb` files, purges the package and its package configuration without autoremove. APT, Snap and Flatpak removal is checked before selected app-data cleanup starts. Flatpak profiles and saved permissions have separate choices. Snap recovery snapshots remain; normal Snap removal may create a new snapshot.
 

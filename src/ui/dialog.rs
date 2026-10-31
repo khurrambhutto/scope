@@ -352,14 +352,6 @@ fn confirm_body(
                     )
                 },
             )
-            .when_some(plan.snap_details.as_ref(), |this, details| {
-                this.child(super::package_details::breakdown(
-                    Some(&crate::domain::package_details::PackageDetails::from(
-                        details.as_ref(),
-                    )),
-                    PackageSource::Snap,
-                ))
-            })
             .when(kind == OpKind::Uninstall, |this| {
                 this.child(super::uninstall_preview::body(
                     entity,

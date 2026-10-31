@@ -74,10 +74,10 @@ pub enum AppDataKind {
 impl AppDataKind {
     pub fn label(self) -> &'static str {
         match self {
-            Self::Config => "Settings",
-            Self::Data => "App data",
+            Self::Config => "User data",
+            Self::Data => "User data",
             Self::Cache => "Cache",
-            Self::State => "State",
+            Self::State => "App state",
             Self::Icon => "Icon",
         }
     }

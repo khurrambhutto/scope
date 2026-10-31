@@ -79,7 +79,7 @@ pub(super) fn build(pkg: &InstalledPackage, roots: &Roots, claims: &Claims) -> C
                 .push("Flatpak scope or application identity is missing; data is retained.".into());
             return plan;
         }
-        candidates.push(Candidate { path: roots.home.join(".var/app").join(&pkg.package_id), label: "App profile, settings and cache".into(), reason: "Flatpak's exact application-ID data directory. It may contain saved app content; review before selecting.".into(), default_selected: false });
+        candidates.push(Candidate { path: roots.home.join(".var/app").join(&pkg.package_id), label: "User data".into(), reason: "Flatpak's exact application-ID data directory. It may contain saved app content; review before selecting.".into(), default_selected: false });
         plan.warnings.push(
             "Files outside the Flatpak app data directory remain outside this cleanup coverage."
                 .into(),
@@ -88,13 +88,13 @@ pub(super) fn build(pkg: &InstalledPackage, roots: &Roots, claims: &Claims) -> C
     if let Some(rule) = catalog::rule(pkg) {
         for namespace in rule.namespaces {
             let roots_to_search = match *namespace {
-                "Code" => vec![(&roots.config, "Profile and settings")],
+                "Code" => vec![(&roots.config, "User data")],
                 "ruff" => vec![(&roots.cache, "Cache")],
                 _ => vec![
-                    (&roots.config, "Settings"),
-                    (&roots.data, "Profile and app data"),
+                    (&roots.config, "User data"),
+                    (&roots.data, "User data"),
                     (&roots.cache, "Cache"),
-                    (&roots.state, "State"),
+                    (&roots.state, "App state"),
                 ],
             };
             for (base, label) in roots_to_search {
@@ -111,7 +111,8 @@ pub(super) fn build(pkg: &InstalledPackage, roots: &Roots, claims: &Claims) -> C
             }
         }
     } else if pkg.source != PackageSource::Flatpak {
-        plan.warnings.push("No reviewed application-data rule is available. Unmatched profiles, caches and nonstandard locations remain unknown.".into());
+        plan.warnings
+            .push("Exact-name matches only; other user-data locations are unknown.".into());
     }
     if let Some(app) = &pkg.appimage_installation {
         let app_roots = appimage::Roots::new(roots.home.clone(), roots.data.join("applications"));
@@ -135,10 +136,7 @@ pub(super) fn build(pkg: &InstalledPackage, roots: &Roots, claims: &Claims) -> C
         for data in appimage::app_data::find_paths(&app_roots, &bases, app, &others) {
             candidates.push(Candidate { path: data.path, label: data.kind.label().into(), reason: "Exact launcher/name association; contents and exclusive app ownership require review.".into(), default_selected: false });
         }
-        for (suffix, label) in [
-            (".home", "Portable home (review contents)"),
-            (".config", "Portable settings"),
-        ] {
+        for (suffix, label) in [(".home", "Portable home"), (".config", "Portable data")] {
             let mut path = app.path.as_os_str().to_os_string();
             path.push(suffix);
             candidates.push(Candidate {
@@ -330,10 +328,10 @@ fn associated_candidates(
     });
     let mut found = Vec::new();
     for (base, label) in [
-        (&roots.config, "Settings (review)"),
-        (&roots.data, "App data (review)"),
-        (&roots.cache, "Cache (review)"),
-        (&roots.state, "State (review)"),
+        (&roots.config, "User data"),
+        (&roots.data, "User data"),
+        (&roots.cache, "Cache"),
+        (&roots.state, "App state"),
     ] {
         let entries = match std::fs::read_dir(base) {
             Ok(entries) => entries,

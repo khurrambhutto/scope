@@ -15,136 +15,137 @@ pub(super) fn body(
     plan: &OperationPlan,
     selected: &[String],
 ) -> AnyElement {
-    let mut content = div().flex().flex_col().gap(px(10.)).mt(px(14.));
-    content = content
-        .child(heading("App files"))
-        .child(super::widgets::plan_rows(installation_paths(plan)));
-    for step in &plan.steps {
-        content = content.child(div().text_size(px(12.)).child(step.description.clone()));
-    }
-    let eligible = plan.cleanup.items.iter().any(|item| item.selectable());
-    if eligible {
-        let entity = entity.clone();
-        content = content.child(heading("App data")).child(
-            Checkbox::new("keep-app-data")
-                .label("Keep app data")
-                .checked(selected.is_empty())
-                .on_click(move |checked, _window, cx| {
-                    entity
-                        .update(cx, |app, cx| app.keep_app_data(*checked, cx))
-                        .ok();
-                }),
+    let mut content = div().flex().flex_col().gap(px(6.)).mt(px(14.));
+    content = content.child(heading("App files"));
+    if let Some(details) = &plan.snap_details {
+        content = content.child(super::package_details::breakdown(
+            Some(&crate::domain::package_details::PackageDetails::from(
+                details.as_ref(),
+            )),
+            crate::domain::package::PackageSource::Snap,
+        ));
+        content = content.child(
+            div()
+                .text_size(px(12.))
+                .text_color(theme::text_dim())
+                .child("Snap may create a recovery snapshot; existing snapshots are kept."),
         );
+    } else {
+        content = content.child(super::widgets::plan_rows(installation_paths(plan)));
     }
-    for automatic in [true, false] {
-        if !automatic
-            && plan
-                .cleanup
-                .items
-                .iter()
-                .any(|item| item.selectable() && !item.default_selected)
-        {
-            content = content.child(heading("Review separately"));
-        }
-        for (index, item) in plan
-            .cleanup
-            .items
-            .iter()
-            .enumerate()
-            .filter(|(_, item)| item.selectable() && item.default_selected == automatic)
-        {
-            let id = item.id.clone();
-            let entity = entity.clone();
-            content = content.child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(3.))
-                    .py(px(theme::DETAIL_ROW_PADDING))
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap(px(theme::DETAIL_ROW_GAP))
-                            .child(
-                                Checkbox::new(("cleanup-item", index))
-                                    .label(item.label.clone())
-                                    .checked(selected.contains(&item.id))
-                                    .on_click(move |checked, _window, cx| {
-                                        entity
-                                            .update(cx, |app, cx| {
-                                                app.set_cleanup_item(&id, *checked, cx)
-                                            })
-                                            .ok();
-                                    }),
-                            )
-                            .child(
-                                div()
-                                    .flex_none()
-                                    .text_size(px(12.))
-                                    .text_color(theme::text_dim())
-                                    .child(if item.path.as_os_str().is_empty() {
-                                        String::new()
-                                    } else {
-                                        item.bytes
-                                            .map(theme::format_size)
-                                            .unwrap_or_else(|| "size unknown".into())
-                                    }),
-                            ),
-                    )
-                    .when(!item.path.as_os_str().is_empty(), |this| {
-                        this.child(
-                            div()
-                                .pl(px(24.))
-                                .text_size(px(11.))
-                                .text_color(theme::text_dim())
-                                .child(item.location_label()),
-                        )
-                    })
-                    .child(
-                        div()
-                            .pl(px(24.))
-                            .text_size(px(11.))
-                            .text_color(theme::text_dim())
-                            .child(item.reason.clone()),
-                    ),
-            );
+    // APT simulation effects and tool environment effects remain visible;
+    // local-file plans are already represented by the path rows above.
+    if matches!(
+        plan.target,
+        OperationTarget::Apt { .. } | OperationTarget::Tool { .. }
+    ) {
+        for step in plan.steps.iter().skip(usize::from(matches!(
+            plan.target,
+            OperationTarget::Apt { .. }
+        ))) {
+            content = content.child(div().text_size(px(12.)).child(step.description.clone()));
         }
     }
-    let retained: Vec<_> = plan
+    let eligible = plan
         .cleanup
         .items
         .iter()
-        .filter(|item| !item.selectable() && item.effect != CleanupEffect::Included)
-        .collect();
-    if !retained.is_empty() || !plan.cleanup.warnings.is_empty() {
-        content = content.child(heading("Kept / cannot verify"));
+        .filter(|item| item.selectable())
+        .count();
+    if eligible > 0 {
+        let entity = entity.clone();
+        content = content.child(
+            div().mt(px(12.)).child(
+                Checkbox::new("select-user-data")
+                    .label("User data")
+                    .checked(selected.len() == eligible)
+                    .on_click(move |checked, _window, cx| {
+                        entity
+                            .update(cx, |app, cx| app.keep_app_data(!*checked, cx))
+                            .ok();
+                    }),
+            ),
+        );
+    }
+    for (index, item) in plan
+        .cleanup
+        .items
+        .iter()
+        .enumerate()
+        .filter(|(_, item)| item.selectable())
+    {
+        let id = item.id.clone();
+        let entity = entity.clone();
+        let checkbox = Checkbox::new(("cleanup-item", index))
+            .label(item.label.clone())
+            .checked(selected.contains(&item.id))
+            .on_click(move |checked, _window, cx| {
+                entity
+                    .update(cx, |app, cx| app.set_cleanup_item(&id, *checked, cx))
+                    .ok();
+            })
+            .into_any_element();
+        let size = if item.path.as_os_str().is_empty() {
+            String::new()
+        } else {
+            item.bytes
+                .map(theme::format_size)
+                .unwrap_or_else(|| "Unknown".into())
+        };
+        content = content.child(super::footprint_row::row(
+            "",
+            (!item.path.as_os_str().is_empty())
+                .then(|| item.location_label())
+                .as_deref(),
+            size,
+            Some(checkbox),
+            None,
+        ));
+    }
+    let retained = plan
+        .cleanup
+        .items
+        .iter()
+        .filter(|item| !item.selectable() && item.effect != CleanupEffect::Included);
+    if retained.clone().next().is_some() {
+        content = content.child(heading("Kept"));
         for item in retained {
-            content = content.child(
-                div()
-                    .text_size(px(12.))
-                    .text_color(theme::text_dim())
-                    .child(format!("{} — {}", item.location_label(), item.reason)),
-            );
-        }
-        for warning in &plan.cleanup.warnings {
-            content = content.child(
-                div()
-                    .text_size(px(12.))
-                    .text_color(theme::text_dim())
-                    .child(warning.clone()),
-            );
+            content = content.child(super::footprint_row::row(
+                item.label.clone(),
+                Some(&item.location_label()),
+                item.bytes
+                    .map(theme::format_size)
+                    .unwrap_or_else(|| "Unknown".into()),
+                None,
+                Some(&item.reason),
+            ));
         }
     }
-    content.child(div().mt(px(6.)).text_size(px(11.)).text_color(theme::text_dim())
-        .child("Files inside selected folders move to Trash, including any profiles, history, credentials or saved content there. Documents outside those folders are kept. Trash continues to use disk space."))
-        .into_any_element()
+    for warning in &plan.cleanup.warnings {
+        content = content.child(
+            div()
+                .mt(px(4.))
+                .text_size(px(12.))
+                .text_color(theme::text_dim())
+                .child(warning.clone()),
+        );
+    }
+    if eligible > 0 {
+        content = content.child(div().mt(px(8.)).text_size(px(12.)).text_color(theme::text_dim())
+            .child("Selected folders and their contents move to Trash, including saved content. Trash still uses disk space."));
+    }
+    content.into_any_element()
 }
 
 fn installation_paths(plan: &OperationPlan) -> Vec<(&'static str, String)> {
     let mut paths = Vec::new();
     match &plan.target {
+        OperationTarget::Apt { package_id } => {
+            paths.push(("APT package", package_id.clone()));
+        }
+        OperationTarget::Flatpak { app_id, .. } => {
+            paths.push(("Flatpak app", app_id.clone()));
+        }
         OperationTarget::AppImage {
             installation: Some(app),
             ..
