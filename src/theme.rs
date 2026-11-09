@@ -133,72 +133,85 @@ pub fn display_title(pkg: &InstalledPackage) -> String {
     pkg.display_name.clone().unwrap_or_else(|| pkg.name.clone())
 }
 
-// ---- Scope palette (moved from the app view) ------------------------------
-
 // ---- Palette ---------------------------------------------------------------
+//
+// One matte red hue (OKLCH 29.48, chroma capped at 0.145) plus neutrals tinted
+// by it. The brand red #e10600 is reserved for the logo.
 
 pub fn border() -> Hsla {
-    rgb(0x4b3034).into()
+    rgb(0x433836).into()
 }
 pub fn text() -> Hsla {
-    rgb(0xefe6e4).into()
+    rgb(0xf4efee).into()
 }
 pub fn text_dim() -> Hsla {
-    rgb(0xbca5a1).into()
+    rgb(0xd9d0cf).into()
 }
 pub fn text_faint() -> Hsla {
-    rgb(0x9e8581).into()
+    rgb(0xbfb3b1).into()
 }
 pub fn accent() -> Hsla {
-    rgb(0xd4504a).into()
+    rgb(0xd77567).into()
 }
 pub fn danger() -> Hsla {
-    rgb(0xc9443e).into()
+    rgb(0xb7493c).into()
 }
 pub fn elev() -> Hsla {
-    rgb(0x211719).into()
+    rgb(0x1a1312).into()
 }
 pub fn elev2() -> Hsla {
-    rgb(0x291c1f).into()
+    rgb(0x211a18).into()
 }
 
-/// Emphasis text stays readable on the dark red control surfaces.
+/// Emphasis text stays readable on every surface, including selected_surface.
 pub fn accent_text() -> Hsla {
-    rgb(0xf08c82).into()
+    rgb(0xeeb4aa).into()
 }
 pub fn hover_surface() -> Hsla {
-    rgb(0x352327).into()
+    rgb(0x29211f).into()
 }
 pub fn selected_surface() -> Hsla {
-    rgb(0x3d2529).into()
+    rgb(0x47211c).into()
 }
-/// A quieter burgundy surface for the expanded app and its breakdown.
+/// The expanded app and its breakdown.
 pub fn detail_surface() -> Hsla {
-    rgb(0x332426).into()
+    rgb(0x29211f).into()
 }
 pub fn detail_hover_surface() -> Hsla {
-    rgb(0x3a2a2c).into()
+    rgb(0x312826).into()
 }
 pub fn border_hover() -> Hsla {
-    rgb(0x9c625e).into()
+    rgb(0x9f928f).into()
 }
 pub fn primary() -> Hsla {
-    rgb(0xa83a36).into()
+    rgb(0x7b2e24).into()
 }
 pub fn primary_hover() -> Hsla {
-    rgb(0xbc4540).into()
+    rgb(0x993a2f).into()
 }
 pub fn primary_pressed() -> Hsla {
-    rgb(0x94332f).into()
+    rgb(0x47211c).into()
+}
+/// Labels of disabled controls (neutral-500).
+pub fn text_disabled() -> Hsla {
+    rgb(0x7f716e).into()
+}
+/// Skeleton placeholders on page surfaces (neutral-750).
+pub fn skeleton() -> Hsla {
+    rgb(0x312826).into()
 }
 pub fn on_accent() -> Hsla {
-    rgb(0xfffaf8).into()
+    rgb(0xfcf5f4).into()
 }
 pub fn background_top() -> Hsla {
-    rgb(0x2d1414).into()
+    rgb(0x22110e).into()
+}
+/// Scrim under dialogs: background_bottom at 60% alpha.
+pub fn scrim() -> Hsla {
+    gpui_kit::rgba(0x100b0a99).into()
 }
 pub fn background_bottom() -> Hsla {
-    rgb(0x0b0c0f).into()
+    rgb(0x100b0a).into()
 }
 
 /// Keep kit-owned input, caret, focus, and button states in Scope's palette.
@@ -236,6 +249,7 @@ pub fn init(cx: &mut App) -> anyhow::Result<()> {
     colors.link_hover = text();
     colors.link_active = accent_text();
     colors.selection = selected_surface();
+    colors.skeleton = skeleton();
     colors.primary = primary();
     colors.primary_foreground = on_accent();
     colors.primary_hover = primary_hover();

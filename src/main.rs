@@ -49,6 +49,7 @@ fn embedded_asset(path: &str) -> Option<&'static [u8]> {
         "search.svg" => Some(include_bytes!("../assets/search.svg")),
         "clear.svg" => Some(include_bytes!("../assets/clear.svg")),
         "bug.svg" => Some(include_bytes!("../assets/bug.svg")),
+        "trash.svg" => Some(include_bytes!("../assets/trash.svg")),
         _ => None,
     }
 }
@@ -184,6 +185,7 @@ mod tests {
             "refresh.svg",
             "search.svg",
             "clear.svg",
+            "trash.svg",
         ] {
             let ci_path = format!("/home/runner/work/scope/scope/assets/{name}");
             let bytes = embedded_asset(&ci_path);

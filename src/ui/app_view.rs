@@ -722,11 +722,23 @@ impl ScopeApp {
     }
 
     /// The virtualized package list, or a loading/empty state.
-    fn list_element(&self, list_entity: &Entity<ScopeApp>) -> AnyElement {
+    fn list_element(&self, list_entity: &Entity<ScopeApp>, cx: &App) -> AnyElement {
         if self.loading && self.packages.entries.is_empty() {
-            loading_state().into_any_element()
+            loading_state(cx).into_any_element()
         } else if self.packages.entries.is_empty() {
-            empty_state().into_any_element()
+            let has_query = !self.search_input.read(cx).value().is_empty();
+            let entity = list_entity.downgrade();
+            let clear = move |_: &ClickEvent, window: &mut Window, cx: &mut App| {
+                entity
+                    .update(cx, |this, cx| {
+                        // set_value emits no Change event, so notify explicitly.
+                        this.search_input
+                            .update(cx, |input, cx| input.set_value("", window, cx));
+                        cx.notify();
+                    })
+                    .ok();
+            };
+            empty_state(has_query.then_some(clear)).into_any_element()
         } else {
             let state = self.list_state.clone();
             let list_entity = list_entity.clone();
@@ -807,7 +819,7 @@ impl Render for ScopeApp {
         let corner_radius = px(if floating { 12. } else { 0. });
         let entity = cx.entity().downgrade();
         let list_entity = cx.entity();
-        let list_element = self.list_element(&list_entity);
+        let list_element = self.list_element(&list_entity, cx);
 
         let banner_children = self.banner_stack(&entity);
 

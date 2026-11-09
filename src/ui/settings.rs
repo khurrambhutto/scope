@@ -2,14 +2,13 @@
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::Disableable;
 use gpui_kit::prelude::*;
 use gpui_kit::{div, px, svg, AnyElement, Context, FontWeight, Pixels, WeakEntity};
 
 use super::app_view::{act, ScopeApp};
 use super::dialog::settings_modal_shell;
 use super::updater::UpdaterStatus;
-use super::widgets::{button, ButtonStyle};
+use super::widgets::{button, ButtonStyle, DisabledLook};
 use crate::theme;
 
 const WEBSITE_URL: &str = "https://khurrambhutto.github.io/scope/";
@@ -95,7 +94,7 @@ impl ScopeApp {
                                 ButtonStyle::Update,
                                 act(entity, |this, cx| this.start_update(cx)),
                             )
-                            .disabled(busy),
+                            .disabled_look(busy),
                         ),
                 )
                 .into_any_element()
@@ -127,7 +126,7 @@ impl ScopeApp {
                     }
                 }),
             )
-            .disabled(busy || matches!(self.updater.status, UpdaterStatus::Ready { .. }))
+            .disabled_look(busy || matches!(self.updater.status, UpdaterStatus::Ready { .. }))
             .into_any_element();
             div()
                 .px(px(20.))

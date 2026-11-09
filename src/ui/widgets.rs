@@ -3,7 +3,8 @@
 use gpui_kit::assets::IconName;
 use gpui_kit::component::{
     button::{Button, ButtonVariants},
-    Icon, Selectable,
+    spinner::Spinner,
+    Disableable, Icon, Selectable, Sizable,
 };
 use gpui_kit::prelude::*;
 use gpui_kit::{
@@ -11,6 +12,8 @@ use gpui_kit::{
 };
 
 use crate::theme::{self, border, elev2, text, text_dim, text_faint};
+
+const ICON_TRASH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/trash.svg");
 
 pub(super) fn view_toggle_button(
     id: &'static str,
@@ -110,28 +113,105 @@ pub(super) fn menu_item(
         )
 }
 
-pub(super) fn empty_state() -> impl IntoElement {
+/// `on_clear` is set only while a query is present.
+pub(super) fn empty_state(
+    on_clear: Option<impl Fn(&ClickEvent, &mut Window, &mut App) + 'static>,
+) -> impl IntoElement {
     div()
         .flex()
+        .flex_col()
         .items_center()
         .justify_center()
-        .py(px(48.))
+        .gap(px(12.))
+        .py(px(40.))
         .text_color(text_faint())
         .text_size(px(14.))
+        .line_height(px(20.))
         .child("No installed apps match your search.")
+        .when_some(on_clear, |this, on_clear| {
+            this.child(
+                button(
+                    "empty-clear-search",
+                    "Clear search",
+                    ButtonStyle::Neutral,
+                    on_clear,
+                )
+                .ghost(),
+            )
+        })
 }
 
-pub(super) fn loading_state() -> impl IntoElement {
+pub(super) fn loading_state(cx: &App) -> impl IntoElement {
+    let animate = !cx.reduce_motion();
     div()
         .flex()
-        .items_center()
-        .justify_center()
-        .py(px(48.))
-        .text_color(text_faint())
-        .text_size(px(14.))
+        .flex_col()
         .child(
-            "Scanning installed apps across APT, Snap, Flatpak, AppImage, Steam, and JetBrains Toolbox…",
+            div()
+                .flex()
+                .items_center()
+                .justify_center()
+                .gap(px(10.))
+                .py(px(20.))
+                .text_color(text_faint())
+                .text_size(px(14.))
+                .child(Spinner::new().small().color(text_faint()))
+                .child(
+                    "Scanning installed apps across APT, Snap, Flatpak, AppImage, Steam, and JetBrains Toolbox…",
+                ),
         )
+        .children(
+            [(180., 240.), (140., 200.), (210., 260.), (160., 220.)]
+                .into_iter()
+                .enumerate()
+                .map(move |(index, (name, meta))| skeleton_row(index, name, meta, animate)),
+        )
+}
+
+/// A list-row placeholder at the real row's icon, name, and metadata sizes.
+fn skeleton_row(index: usize, name_width: f32, meta_width: f32, animate: bool) -> AnyElement {
+    use gpui_kit::{Animation, AnimationExt};
+
+    let bar = |width: f32, height: f32| {
+        div()
+            .w(px(width))
+            .h(px(height))
+            .rounded(px(4.))
+            .bg(theme::skeleton())
+    };
+    let row = div()
+        .flex()
+        .items_center()
+        .gap(px(12.))
+        .px(px(12.))
+        .py(px(10.))
+        .my(px(2.))
+        .child(
+            div()
+                .flex_none()
+                .size(px(40.))
+                .rounded(px(10.))
+                .bg(theme::skeleton()),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(7.))
+                .child(bar(name_width, 12.))
+                .child(bar(meta_width, 10.)),
+        );
+    if !animate {
+        return row.into_any_element();
+    }
+    row.with_animation(
+        ("skeleton-row", index),
+        Animation::new(std::time::Duration::from_millis(1400))
+            .repeat()
+            .with_easing(gpui_kit::bounce(gpui_kit::ease_in_out)),
+        |this, delta| this.opacity(1.0 - delta * 0.5),
+    )
+    .into_any_element()
 }
 
 pub(super) enum BannerKind {
@@ -140,23 +220,34 @@ pub(super) enum BannerKind {
 }
 
 pub(super) fn banner(message: &str, kind: BannerKind) -> gpui_kit::Div {
-    let (bg, border_c, fg) = match kind {
+    let (bg, fg, icon) = match kind {
         BannerKind::Error => (
             theme::selected_surface(),
-            theme::border_hover(),
             theme::accent_text(),
+            IconName::CircleX,
         ),
-        BannerKind::Warn => (elev2(), theme::border_hover(), text()),
+        BannerKind::Warn => (elev2(), text(), IconName::TriangleAlert),
     };
     div()
+        .flex()
+        .items_start()
+        .gap(px(12.))
         .px(px(14.))
         .py(px(10.))
         .rounded(px(12.))
         .border_1()
-        .border_color(border_c)
+        .border_color(theme::border_hover())
         .bg(bg)
         .text_size(px(13.))
+        .line_height(px(18.))
         .text_color(fg)
+        .child(
+            Icon::new(icon)
+                .size(px(16.))
+                .flex_none()
+                .mt(px(1.))
+                .text_color(fg),
+        )
         .child(div().flex_1().min_w(px(0.)).child(message.to_string()))
 }
 
@@ -183,9 +274,7 @@ pub(super) fn dismissible_banner(
     on_dismiss: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
     banner(message, kind)
-        .flex()
-        .items_start()
-        .gap(px(12.))
+        .pr(px(8.))
         .child(dismiss_button(id, "Dismiss notification", on_dismiss))
 }
 
@@ -212,8 +301,29 @@ pub(super) fn button(
         .on_click(on_click);
     match style {
         ButtonStyle::Neutral => button,
-        ButtonStyle::Danger => button.danger(),
+        // Primary and danger share one hue, so removal also carries weight and an icon.
+        ButtonStyle::Danger => button
+            .danger()
+            .font_weight(FontWeight::SEMIBOLD)
+            .icon(Icon::empty().path(ICON_TRASH)),
         ButtonStyle::Update => button.primary(),
+    }
+}
+
+/// Disabled controls share one look: transparent, outlined, with a muted label.
+/// Instance styles override the kit's disabled style, so they apply only here.
+pub(super) trait DisabledLook {
+    fn disabled_look(self, disabled: bool) -> Self;
+}
+
+impl DisabledLook for Button {
+    fn disabled_look(self, disabled: bool) -> Self {
+        self.disabled(disabled).when(disabled, |this| {
+            this.bg(gpui_kit::transparent_black())
+                .border_1()
+                .border_color(border())
+                .text_color(theme::text_disabled())
+        })
     }
 }
 

@@ -1,8 +1,8 @@
 //! One row in the package list: icon, title/meta line, hover action button.
 
-use gpui_kit::component::{button::Button, Disableable};
+use gpui_kit::component::button::Button;
 use gpui_kit::prelude::*;
-use gpui_kit::{div, img, px, rgb, rgba, AnyElement, FontWeight, WeakEntity};
+use gpui_kit::{div, img, px, rgba, AnyElement, FontWeight, WeakEntity};
 
 use crate::backend::{self, OpKind};
 use crate::domain::listing;
@@ -12,7 +12,7 @@ use crate::theme::{self, display_title, text_dim};
 
 use super::app_view::{act, ScopeApp};
 use super::filters::ViewMode;
-use super::widgets::{button, ButtonStyle};
+use super::widgets::{button, ButtonStyle, DisabledLook};
 
 pub(super) struct RowState<'a> {
     pub selected: bool,
@@ -100,14 +100,14 @@ pub(super) fn row_element(
         .px(px(12.))
         .when(has_action, |this| {
             this.pr(px(if show_removal_size {
-                330.
+                352.
             } else if matches!(
                 pkg.source,
                 PackageSource::Steam | PackageSource::JetBrainsToolbox
             ) {
                 170.
             } else {
-                132.
+                154.
             }))
         })
         .py(px(10.))
@@ -170,6 +170,13 @@ pub(super) fn row_element(
                         .child("·")
                         .child(theme::format_size(pkg.size_bytes))
                         .child("·")
+                        .child(
+                            div()
+                                .flex_none()
+                                .size(px(6.))
+                                .rounded_full()
+                                .bg(theme::source_color(pkg.source)),
+                        )
                         .child(theme::package_source_label(pkg))
                         .when_some(steam_update_status, |this, status| {
                             this.child("·").child(status)
@@ -234,7 +241,7 @@ fn action_button(
                 .ok();
         },
     )
-    .disabled(operation_busy)
+    .disabled_look(operation_busy)
     .tab_stop(selected && !operation_busy)
     .into_any_element()
 }
@@ -281,7 +288,7 @@ fn unavailable_action_button() -> AnyElement {
         .h(px(34.))
         .px(px(12.))
         .text_size(px(12.))
-        .disabled(true)
+        .disabled_look(true)
         .into_any_element()
 }
 
@@ -302,7 +309,7 @@ pub(super) fn package_icon(pkg: &InstalledPackage, size: f32) -> AnyElement {
         .items_center()
         .justify_center()
         .bg(theme::source_color(pkg.source))
-        .text_color(rgb(0xffffff))
+        .text_color(theme::on_accent())
         .font_weight(FontWeight::SEMIBOLD)
         .text_size(px(if size > 48. { 18. } else { 14. }))
         .child(theme::initials(&title))
