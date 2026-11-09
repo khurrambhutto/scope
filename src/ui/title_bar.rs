@@ -3,7 +3,7 @@
 
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    div, img, px, rgb, svg, FontWeight, ImageSource, MouseButton, Pixels, Resource, Window,
+    div, img, px, svg, FontWeight, ImageSource, MouseButton, Pixels, Resource, Window,
     WindowControlArea,
 };
 
@@ -110,6 +110,7 @@ pub(super) fn title_bar(
                     ICON_MIN,
                     WindowControlArea::Min,
                     elev2(),
+                    text(),
                     px(0.),
                     |window| window.minimize_window(),
                 ))
@@ -118,6 +119,7 @@ pub(super) fn title_bar(
                     ICON_MAX,
                     WindowControlArea::Max,
                     elev2(),
+                    text(),
                     px(0.),
                     |window| window.zoom_window(),
                 ))
@@ -126,6 +128,7 @@ pub(super) fn title_bar(
                     ICON_CLOSE,
                     WindowControlArea::Close,
                     danger(),
+                    crate::theme::on_accent(),
                     corner_radius,
                     |window| window.remove_window(),
                 )),
@@ -137,6 +140,7 @@ pub(super) fn window_control_button(
     icon: &'static str,
     area: WindowControlArea,
     hover_bg: gpui_kit::Hsla,
+    hover_fg: gpui_kit::Hsla,
     corner_radius: Pixels,
     action: impl Fn(&mut Window) + 'static,
 ) -> impl IntoElement {
@@ -149,7 +153,7 @@ pub(super) fn window_control_button(
             cx.stop_propagation();
         })
         .on_click(move |_event, window, _cx| action(window))
-        .w(px(40.))
+        .w(px(46.))
         .h(px(36.))
         .rounded_tr(corner_radius)
         .flex()
@@ -166,6 +170,6 @@ pub(super) fn window_control_button(
                 .size(px(13.))
                 .flex_none()
                 .text_color(text_dim())
-                .group_hover(id, |this| this.text_color(rgb(0xffffff))),
+                .group_hover(id, move |this| this.text_color(hover_fg)),
         )
 }

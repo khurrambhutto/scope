@@ -4,8 +4,8 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    div, linear_color_stop, linear_gradient, px, relative, rgba, AnyElement, App, ClickEvent,
-    FontWeight, Pixels, WeakEntity, Window,
+    div, linear_color_stop, linear_gradient, px, relative, AnyElement, App, ClickEvent, FontWeight,
+    Pixels, WeakEntity, Window,
 };
 
 use crate::backend::OpKind;
@@ -171,7 +171,7 @@ fn modal_shell_styled(
         .items_center()
         .justify_center()
         .rounded(corner_radius)
-        .bg(rgba(0x00000099))
+        .bg(theme::scrim())
         .on_click(act(entity, |this, cx| this.close_dialog(cx)))
         .child(
             div()

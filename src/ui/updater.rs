@@ -6,7 +6,7 @@
 use gpui_kit::assets::IconName;
 use gpui_kit::component::{
     button::{Button, ButtonVariants},
-    Disableable, Icon,
+    Icon,
 };
 use gpui_kit::prelude::*;
 use gpui_kit::{div, px, AnyElement, FontWeight, IntoElement, SharedString};
@@ -14,7 +14,7 @@ use gpui_kit::{div, px, AnyElement, FontWeight, IntoElement, SharedString};
 use crate::domain::operations::OperationResult;
 use crate::domain::updater::{InstallKind, UpdateCheck, RELEASES_URL};
 use crate::theme;
-use crate::ui::widgets::{button, dismiss_button, progress_bar, ButtonStyle};
+use crate::ui::widgets::{button, dismiss_button, progress_bar, ButtonStyle, DisabledLook};
 
 /// The updater lifecycle. Each phase carries exactly the data it needs, so an
 /// "available" banner cannot render without a check and a finished banner cannot
@@ -189,7 +189,7 @@ pub fn updater_banner(
                     ButtonStyle::Update,
                     on_update,
                 )
-                .disabled(!can_act),
+                .disabled_look(!can_act),
             );
         } else {
             let url = check.url.clone();
