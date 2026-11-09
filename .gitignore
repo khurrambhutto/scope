@@ -13,6 +13,7 @@ skills-lock.json
 # Showreel
 /showreel/
 /brag-output/
+/brag-reddit/
 
 # IDE
 .idea/

@@ -382,10 +382,12 @@ pub async fn run_prepared(
         Ok(c) => c,
         Err(e) => {
             return OperationResult {
+                cleanup: Vec::new(),
                 success: false,
                 message: format!("Failed to start command: {e}"),
                 logs: format!("spawn error: {e}\n[scope] ran: {display_program} {args:?}"),
                 exit_code: None,
+                warnings: Vec::new(),
             };
         }
     };
@@ -473,10 +475,12 @@ pub async fn run_prepared(
 
     if timed_out {
         return OperationResult {
+            cleanup: Vec::new(),
             success: false,
             message: format!("Operation timed out after {timeout:?}."),
             logs: format!("timed out after {timeout:?}{logs_suffix}"),
             exit_code: None,
+            warnings: Vec::new(),
         };
     }
 
@@ -494,23 +498,29 @@ pub async fn run_prepared(
                 format!("Operation failed (exit {exit_code:?}): {first_err}")
             };
             OperationResult {
+                cleanup: Vec::new(),
                 success,
                 message,
                 logs,
                 exit_code,
+                warnings: Vec::new(),
             }
         }
         Some(Err(e)) => OperationResult {
+            cleanup: Vec::new(),
             success: false,
             message: format!("Command failed: {e}"),
             logs: format!("wait error: {e}{logs_suffix}"),
             exit_code: None,
+            warnings: Vec::new(),
         },
         None => OperationResult {
+            cleanup: Vec::new(),
             success: false,
             message: "Command did not run.".into(),
             logs: logs_suffix,
             exit_code: None,
+            warnings: Vec::new(),
         },
     }
 }

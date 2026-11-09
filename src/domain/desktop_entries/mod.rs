@@ -496,6 +496,10 @@ impl DesktopIndex {
                 pkg.name = app.name.clone();
                 pkg.display_name = Some(app.name.clone());
                 pkg.description = app.comment.clone();
+                if let Ok(installation) = crate::domain::extracted_app::discover(&app.file_path) {
+                    pkg.version = installation.version.clone();
+                    pkg.extracted_installation = Some(Box::new(installation));
+                }
                 pkg.categories = (!app.categories.is_empty()).then(|| app.categories.join(", "));
                 pkg.terminal = app.terminal;
                 pkg.app_kind = if app.terminal {

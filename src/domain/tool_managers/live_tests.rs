@@ -66,7 +66,7 @@ fn seed(source: PackageSource, directory: &std::path::Path) -> ToolInstallation 
             ("CARGO_INSTALL_ROOT".into(), root.display().to_string()),
             (
                 "CARGO_HOME".into(),
-                home().unwrap().join(".cargo").display().to_string(),
+                directory.join("cargo-home").display().to_string(),
             ),
         ]),
         _ => unreachable!(),
@@ -138,6 +138,62 @@ with zipfile.ZipFile(root / f'{name}-{version}-py3-none-any.whl', 'w') as archiv
 #[tokio::test]
 #[ignore = "installs, upgrades, and uninstalls fixture wheels in private temporary uv/pipx homes; pipx may download its packaging libraries"]
 async fn disposable_python_tools_update_and_uninstall() {
+    if std::env::var_os("SCOPE_PY_FIXTURE_CHILD").is_none() {
+        let sandbox = tempfile::tempdir().unwrap();
+        let private_home = sandbox.path().join("home");
+        std::fs::create_dir_all(&private_home).unwrap();
+        let private_bin = private_home.join(".local/bin");
+        std::fs::create_dir_all(&private_bin).unwrap();
+        for source in [PackageSource::Uv, PackageSource::Pipx] {
+            let name = manager_name(source);
+            let mut executable = system::resolve(name).unwrap();
+            if executable
+                .parent()
+                .and_then(|path| path.file_name())
+                .is_some_and(|name| name == "shims")
+            {
+                let mise =
+                    system::resolve("mise").expect("mise shim requires its installed manager");
+                let resolved = system::capture_output(
+                    mise.to_str().unwrap(),
+                    &["which", name],
+                    Duration::from_secs(5),
+                )
+                .await
+                .unwrap();
+                assert!(resolved.success, "cannot resolve fixture runtime");
+                executable = PathBuf::from(resolved.stdout.trim());
+                assert!(executable.is_absolute() && executable.is_file());
+            }
+            std::os::unix::fs::symlink(executable, private_bin.join(name)).unwrap();
+        }
+        let mut paths = vec![private_bin];
+        paths.extend(std::env::split_paths(
+            &std::env::var_os("PATH").unwrap_or_default(),
+        ));
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "domain::tool_managers::live_tests::disposable_python_tools_update_and_uninstall",
+                "--ignored",
+                "--nocapture",
+            ])
+            .env("SCOPE_PY_FIXTURE_CHILD", "1")
+            .env("HOME", &private_home)
+            .env("XDG_CONFIG_HOME", private_home.join(".config"))
+            .env("XDG_DATA_HOME", private_home.join(".local/share"))
+            .env("XDG_CACHE_HOME", private_home.join(".cache"))
+            .env("XDG_STATE_HOME", private_home.join(".local/state"))
+            .env("UV_CACHE_DIR", private_home.join("uv-cache"))
+            .env("UV_PYTHON", "/usr/bin/python3")
+            .env("PIPX_DEFAULT_PYTHON", "/usr/bin/python3")
+            .env("PIP_CACHE_DIR", private_home.join("pip-cache"))
+            .env("PATH", std::env::join_paths(paths).unwrap())
+            .status()
+            .unwrap();
+        assert!(status.success(), "private Python tool lifecycle failed");
+        return;
+    }
     let directory = tempfile::tempdir_in(home().unwrap()).unwrap();
     let wheels = directory.path().join("wheels");
     std::fs::create_dir(&wheels).unwrap();

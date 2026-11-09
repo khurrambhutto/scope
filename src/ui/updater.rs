@@ -407,6 +407,8 @@ mod tests {
     fn finish_records_a_success_message() {
         let mut ui = UpdaterUi::default();
         ui.finish(OperationResult {
+            cleanup: Vec::new(),
+            warnings: Vec::new(),
             success: true,
             message: "installed".into(),
             logs: String::new(),
@@ -419,6 +421,8 @@ mod tests {
     fn finish_records_a_failure_message() {
         let mut ui = UpdaterUi::default();
         ui.finish(OperationResult {
+            cleanup: Vec::new(),
+            warnings: Vec::new(),
             success: false,
             message: "boom".into(),
             logs: String::new(),

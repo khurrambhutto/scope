@@ -47,6 +47,42 @@ pub async fn inspect_progressive(
     cancel: Arc<AtomicBool>,
     publish: impl Fn(InspectionUpdate) + Send + Sync + 'static,
 ) -> PackageDetails {
+    let enrich = listing::can_uninstall(&pkg);
+    let publish: Publish = Arc::new(publish);
+    let native_publish = publish.clone();
+    let mut details = inspect_native(pkg.clone(), cancel.clone(), move |mut update| {
+        if enrich {
+            update.complete = false;
+        }
+        native_publish(update);
+    })
+    .await;
+    if !enrich || cancel.load(Ordering::Relaxed) {
+        return details;
+    }
+    let cleanup = tokio::select! {
+        plan = crate::domain::app_data::preview(&pkg) => plan,
+        () = async {
+            while !cancel.load(Ordering::Relaxed) {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        } => return details,
+    };
+    if !cancel.load(Ordering::Relaxed) {
+        super::cleanup::merge(&mut details, &cleanup);
+        publish(InspectionUpdate {
+            details: details.clone(),
+            complete: true,
+        });
+    }
+    details
+}
+
+async fn inspect_native(
+    pkg: InstalledPackage,
+    cancel: Arc<AtomicBool>,
+    publish: impl Fn(InspectionUpdate) + Send + Sync + 'static,
+) -> PackageDetails {
     let removable = listing::can_uninstall(&pkg);
     let publish: Publish = Arc::new(move |update| {
         publish(InspectionUpdate {
@@ -174,6 +210,33 @@ mod tests {
             .iter()
             .all(|item| item.effect == DetailEffect::Informational && item.size.bytes.is_none()));
         assert_eq!(details.removal_size().bytes, None);
+    }
+
+    #[tokio::test]
+    #[ignore = "read-only; requires SCOPE_VERIFY_PACKAGE and SCOPE_VERIFY_DATA in the current cache"]
+    async fn live_details_include_detected_user_data() {
+        let id = std::env::var("SCOPE_VERIFY_PACKAGE").unwrap();
+        let expected = std::env::var("SCOPE_VERIFY_DATA").unwrap();
+        let scan = crate::backend::read_cache().unwrap();
+        let pkg = scan
+            .packages
+            .into_iter()
+            .find(|pkg| pkg.package_id == id)
+            .unwrap();
+        let details = inspect_progressive(pkg, Arc::new(AtomicBool::new(false)), |_| {}).await;
+        for item in &details.items {
+            println!(
+                "{:?}: {} | {} | {:?}",
+                item.effect,
+                item.label,
+                item.location.as_deref().unwrap_or(""),
+                item.size.bytes
+            );
+        }
+        assert!(details
+            .items
+            .iter()
+            .any(|item| item.location.as_deref() == Some(&expected)));
     }
 
     #[tokio::test]

@@ -25,13 +25,21 @@ pub async fn preview(pkg: &InstalledPackage) -> Result<OperationPlan> {
         anyhow::bail!("Installed version is unknown. Rescan before updating.")
     }
     let target = OperationTarget::from_package(pkg)?;
+    if matches!(target, OperationTarget::Extracted { .. }) {
+        anyhow::bail!("Updates for extracted installations are not supported.");
+    }
     if let OperationTarget::Tool {
         package_id,
         installation,
     } = &target
     {
-        crate::domain::tool_managers::operations::verify(package_id, installation, &pkg.version)
-            .await?;
+        // Tool inventory futures are large; keep their state off caller stacks.
+        Box::pin(crate::domain::tool_managers::operations::verify(
+            package_id,
+            installation,
+            &pkg.version,
+        ))
+        .await?;
     }
     let protection = safety::check_target(&target);
     let (auth, mut steps) = if let OperationTarget::Tool {
@@ -96,7 +104,7 @@ pub async fn preview(pkg: &InstalledPackage) -> Result<OperationPlan> {
         created_at_ms: now_ms(),
         apt_transaction_fingerprint: fingerprint,
         snap_details: None,
-        app_data: Vec::new(),
+        cleanup: Default::default(),
     })
 }
 
@@ -154,7 +162,7 @@ fn build_steps(
         | OperationTarget::DebInstall { .. } => {
             blocked("AppImage integration metadata is missing. Rescan first.")
         }
-        OperationTarget::Desktop { .. } => {
+        OperationTarget::Desktop { .. } | OperationTarget::Extracted { .. } => {
             blocked("This app is not managed by a supported package manager.")
         }
         OperationTarget::Steam { .. } => {
@@ -234,8 +242,13 @@ pub async fn apply(
             package_id,
             installation,
         } => {
-            crate::domain::tool_managers::operations::apply(plan, package_id, installation, on_line)
-                .await
+            Box::pin(crate::domain::tool_managers::operations::apply(
+                plan,
+                package_id,
+                installation,
+                on_line,
+            ))
+            .await
         }
         OperationTarget::Apt { package_id } => {
             run_elevated(
@@ -279,23 +292,30 @@ pub async fn apply(
         OperationTarget::AppImage { .. }
         | OperationTarget::AppImageInstall { .. }
         | OperationTarget::DebInstall { .. }
-        | OperationTarget::Desktop { .. } => OperationResult {
+        | OperationTarget::Desktop { .. }
+        | OperationTarget::Extracted { .. } => OperationResult {
+            cleanup: Vec::new(),
             success: false,
             message: "This app cannot be updated through Scope.".into(),
             logs: String::new(),
             exit_code: None,
+            warnings: Vec::new(),
         },
         OperationTarget::Steam { .. } => OperationResult {
+            cleanup: Vec::new(),
             success: false,
             message: "Steam items are read-only in Scope. Manage updates in Steam.".into(),
             logs: String::new(),
             exit_code: None,
+            warnings: Vec::new(),
         },
         OperationTarget::JetBrainsToolbox { .. } => OperationResult {
+            cleanup: Vec::new(),
             success: false,
             message: "JetBrains Toolbox manages IDE updates and uninstall.".into(),
             logs: String::new(),
             exit_code: None,
+            warnings: Vec::new(),
         },
     }
 }
@@ -325,10 +345,12 @@ mod tests {
     #[test]
     fn snap_running_app_error_explains_how_to_retry() {
         let result = OperationResult {
+            cleanup: Vec::new(),
             success: false,
             message: "Operation failed (exit Some(1)): error: cannot refresh \"bitwarden\": snap \"bitwarden\" has running apps".into(),
             logs: "error: cannot refresh \"bitwarden\": snap \"bitwarden\" has running apps".into(),
             exit_code: Some(1),
+            warnings: Vec::new(),
         };
         let original_logs = result.logs.clone();
         let result = snap_update_result(result, "bitwarden", "Bitwarden");
@@ -345,10 +367,12 @@ mod tests {
     #[test]
     fn snap_running_app_error_is_found_in_multiline_logs() {
         let result = OperationResult {
+            cleanup: Vec::new(),
             success: false,
             message: "Operation failed (exit Some(1)): error: cannot perform the following tasks:".into(),
             logs: "error: cannot perform the following tasks:\n- Ensure prerequisites (snap \"bitwarden\" has running apps (bitwarden), pids: 1234)".into(),
             exit_code: Some(1),
+            warnings: Vec::new(),
         };
 
         assert_eq!(
@@ -364,10 +388,12 @@ mod tests {
             "error: snap \"another-app\" has running apps",
         ] {
             let result = OperationResult {
+                cleanup: Vec::new(),
                 success: false,
                 message: error.into(),
                 logs: error.into(),
                 exit_code: Some(1),
+                warnings: Vec::new(),
             };
 
             assert_eq!(
@@ -380,10 +406,12 @@ mod tests {
     #[test]
     fn snap_success_keeps_the_original_message() {
         let result = OperationResult {
+            cleanup: Vec::new(),
             success: true,
             message: "Operation completed successfully.".into(),
             logs: "snap \"bitwarden\" has running apps".into(),
             exit_code: Some(0),
+            warnings: Vec::new(),
         };
 
         assert_eq!(
@@ -410,7 +438,7 @@ mod tests {
             created_at_ms: 0,
             apt_transaction_fingerprint: Some("fingerprint".into()),
             snap_details: None,
-            app_data: Vec::new(),
+            cleanup: Default::default(),
         }
     }
 

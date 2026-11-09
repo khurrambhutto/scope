@@ -53,16 +53,20 @@ const SNAP_PROBE_TIMEOUT: Duration = Duration::from_secs(8);
 
 /// Probe the full target; user tools require their captured manager context.
 pub async fn probe_target(plan: &super::OperationPlan) -> Result<ProbedPackage> {
+    if let super::OperationTarget::Extracted { installation } = &plan.target {
+        crate::domain::extracted_app::verify(installation)?;
+        return Ok(ProbedPackage::installed(Some(plan.current_version.clone())));
+    }
     if let super::OperationTarget::Tool {
         package_id,
         installation,
     } = &plan.target
     {
-        crate::domain::tool_managers::operations::verify(
+        Box::pin(crate::domain::tool_managers::operations::verify(
             package_id,
             installation,
             &plan.current_version,
-        )
+        ))
         .await?;
         Ok(ProbedPackage::installed(Some(plan.current_version.clone())))
     } else if let super::OperationTarget::AppImage {

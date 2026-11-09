@@ -10,6 +10,7 @@ pub mod apt_transaction;
 pub mod deb_install;
 pub mod probe;
 pub mod uninstall;
+pub mod uninstall_verify;
 pub mod update;
 
 use std::collections::HashMap;
@@ -51,6 +52,9 @@ pub enum OperationTarget {
     /// Integrate an opened AppImage file into `~/AppImages`.
     AppImageInstall {
         plan: Box<crate::domain::appimage::install::InstallPlan>,
+    },
+    Extracted {
+        installation: Box<crate::domain::extracted_app::ExtractedInstallation>,
     },
     Desktop {
         desktop_file: PathBuf,
@@ -101,8 +105,11 @@ impl OperationTarget {
                 path: PathBuf::from(&package.package_id),
                 installation: package.appimage_installation.clone(),
             }),
-            PackageSource::Desktop => Ok(Self::Desktop {
-                desktop_file: PathBuf::from(&package.package_id),
+            PackageSource::Desktop => Ok(match package.extracted_installation.clone() {
+                Some(installation) => Self::Extracted { installation },
+                None => Self::Desktop {
+                    desktop_file: PathBuf::from(&package.package_id),
+                },
             }),
             PackageSource::Steam => Ok(Self::Steam {
                 app_id: package.package_id.clone(),
@@ -120,7 +127,7 @@ impl OperationTarget {
             Self::Snap { .. } => PackageSource::Snap,
             Self::Flatpak { .. } => PackageSource::Flatpak,
             Self::AppImage { .. } | Self::AppImageInstall { .. } => PackageSource::AppImage,
-            Self::Desktop { .. } => PackageSource::Desktop,
+            Self::Desktop { .. } | Self::Extracted { .. } => PackageSource::Desktop,
             Self::Steam { .. } => PackageSource::Steam,
             Self::JetBrainsToolbox { .. } => PackageSource::JetBrainsToolbox,
         }
@@ -136,6 +143,7 @@ impl OperationTarget {
             Self::AppImage { path, .. } => path.to_str().unwrap_or(""),
             Self::AppImageInstall { plan } => plan.source.to_str().unwrap_or(""),
             Self::Desktop { desktop_file } => desktop_file.to_str().unwrap_or(""),
+            Self::Extracted { installation } => installation.root.to_str().unwrap_or(""),
             Self::JetBrainsToolbox { installation_root } => {
                 installation_root.to_str().unwrap_or("")
             }
@@ -201,19 +209,24 @@ pub struct OperationPlan {
     /// Informational Snap breakdown captured at preview; never executed as paths.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub snap_details: Option<Box<crate::domain::snap_details::SnapDetails>>,
-    /// AppImage data found by name at preview; removed only when the user
-    /// opts in, and only entries a fresh search still finds.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub app_data: Vec<crate::domain::appimage::app_data::AppData>,
+    /// Reviewed source-neutral data; only stored item IDs can authorize cleanup.
+    #[serde(default)]
+    pub cleanup: crate::domain::app_data::CleanupPlan,
 }
 
 /// Outcome of applying a plan.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OperationResult {
+    /// Source-neutral per-item cleanup outcomes, retained after rescan.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cleanup: Vec<crate::domain::app_data::CleanupOutcome>,
     pub success: bool,
     pub message: String,
     pub logs: String,
     pub exit_code: Option<i32>,
+    /// Nonfatal cleanup failures and retained paths, kept until the result is dismissed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
 }
 
 /// Progress stage of a running apply flow, streamed to the UI so the wait
@@ -362,7 +375,7 @@ mod tests {
             created_at_ms: 0,
             apt_transaction_fingerprint: None,
             snap_details: None,
-            app_data: Vec::new(),
+            cleanup: Default::default(),
         }
     }
 

@@ -155,6 +155,8 @@ pub enum OpMsg {
 
 fn failed(message: impl Into<String>) -> OperationResult {
     OperationResult {
+        cleanup: Vec::new(),
+        warnings: Vec::new(),
         success: false,
         message: message.into(),
         logs: String::new(),
@@ -195,11 +197,15 @@ pub fn spawn_preview(
                 return;
             }
         };
-        if !plan.protected {
-            plans.issue(plan.clone());
-        }
+        register_preview(&plans, &plan);
         let _ = tx.send(Ok(plan));
     });
+}
+
+fn register_preview(plans: &PlanStore, plan: &OperationPlan) {
+    if !plan.protected {
+        plans.issue(plan.clone());
+    }
 }
 
 /// A list row standing in for an opened package file before it is installed.
@@ -250,7 +256,7 @@ async fn install_preview(pkg: &InstalledPackage) -> anyhow::Result<OperationPlan
         created_at_ms: crate::domain::operations::now_ms(),
         apt_transaction_fingerprint: None,
         snap_details: None,
-        app_data: Vec::new(),
+        cleanup: Default::default(),
         target: OperationTarget::AppImageInstall {
             plan: Box::new(install),
         },
@@ -286,12 +292,11 @@ fn install_steps(
 ///
 /// Mirrors `apply_uninstall` / `apply_update`: take the plan from the store,
 /// probe the live system, re-run the safety revalidation, then execute.
-/// `remove_app_data` only selects whether the plan's own `app_data` list is
-/// used; the paths always come from the stored plan.
+/// Selected item IDs must be a subset of the stored reviewed cleanup plan.
 pub fn spawn_apply(
     plans: PlanStore,
     plan_id: String,
-    remove_app_data: bool,
+    selected_cleanup: Vec<String>,
     tx: mpsc::UnboundedSender<OpMsg>,
 ) {
     std::thread::spawn(move || {
@@ -302,9 +307,15 @@ pub fn spawn_apply(
                 )));
                 return;
             };
-            if !remove_app_data {
-                plan.app_data.clear();
+            if let Err(error) =
+                crate::domain::app_data::validate_selection(&plan.cleanup, &selected_cleanup)
+            {
+                let _ = tx.unbounded_send(OpMsg::Done(failed(error.to_string())));
+                return;
             }
+            plan.cleanup.items.iter_mut().for_each(|item| {
+                item.default_selected = selected_cleanup.contains(&item.id);
+            });
 
             let _ = tx.unbounded_send(OpMsg::Stage(OperationStage::Verifying));
             if let Some(expected) = plan
@@ -378,6 +389,8 @@ pub fn spawn_apply(
                 (Operation::Install, OperationTarget::AppImageInstall { plan: install }) => {
                     match crate::domain::appimage::install::apply(install, &on_line).await {
                         Ok(message) => OperationResult {
+                            cleanup: Vec::new(),
+                            warnings: Vec::new(),
                             success: true,
                             message,
                             logs: String::new(),
@@ -559,16 +572,57 @@ mod tests {
         assert!(block_on(rx).unwrap().is_err());
     }
 
+    fn fixture_uninstall_plan() -> OperationPlan {
+        OperationPlan {
+            plan_id: "fixture-plan".into(),
+            operation: Operation::Uninstall,
+            target: OperationTarget::Snap {
+                package_id: "fixture".into(),
+            },
+            display_name: "Fixture".into(),
+            current_version: "1".into(),
+            target_version: String::new(),
+            requires_auth: true,
+            auth_method: crate::domain::operations::AuthMethod::Pkexec,
+            protected: false,
+            protection_reason: None,
+            steps: Vec::new(),
+            created_at_ms: 0,
+            apt_transaction_fingerprint: None,
+            snap_details: None,
+            cleanup: Default::default(),
+        }
+    }
+
     #[test]
-    fn spawn_preview_registers_a_non_protected_plan() {
+    fn register_preview_issues_a_non_protected_plan_without_live_discovery() {
         let store = PlanStore::default();
-        let (tx, rx) = oneshot::channel();
-        let mut pkg = apt_package("code");
-        pkg.source = PackageSource::Snap;
-        spawn_preview(store.clone(), OpKind::Uninstall, pkg, tx);
-        let plan = block_on(rx).unwrap().unwrap();
-        assert!(plan.snap_details.is_some());
+        let plan = fixture_uninstall_plan();
+        register_preview(&store, &plan);
         assert!(store.take(&plan.plan_id).is_some());
+    }
+
+    #[test]
+    fn forged_data_selection_is_rejected_before_any_native_action() {
+        let plans = PlanStore::default();
+        let plan = fixture_uninstall_plan();
+        plans.issue(plan.clone());
+        let (tx, mut rx) = mpsc::unbounded();
+        spawn_apply(
+            plans.clone(),
+            plan.plan_id.clone(),
+            vec!["not-reviewed".into()],
+            tx,
+        );
+        let result = block_on(futures::StreamExt::next(&mut rx));
+        let Some(OpMsg::Done(result)) = result else {
+            panic!("Validation must finish before native execution starts")
+        };
+        assert!(!result.success);
+        assert!(result
+            .message
+            .contains("Unknown or unavailable cleanup selection"));
+        assert!(plans.take(&plan.plan_id).is_none());
     }
 
     #[test]

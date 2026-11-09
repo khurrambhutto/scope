@@ -343,10 +343,12 @@ pub async fn install(
             ));
             match atomic_replace_appimage(&artifact.path, target) {
                 Ok(()) => OperationResult {
+                    cleanup: Vec::new(),
                     success: true,
                     message: "AppImage updated. Restart Scope to use the new version.".into(),
                     logs: format!("atomically replaced {}", target.display()),
                     exit_code: Some(0),
+                    warnings: Vec::new(),
                 },
                 Err(error) => failed(
                     format!("AppImage install failed: {error}"),
@@ -387,10 +389,12 @@ fn atomic_replace_appimage(source: &Path, target: &Path) -> std::io::Result<()> 
 
 fn failed(message: impl Into<String>, logs: impl Into<String>) -> OperationResult {
     OperationResult {
+        cleanup: Vec::new(),
         success: false,
         message: message.into(),
         logs: logs.into(),
         exit_code: None,
+        warnings: Vec::new(),
     }
 }
 

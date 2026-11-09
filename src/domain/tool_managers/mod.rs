@@ -95,39 +95,63 @@ pub fn manager_name(source: PackageSource) -> &'static str {
     }
 }
 
-pub async fn inventory(source: PackageSource) -> Result<Vec<InstalledPackage>> {
-    let manager = system::resolve(manager_name(source))
-        .ok_or_else(|| anyhow::anyhow!("Tool manager is unavailable"))?;
-    match source {
-        PackageSource::Uv => uv::inventory(manager, None).await,
-        PackageSource::Pipx => pipx::inventory(manager, None).await,
-        PackageSource::Cargo => cargo::inventory(manager, None).await,
-        PackageSource::Npm | PackageSource::Bun => {
-            javascript::inventory(source, manager, None).await
+/// Manager inventories contain large command/receipt futures. Heap-own those
+/// states here so preview, verification and apply do not inline them recursively.
+pub fn inventory(
+    source: PackageSource,
+) -> futures::future::BoxFuture<'static, Result<Vec<InstalledPackage>>> {
+    Box::pin(async move {
+        let manager = system::resolve(manager_name(source))
+            .ok_or_else(|| anyhow::anyhow!("Tool manager is unavailable"))?;
+        match source {
+            PackageSource::Uv => Box::pin(uv::inventory(manager, None)).await,
+            PackageSource::Pipx => Box::pin(pipx::inventory(manager, None)).await,
+            PackageSource::Cargo => Box::pin(cargo::inventory(manager, None)).await,
+            PackageSource::Npm | PackageSource::Bun => {
+                Box::pin(javascript::inventory(source, manager, None)).await
+            }
+            _ => bail!("Not a tool manager"),
         }
-        _ => bail!("Not a tool manager"),
-    }
+    })
 }
 
-pub async fn inventory_recorded(installation: &ToolInstallation) -> Result<Vec<InstalledPackage>> {
-    match installation.source {
-        PackageSource::Uv => uv::inventory(installation.manager.clone(), Some(installation)).await,
-        PackageSource::Pipx => {
-            pipx::inventory(installation.manager.clone(), Some(installation)).await
+pub fn inventory_recorded(
+    installation: &ToolInstallation,
+) -> futures::future::BoxFuture<'_, Result<Vec<InstalledPackage>>> {
+    Box::pin(async move {
+        match installation.source {
+            PackageSource::Uv => {
+                Box::pin(uv::inventory(
+                    installation.manager.clone(),
+                    Some(installation),
+                ))
+                .await
+            }
+            PackageSource::Pipx => {
+                Box::pin(pipx::inventory(
+                    installation.manager.clone(),
+                    Some(installation),
+                ))
+                .await
+            }
+            PackageSource::Cargo => {
+                Box::pin(cargo::inventory(
+                    installation.manager.clone(),
+                    Some(installation),
+                ))
+                .await
+            }
+            PackageSource::Npm | PackageSource::Bun => {
+                Box::pin(javascript::inventory(
+                    installation.source,
+                    installation.manager.clone(),
+                    Some(installation),
+                ))
+                .await
+            }
+            _ => bail!("Not a tool manager"),
         }
-        PackageSource::Cargo => {
-            cargo::inventory(installation.manager.clone(), Some(installation)).await
-        }
-        PackageSource::Npm | PackageSource::Bun => {
-            javascript::inventory(
-                installation.source,
-                installation.manager.clone(),
-                Some(installation),
-            )
-            .await
-        }
-        _ => bail!("Not a tool manager"),
-    }
+    })
 }
 
 pub async fn check_updates(packages: &mut [InstalledPackage]) -> Option<String> {

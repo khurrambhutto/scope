@@ -25,8 +25,13 @@ pub async fn preview(pkg: &InstalledPackage) -> Result<OperationPlan> {
         installation,
     } = &target
     {
-        crate::domain::tool_managers::operations::verify(package_id, installation, &pkg.version)
-            .await?;
+        // Tool inventory futures are large; keep their state off caller stacks.
+        Box::pin(crate::domain::tool_managers::operations::verify(
+            package_id,
+            installation,
+            &pkg.version,
+        ))
+        .await?;
     }
     let protection = safety::check_target(&target);
     let (auth, mut steps) = if let OperationTarget::Tool {
@@ -63,14 +68,24 @@ pub async fn preview(pkg: &InstalledPackage) -> Result<OperationPlan> {
         let transaction = apt_transaction::simulate(Operation::Uninstall, target.id()).await?;
         steps.push(PlanStep {
             description: format!(
-                "APT simulation removes {} package(s), including package configuration.",
-                transaction.removals.len()
+                "APT removes these packages and their package configuration: {}.",
+                transaction.removals.join(", ")
             ),
             command_summary: format!(
                 "apt-get -s {} (verified again before apply)",
                 apt_transaction::uninstall_args(target.id()).join(" ")
             ),
         });
+        if !transaction.installs.is_empty() || !transaction.upgrades.is_empty() {
+            steps.push(PlanStep {
+                description: format!(
+                    "Additional APT effects — installs: {}; upgrades: {}.",
+                    transaction.installs.join(", "),
+                    transaction.upgrades.join(", ")
+                ),
+                command_summary: String::new(),
+            });
+        }
         Some(transaction.fingerprint)
     } else {
         None
@@ -86,22 +101,10 @@ pub async fn preview(pkg: &InstalledPackage) -> Result<OperationPlan> {
     } else {
         None
     };
-    let app_data = match (&target, protection.protected) {
-        (
-            OperationTarget::AppImage {
-                installation: Some(installation),
-                ..
-            },
-            false,
-        ) => {
-            let installation = installation.as_ref().clone();
-            tokio::task::spawn_blocking(move || {
-                crate::domain::appimage::operations::find_app_data(&installation)
-            })
-            .await
-            .unwrap_or_default()
-        }
-        _ => Vec::new(),
+    let cleanup = if protection.protected {
+        Default::default()
+    } else {
+        crate::domain::app_data::preview(pkg).await
     };
     Ok(OperationPlan {
         plan_id: new_plan_id(),
@@ -118,7 +121,7 @@ pub async fn preview(pkg: &InstalledPackage) -> Result<OperationPlan> {
         created_at_ms: now_ms(),
         apt_transaction_fingerprint: fingerprint,
         snap_details,
-        app_data,
+        cleanup,
     })
 }
 
@@ -132,7 +135,7 @@ fn build_steps(target: &OperationTarget, protected: bool) -> (AuthMethod, Vec<Pl
             AuthMethod::Pkexec,
             vec![PlanStep {
                 description: format!(
-                    "Purge the APT package '{package_id}' and its package configuration. Personal settings and data are kept."
+                    "Purge the APT package '{package_id}' and its package configuration. Personal data is handled separately by the reviewed choices below."
                 ),
                 command_summary: format!(
                     "pkexec env DEBIAN_FRONTEND=noninteractive apt-get {}",
@@ -143,7 +146,7 @@ fn build_steps(target: &OperationTarget, protected: bool) -> (AuthMethod, Vec<Pl
         OperationTarget::Snap { package_id } => (
             AuthMethod::Pkexec,
             vec![PlanStep {
-                description: format!("Remove the Snap '{package_id}' via snap remove."),
+                description: format!("Snap removes '{package_id}' and its managed app data. It may create a recovery snapshot; existing snapshots are kept."),
                 command_summary: format!("pkexec snap remove {package_id}"),
             }],
         ),
@@ -167,6 +170,13 @@ fn build_steps(target: &OperationTarget, protected: bool) -> (AuthMethod, Vec<Pl
         | OperationTarget::DebInstall { .. } => {
             blocked("AppImage integration metadata is missing. Rescan first.")
         }
+        OperationTarget::Extracted { installation } => (
+            AuthMethod::None,
+            vec![PlanStep {
+                description: format!("Move the verified installation {} and its {} launcher(s) to Trash.", installation.root.display(), installation.launchers.len()),
+                command_summary: format!("gio trash -- {}", installation.root.display()),
+            }],
+        ),
         OperationTarget::Desktop { .. } => {
             blocked("This app is not managed by a supported package manager.")
         }
@@ -209,17 +219,108 @@ pub fn revalidate(plan: &OperationPlan, probed: &super::probe::ProbedPackage) ->
     Ok(())
 }
 
+/// Execute the manager first, verify absence, then apply only reviewed data choices.
 pub async fn apply(
     plan: &OperationPlan,
     on_line: &(dyn Fn(&str) + Send + Sync),
 ) -> OperationResult {
+    let selected = plan.cleanup.default_selection();
+    if let Err(error) = crate::domain::app_data::preflight(&plan.cleanup, &selected) {
+        return OperationResult {
+            success: false,
+            message: format!("Uninstall stopped before making changes: {error}"),
+            logs: String::new(),
+            exit_code: None,
+            warnings: Vec::new(),
+            cleanup: plan
+                .cleanup
+                .items
+                .iter()
+                .map(|item| crate::domain::app_data::CleanupOutcome {
+                    label: item.label.clone(),
+                    path: item.path.clone(),
+                    status: crate::domain::app_data::CleanupStatus::Kept,
+                    message: "Kept because uninstall did not start.".into(),
+                })
+                .collect(),
+        };
+    }
+    let mut result = apply_native(plan, on_line).await;
+    if result.success
+        && matches!(
+            plan.target,
+            OperationTarget::Apt { .. }
+                | OperationTarget::Snap { .. }
+                | OperationTarget::Flatpak { .. }
+        )
+    {
+        if let Err(error) = super::uninstall_verify::verify_absent(&plan.target).await {
+            result.success = false;
+            result.message = format!("Removal could not be verified: {error}. App data was kept.");
+        }
+    }
+    if result.success {
+        let selected = plan.cleanup.default_selection();
+        result.cleanup = crate::domain::app_data::apply(&plan.cleanup, &selected, on_line).await;
+        for outcome in &result.cleanup {
+            use crate::domain::app_data::CleanupStatus;
+            if matches!(
+                outcome.status,
+                CleanupStatus::Shared
+                    | CleanupStatus::Changed
+                    | CleanupStatus::Failed
+                    | CleanupStatus::Unknown
+            ) {
+                result.warnings.push(format!(
+                    "{}: {}",
+                    if outcome.path.as_os_str().is_empty() {
+                        outcome.label.clone()
+                    } else {
+                        outcome.path.display().to_string()
+                    },
+                    outcome.message
+                ));
+            }
+        }
+        result
+            .warnings
+            .extend(plan.cleanup.warnings.iter().cloned());
+        result.message = if result.warnings.is_empty() {
+            "The app and selected data were removed. Data moved to Trash remains recoverable."
+                .into()
+        } else {
+            "The app was removed; some data was kept or could not be verified.".into()
+        };
+    }
+    if !result.success {
+        result.cleanup = plan.cleanup.items.iter().map(|item| crate::domain::app_data::CleanupOutcome {
+            label: item.label.clone(), path: item.path.clone(),
+            status: crate::domain::app_data::CleanupStatus::Kept,
+            message: "App data was kept because installation removal failed or could not be verified.".into(),
+        }).collect();
+    }
+    result
+}
+
+async fn apply_native(
+    plan: &OperationPlan,
+    on_line: &(dyn Fn(&str) + Send + Sync),
+) -> OperationResult {
     match &plan.target {
+        OperationTarget::Extracted { installation } => {
+            crate::domain::extracted_app::uninstall(installation, &plan.cleanup, on_line).await
+        }
         OperationTarget::Tool {
             package_id,
             installation,
         } => {
-            crate::domain::tool_managers::operations::apply(plan, package_id, installation, on_line)
-                .await
+            Box::pin(crate::domain::tool_managers::operations::apply(
+                plan,
+                package_id,
+                installation,
+                on_line,
+            ))
+            .await
         }
         OperationTarget::Apt { package_id } => {
             run_elevated(
@@ -258,30 +359,33 @@ pub async fn apply(
         OperationTarget::AppImage {
             installation: Some(installation),
             ..
-        } => {
-            crate::domain::appimage::operations::uninstall(installation, &plan.app_data, on_line)
-                .await
-        }
+        } => crate::domain::appimage::operations::uninstall(installation, &[], on_line).await,
         OperationTarget::AppImage { .. }
         | OperationTarget::AppImageInstall { .. }
         | OperationTarget::DebInstall { .. }
         | OperationTarget::Desktop { .. } => OperationResult {
+            cleanup: Vec::new(),
             success: false,
             message: "This app cannot be uninstalled through Scope.".into(),
             logs: String::new(),
             exit_code: None,
+            warnings: Vec::new(),
         },
         OperationTarget::Steam { .. } => OperationResult {
+            cleanup: Vec::new(),
             success: false,
             message: "Steam items are read-only in Scope. Manage updates in Steam.".into(),
             logs: String::new(),
             exit_code: None,
+            warnings: Vec::new(),
         },
         OperationTarget::JetBrainsToolbox { .. } => OperationResult {
+            cleanup: Vec::new(),
             success: false,
             message: "JetBrains Toolbox manages IDE updates and uninstall.".into(),
             logs: String::new(),
             exit_code: None,
+            warnings: Vec::new(),
         },
     }
 }
@@ -308,7 +412,7 @@ mod tests {
             created_at_ms: 0,
             apt_transaction_fingerprint: None,
             snap_details: None,
-            app_data: Vec::new(),
+            cleanup: Default::default(),
         }
     }
 
@@ -333,7 +437,7 @@ mod tests {
         );
         assert!(steps[0]
             .description
-            .contains("Personal settings and data are kept"));
+            .contains("Personal data is handled separately"));
     }
 
     #[test]

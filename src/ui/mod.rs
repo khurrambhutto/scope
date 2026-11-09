@@ -8,6 +8,7 @@ pub mod detail;
 mod detail_transition;
 pub mod dialog;
 pub mod filters;
+mod footprint_row;
 mod install_preview;
 mod operation_controller;
 mod operation_footer;
@@ -18,6 +19,7 @@ mod scan_notices;
 mod settings;
 mod smooth_scroll;
 pub mod title_bar;
+mod uninstall_preview;
 pub mod updater;
 pub mod widgets;
 

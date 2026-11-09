@@ -34,8 +34,8 @@ pub(super) enum Dialog {
         kind: OpKind,
         pkg: InstalledPackage,
         plan: Box<OperationPlan>,
-        /// Opt-in removal of `plan.app_data`; always starts unchecked.
-        remove_app_data: bool,
+        /// IDs reviewed in the stored plan; defaults include verified app data.
+        selected_cleanup: Vec<String>,
     },
 }
 
@@ -101,13 +101,15 @@ impl ScopeApp {
                 kind,
                 pkg,
                 plan,
-                remove_app_data,
-            } => confirm_body(entity, *kind, pkg, plan, *remove_app_data),
+                selected_cleanup,
+            } => confirm_body(entity, *kind, pkg, plan, selected_cleanup),
         };
 
         let install_card = matches!(dialog, Dialog::Confirm { kind: OpKind::Install, plan, .. } if !plan.protected);
         if install_card {
             modal_shell_styled(heading, body, entity, corner_radius, ModalStyle::Install)
+        } else if matches!(dialog, Dialog::Confirm { .. }) {
+            modal_shell_styled(heading, body, entity, corner_radius, ModalStyle::Review)
         } else {
             modal_shell(heading, body, entity, corner_radius)
         }
@@ -143,6 +145,7 @@ enum ModalStyle {
     Operation,
     Settings,
     Install,
+    Review,
 }
 
 fn modal_shell_styled(
@@ -183,6 +186,13 @@ fn modal_shell_styled(
                 .when(style == ModalStyle::Install, |this| {
                     this.w(px(640.))
                         .max_w(relative(0.92))
+                        .max_h(relative(0.9))
+                        .overflow_hidden()
+                        .flex()
+                        .flex_col()
+                })
+                .when(style == ModalStyle::Review, |this| {
+                    this.max_w(relative(0.92))
                         .max_h(relative(0.9))
                         .overflow_hidden()
                         .flex()
@@ -243,7 +253,7 @@ fn confirm_body(
     kind: OpKind,
     pkg: &InstalledPackage,
     plan: &OperationPlan,
-    remove_app_data: bool,
+    selected_cleanup: &[String],
 ) -> AnyElement {
     if plan.protected {
         let reason = plan
@@ -318,48 +328,6 @@ fn confirm_body(
         return confirm_actions(entity, ButtonStyle::Update, div().child(plan_rows(rows)));
     }
 
-    if matches!(
-        plan.target,
-        crate::domain::operations::OperationTarget::Apt { .. }
-    ) {
-        rows.push((
-            "Effects",
-            "Removes the app and its package configuration. Personal settings and data are kept."
-                .into(),
-        ));
-    }
-
-    if let crate::domain::operations::OperationTarget::Tool { installation, .. } = &plan.target {
-        rows.push(("Installation", installation.root.display().to_string()));
-        if let Some(environment) = &installation.environment {
-            rows.push(("Environment", environment.display().to_string()));
-        }
-        if let Some(step) = plan.steps.first() {
-            rows.push(("Command", step.command_summary.clone()));
-        }
-        rows.push(("Effects", installation.notes.join("\n\n")));
-    }
-
-    if let crate::domain::operations::OperationTarget::AppImage {
-        installation: Some(installation),
-        ..
-    } = &plan.target
-    {
-        rows.push(("Launchers", paths(&installation.launchers)));
-        if !installation.icons.is_empty() {
-            rows.push(("Icons", paths(&installation.icons)));
-        }
-        rows.push((
-            "Effects",
-            if plan.app_data.is_empty() {
-                "Moves these files to Trash. Portable .home/.config folders are kept, and no app data folders were found by name."
-            } else {
-                "Moves these files to Trash. Portable .home/.config folders are kept, and the app data below is kept unless you select it."
-            }
-            .into(),
-        ));
-    }
-
     let confirm_style = match kind {
         OpKind::Uninstall => ButtonStyle::Danger,
         OpKind::Update | OpKind::Install => ButtonStyle::Update,
@@ -384,80 +352,14 @@ fn confirm_body(
                     )
                 },
             )
-            .when_some(plan.snap_details.as_ref(), |this, details| {
-                this.child(super::package_details::breakdown(
-                    Some(&crate::domain::package_details::PackageDetails::from(
-                        details.as_ref(),
-                    )),
-                    PackageSource::Snap,
+            .when(kind == OpKind::Uninstall, |this| {
+                this.child(super::uninstall_preview::body(
+                    entity,
+                    plan,
+                    selected_cleanup,
                 ))
-            })
-            .when(
-                kind == OpKind::Uninstall && !plan.app_data.is_empty(),
-                |this| this.child(app_data_choice(entity, &plan.app_data, remove_app_data)),
-            ),
+            }),
     )
-}
-
-/// Opt-in list of app data found by name, moved to Trash only when checked.
-fn app_data_choice(
-    entity: &WeakEntity<ScopeApp>,
-    app_data: &[crate::domain::appimage::app_data::AppData],
-    checked: bool,
-) -> AnyElement {
-    let total: u64 = app_data.iter().filter_map(|data| data.bytes).sum();
-    let partial = app_data.iter().any(|data| data.bytes.is_none());
-    let label = format!(
-        "Also move app data to Trash ({}{})",
-        theme::format_size(total),
-        if partial { "+" } else { "" }
-    );
-    let entity = entity.clone();
-    div()
-        .mt(px(14.))
-        .pt(px(12.))
-        .border_t_1()
-        .border_color(border())
-        .flex()
-        .flex_col()
-        .gap(px(8.))
-        .child(
-            gpui_kit::component::checkbox::Checkbox::new("dlg-remove-app-data")
-                .label(label)
-                .checked(checked)
-                .on_click(move |checked, _window, cx| {
-                    let checked = *checked;
-                    entity
-                        .update(cx, |this, cx| this.set_remove_app_data(checked, cx))
-                        .ok();
-                }),
-        )
-        .child(
-            div().text_color(text_dim()).child(plan_rows(
-                app_data
-                    .iter()
-                    .map(|data| {
-                        let size = data
-                            .bytes
-                            .map(theme::format_size)
-                            .unwrap_or_else(|| "size unknown".into());
-                        (
-                            data.kind.label(),
-                            format!("{}  ·  {size}", data.path.display()),
-                        )
-                    })
-                    .collect(),
-            )),
-        )
-        .into_any_element()
-}
-
-fn paths(paths: &[std::path::PathBuf]) -> String {
-    paths
-        .iter()
-        .map(|path| path.display().to_string())
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 fn confirm_actions(
@@ -469,7 +371,16 @@ fn confirm_actions(
         .p(px(20.))
         .flex()
         .flex_col()
-        .child(content)
+        .min_h(px(0.))
+        .flex_1()
+        .child(
+            div()
+                .id("review-content")
+                .min_h(px(0.))
+                .flex_1()
+                .overflow_y_scroll()
+                .child(content),
+        )
         .child(dialog_actions(vec![
             button(
                 "dlg-cancel",

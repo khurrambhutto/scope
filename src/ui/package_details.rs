@@ -1,8 +1,6 @@
 //! Shared lazy inspection and source-aware type/path/size breakdown.
 
 use futures::{channel::mpsc, StreamExt};
-use gpui_kit::assets::IconName;
-use gpui_kit::component::Icon;
 use gpui_kit::prelude::*;
 use gpui_kit::{div, px, AnyElement, Context, FontWeight};
 
@@ -75,8 +73,9 @@ pub(super) fn breakdown(details: Option<&PackageDetails>, source: PackageSource)
     if let Some(details) = details {
         for (effect, heading) in [
             (DetailEffect::Removed, ""),
-            (DetailEffect::Kept, "Kept after uninstall"),
-            (DetailEffect::Unverified, "Needs review"),
+            (DetailEffect::Review, "Review"),
+            (DetailEffect::Kept, "Kept"),
+            (DetailEffect::Unverified, "Unavailable"),
             (DetailEffect::Informational, ""),
         ] {
             if details.items.iter().any(|item| item.effect == effect) {
@@ -170,96 +169,47 @@ pub(super) fn removal_summary(details: Option<&PackageDetails>) -> String {
         return "Measuring removal…".into();
     };
     let size = details.removal_size();
-    match size.bytes {
+    let mut summary = match size.bytes {
         Some(bytes) => format!(
             "Removes ~{}{}",
             measured_size(bytes),
             if size.complete { "" } else { "+" }
         ),
         None => "Removal size unknown".into(),
+    };
+    if details
+        .items
+        .iter()
+        .any(|item| item.effect == DetailEffect::Review)
+    {
+        let review = details.review_size();
+        summary.push_str(&match review.bytes {
+            Some(bytes) => format!(
+                " · ~{}{} to review",
+                measured_size(bytes),
+                if review.complete { "" } else { "+" }
+            ),
+            None => " · Data to review".into(),
+        });
     }
+    summary
 }
 
-fn detail_row(item: &DetailItem) -> AnyElement {
+pub(super) fn detail_row(item: &DetailItem) -> AnyElement {
     let pending = item.size.note.as_deref() == Some(crate::domain::package_details::MEASURING_NOTE);
-    let size = size_label(&item.size);
-    let icon = match item.effect {
-        DetailEffect::Removed | DetailEffect::Informational => None,
-        DetailEffect::Kept => Some(IconName::Minus),
-        DetailEffect::Unverified => Some(IconName::CircleAlert),
-    };
-    let mut path = div().flex_1().min_w(px(0.)).flex().flex_col();
-    if let Some(location) = &item.location {
-        path = path.child(
-            div()
-                .text_size(px(12.))
-                .line_height(px(18.))
-                .text_color(theme::text_dim())
-                .child(location.clone()),
-        );
-    }
-    let note = item.size.note.as_ref().filter(|_| {
+    let note = item.size.note.as_deref().filter(|_| {
         !pending
             && (!item.size.complete
                 || item.size.status
                     == crate::domain::package_details::MeasurementStatus::SharedStorage)
     });
-    if let Some(note) = note {
-        path = path.child(
-            div()
-                .text_size(px(11.))
-                .line_height(px(16.))
-                .text_color(theme::text_dim())
-                .child(note.clone()),
-        );
-    } else if item.effect == DetailEffect::Unverified {
-        path = path.child(
-            div()
-                .text_size(px(11.))
-                .line_height(px(16.))
-                .text_color(theme::text_dim())
-                .child("Removal coverage is not verified"),
-        );
-    }
-    div()
-        .flex()
-        .items_start()
-        .gap(px(theme::DETAIL_ROW_GAP))
-        .py(px(theme::DETAIL_ROW_PADDING))
-        .text_size(px(13.))
-        .line_height(px(18.))
-        .child(
-            div()
-                .flex_none()
-                .w(px(theme::DETAIL_LABEL_WIDTH))
-                .flex()
-                .items_center()
-                .gap(px(9.))
-                .children(icon.map(|icon| {
-                    Icon::new(icon)
-                        .size(px(12.))
-                        .text_color(theme::text_faint())
-                }))
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w(px(0.))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .child(item.label.clone()),
-                ),
-        )
-        .child(path)
-        .child(
-            div()
-                .flex_none()
-                .w(px(80.))
-                .text_right()
-                .text_size(px(12.))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(theme::text_dim())
-                .child(size),
-        )
-        .into_any_element()
+    super::footprint_row::row(
+        item.label.clone(),
+        item.location.as_deref(),
+        size_label(&item.size),
+        None,
+        note,
+    )
 }
 
 fn size_label(size: &crate::domain::package_details::Measurement) -> String {
@@ -316,6 +266,37 @@ fn loading_labels(source: PackageSource) -> &'static [&'static str] {
 mod tests {
     use super::*;
     use crate::domain::package_details::{Measurement, MeasurementStatus};
+
+    #[test]
+    fn summary_separates_native_removal_from_optional_data() {
+        let mut details = PackageDetails::default();
+        for (effect, bytes) in [
+            (DetailEffect::Removed, 1024),
+            (DetailEffect::Review, 2048),
+            (DetailEffect::Kept, 4096),
+        ] {
+            details.items.push(DetailItem {
+                label: "User data".into(),
+                location: None,
+                effect,
+                size: Measurement {
+                    status: Default::default(),
+                    bytes: Some(bytes),
+                    complete: true,
+                    note: None,
+                },
+            });
+        }
+        let summary = removal_summary(Some(&details));
+        assert_eq!(
+            summary,
+            format!(
+                "Removes ~{} · ~{} to review",
+                measured_size(1024),
+                measured_size(2048)
+            )
+        );
+    }
 
     #[test]
     fn size_labels_distinguish_included_kept_unattributed_and_unavailable() {
