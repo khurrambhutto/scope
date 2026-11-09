@@ -187,9 +187,9 @@ pub async fn preview(pkg: &InstalledPackage) -> CleanupPlan {
                 }
                 plan.warnings.push(error);
             } else if !inspected.hidden.is_empty() {
-                plan.warnings.push(format!("{} background processes could not be inspected. Close the app before selecting user data. Selections accept these gaps; background writers may recreate data.", inspected.hidden.len()));
+                plan.warnings.push(format!("Close the app first. {} background processes couldn't be checked; selecting data accepts that.", inspected.hidden.len()));
                 if package.extracted_installation.is_some() {
-                    plan.warnings.push("Confirming Uninstall accepts these displayed process-inspection gaps for the extracted app files. A known running app or a new gap still stops removal.".into());
+                    plan.warnings.push("Uninstalling also accepts those unchecked processes for the app files; a running app or a new gap still stops removal.".into());
                 }
                 for item in &mut plan.items {
                     item.default_selected = false;

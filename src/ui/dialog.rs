@@ -325,7 +325,12 @@ fn confirm_body(
     }
 
     if kind == OpKind::Update {
-        return confirm_actions(entity, ButtonStyle::Update, div().child(plan_rows(rows)));
+        return confirm_actions(
+            entity,
+            ButtonStyle::Update,
+            "Confirm",
+            div().child(plan_rows(rows)),
+        );
     }
 
     let confirm_style = match kind {
@@ -336,6 +341,11 @@ fn confirm_body(
     confirm_actions(
         entity,
         confirm_style,
+        if kind == OpKind::Uninstall {
+            "Uninstall"
+        } else {
+            "Confirm"
+        },
         div()
             .child(plan_rows(rows))
             .when_some(
@@ -365,6 +375,7 @@ fn confirm_body(
 fn confirm_actions(
     entity: &WeakEntity<ScopeApp>,
     confirm_style: ButtonStyle,
+    confirm_label: &'static str,
     content: gpui_kit::Div,
 ) -> AnyElement {
     div()
@@ -391,7 +402,7 @@ fn confirm_actions(
             .into_any_element(),
             button(
                 "dlg-confirm",
-                "Confirm",
+                confirm_label,
                 confirm_style,
                 act(entity, |this, cx| this.confirm_op(cx)),
             )

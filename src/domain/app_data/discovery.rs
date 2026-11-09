@@ -60,7 +60,7 @@ pub(super) fn build(pkg: &InstalledPackage, roots: &Roots, claims: &Claims) -> C
     for launcher in claims
         .launchers
         .iter()
-        .filter(|launcher| claims.owned_paths.contains(&launcher.file_path))
+        .filter(|launcher| claims.owns_launcher(launcher))
     {
         if let Some(executable) = &launcher.executable {
             plan.executables.push(
@@ -86,29 +86,18 @@ pub(super) fn build(pkg: &InstalledPackage, roots: &Roots, claims: &Claims) -> C
         );
     }
     if let Some(rule) = catalog::rule(pkg) {
-        for namespace in rule.namespaces {
-            let roots_to_search = match *namespace {
-                "Code" => vec![(&roots.config, "User data")],
-                "ruff" => vec![(&roots.cache, "Cache")],
-                _ => vec![
-                    (&roots.config, "User data"),
-                    (&roots.data, "User data"),
-                    (&roots.cache, "Cache"),
-                    (&roots.state, "App state"),
-                ],
-            };
-            for (base, label) in roots_to_search {
-                candidates.push(Candidate {
-                    path: base.join(namespace),
-                    label: label.into(),
-                    reason: rule.evidence.into(),
-                    default_selected: !rule.sensitive
-                        && matches!(
-                            pkg.source,
-                            PackageSource::Apt | PackageSource::AppImage | PackageSource::Desktop
-                        ),
-                });
-            }
+        let eligible = matches!(
+            pkg.source,
+            PackageSource::Apt | PackageSource::AppImage | PackageSource::Desktop
+        );
+        for place in rule.places {
+            candidates.push(Candidate {
+                path: place.resolve(roots),
+                label: place.kind.label().into(),
+                reason: rule.evidence.into(),
+                default_selected: eligible
+                    && (place.kind == catalog::Kind::Cache || !rule.sensitive),
+            });
         }
     } else if pkg.source != PackageSource::Flatpak {
         plan.warnings
@@ -124,7 +113,7 @@ pub(super) fn build(pkg: &InstalledPackage, roots: &Roots, claims: &Claims) -> C
         };
         let mut others = appimage::app_data::OtherLaunchers::default();
         for launcher in &claims.launchers {
-            if !claims.owned_paths.contains(&launcher.file_path) {
+            if !claims.owns_launcher(launcher) {
                 others.add(
                     &launcher.id,
                     &launcher.name,
@@ -149,7 +138,7 @@ pub(super) fn build(pkg: &InstalledPackage, roots: &Roots, claims: &Claims) -> C
     }
     if pkg.source != PackageSource::Flatpak
         && pkg.appimage_installation.is_none()
-        && catalog::rule(pkg).is_none()
+        && name_search(pkg)
     {
         candidates.extend(associated_candidates(
             pkg,
@@ -266,7 +255,7 @@ fn associated_candidates(
     for launcher in claims
         .launchers
         .iter()
-        .filter(|app| claims.owned_paths.contains(&app.file_path))
+        .filter(|app| claims.owns_launcher(app))
     {
         names.push(launcher.id.clone());
         names.push(launcher.name.clone());
@@ -368,6 +357,16 @@ fn associated_candidates(
         }
     }
     found
+}
+
+/// A reviewed rule replaces the exact-name search unless it only adds places.
+/// A Snap the catalog knows keeps its data in ~/snap, so a name search would
+/// only find another installation's folders.
+fn name_search(pkg: &InstalledPackage) -> bool {
+    match catalog::rule(pkg) {
+        Some(rule) => rule.name_match,
+        None => pkg.source != PackageSource::Snap || catalog::known(pkg).is_none(),
+    }
 }
 
 fn item(

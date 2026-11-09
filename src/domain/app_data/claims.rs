@@ -18,29 +18,72 @@ pub(super) struct Claims {
     pub launchers: Vec<desktop_entries::DesktopApp>,
     pub owned_paths: HashSet<PathBuf>,
     pub writer: Option<String>,
+    /// The roots claims were collected for; reviewed places resolve against them.
+    pub roots: Option<Roots>,
 }
 
 impl Claims {
+    /// Whether this launcher belongs to the target: one of its own files, or a
+    /// user override with the same desktop ID that still runs a program the
+    /// target installed (apps such as Claude desktop rewrite their launcher in
+    /// ~/.local/share/applications). Shared runners such as env or flatpak are
+    /// never target files, so they cannot pass.
+    pub fn owns_launcher(&self, app: &desktop_entries::DesktopApp) -> bool {
+        if self.owned_paths.contains(&app.file_path) {
+            return true;
+        }
+        let Some(executable) = &app.executable else {
+            return false;
+        };
+        let runs_owned = self.owned_paths.contains(executable)
+            || executable
+                .canonicalize()
+                .is_ok_and(|path| self.owned_paths.contains(&path));
+        runs_owned
+            && self.launchers.iter().any(|own| {
+                own.file_path != app.file_path
+                    && own.file_path.file_name() == app.file_path.file_name()
+                    && self.owned_paths.contains(&own.file_path)
+            })
+    }
+
     pub fn shared_reason(&self, target: &InstalledPackage, path: &Path) -> Option<String> {
-        let rule = catalog::rule(target);
+        let rule = catalog::known(target);
         let mut aliases: Vec<String> = match rule {
             Some(rule) => rule.aliases.iter().map(|s| s.to_string()).collect(),
             None => catalog::identities(target),
         };
-        if let Some(name) = path.file_name().and_then(|name| name.to_str()) {
-            aliases.push(catalog::normalize(name));
+        // A folder found by name may belong to any app with that name. A
+        // reviewed place is the target app's own; only other installations of
+        // that app (its aliases) or rules naming the place can share it.
+        let reviewed = rule.zip(self.roots.as_ref()).is_some_and(|(rule, roots)| {
+            rule.places.iter().any(|place| place.resolve(roots) == path)
+        });
+        if !reviewed {
+            if let Some(name) = path.file_name().and_then(|name| name.to_str()) {
+                aliases.push(catalog::normalize(name));
+            }
         }
         for other in &self.packages {
             if other.key == target.key {
                 continue;
             }
             let ids = catalog::identities(other);
-            let same_rule = catalog::rule(other)
+            let other_rule = catalog::known(other);
+            let same_rule = other_rule
                 .is_some_and(|other_rule| rule.is_some_and(|rule| std::ptr::eq(rule, other_rule)));
+            let named_place = !path.as_os_str().is_empty()
+                && other_rule
+                    .zip(self.roots.as_ref())
+                    .is_some_and(|(other_rule, roots)| other_rule.names_path(roots, path));
             let flatpak_same_id = target.source == PackageSource::Flatpak
                 && other.source == PackageSource::Flatpak
                 && target.package_id == other.package_id;
-            if same_rule || flatpak_same_id || ids.iter().any(|id| aliases.contains(id)) {
+            if same_rule
+                || named_place
+                || flatpak_same_id
+                || ids.iter().any(|id| aliases.contains(id))
+            {
                 return Some(format!(
                     "Shared with {} installation '{}'; retained.",
                     other.source.id(),
@@ -49,7 +92,7 @@ impl Claims {
             }
         }
         for app in &self.launchers {
-            if self.owned_paths.contains(&app.file_path) {
+            if self.owns_launcher(app) {
                 continue;
             }
             let names = [
@@ -96,6 +139,7 @@ pub(super) async fn collect(target: &InstalledPackage, roots: &Roots) -> Claims 
 async fn collect_inner(target: &InstalledPackage, roots: &Roots) -> Claims {
     let mut claims = Claims {
         complete: true,
+        roots: Some(roots.clone()),
         ..Default::default()
     };
     let native = [
@@ -401,9 +445,10 @@ fn parse_claim(
     if let Some(app) = desktop_entries::parse_launcher(path) {
         return Ok(app);
     }
-    let background = raw.entry("DBusActivatable") == Some("true")
-        || (raw.entry("NoDisplay") == Some("true") && raw.entry("X-SnapInstanceName").is_some());
-    if background && raw.entry("Name").is_some() && raw.entry("Exec").is_none() {
+    // A launcher without Exec (D-Bus activated, a Snap background app, or a
+    // hidden entry such as qemu-system-data's qemu.desktop) still claims its
+    // name and icon; it just names no executable.
+    if raw.entry("Name").is_some() && raw.entry("Exec").is_none() {
         return Ok(desktop_entries::DesktopApp {
             id: path
                 .file_stem()
@@ -437,5 +482,64 @@ mod tests {
         let claim = parse_claim(&path, &raw).unwrap();
         assert_eq!(claim.name, "Prompting Client");
         assert!(!claim.menu_visible && claim.executable.is_none());
+    }
+
+    #[test]
+    fn hidden_launcher_without_exec_claims_its_name_instead_of_failing() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("qemu.desktop");
+        let text = "[Desktop Entry]\nVersion=1.0\nName=QEMU\nIcon=qemu\nType=Application\nTerminal=false\nNoDisplay=true\n";
+        std::fs::write(&path, text).unwrap();
+        let raw = crate::domain::appimage::desktop::DesktopFile::read(&path).unwrap();
+        let claim = parse_claim(&path, &raw).unwrap();
+        assert_eq!((claim.id.as_str(), claim.name.as_str()), ("qemu", "QEMU"));
+        assert_eq!(claim.icon.as_deref(), Some("qemu"));
+        assert!(claim.executable.is_none());
+    }
+
+    #[test]
+    fn launcher_without_a_name_still_fails_closed() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("broken.desktop");
+        std::fs::write(&path, "[Desktop Entry]\nType=Application\n").unwrap();
+        let raw = crate::domain::appimage::desktop::DesktopFile::read(&path).unwrap();
+        assert!(parse_claim(&path, &raw).is_err());
+    }
+
+    fn launcher(path: &Path, executable: &str) -> desktop_entries::DesktopApp {
+        desktop_entries::DesktopApp {
+            id: path.file_stem().unwrap().to_str().unwrap().into(),
+            file_path: path.into(),
+            name: "Claude".into(),
+            comment: None,
+            exec: executable.into(),
+            executable: Some(PathBuf::from(executable)),
+            icon: None,
+            categories: Vec::new(),
+            terminal: false,
+            menu_visible: true,
+        }
+    }
+
+    #[test]
+    fn user_override_of_an_owned_launcher_belongs_to_the_target() {
+        let system = Path::new("/usr/share/applications/com.anthropic.Claude.desktop");
+        let user = Path::new("/home/u/.local/share/applications/com.anthropic.Claude.desktop");
+        let other = Path::new("/home/u/.local/share/applications/other-claude.desktop");
+        let claims = Claims {
+            owned_paths: HashSet::from([system.into(), PathBuf::from("/usr/bin/claude-desktop")]),
+            launchers: vec![
+                launcher(system, "/usr/bin/claude-desktop"),
+                launcher(user, "/usr/bin/claude-desktop"),
+                launcher(other, "/usr/bin/claude-desktop"),
+            ],
+            ..Default::default()
+        };
+        assert!(claims.owns_launcher(&claims.launchers[0]));
+        assert!(claims.owns_launcher(&claims.launchers[1]));
+        // A different desktop ID is another app, even with the same program.
+        assert!(!claims.owns_launcher(&claims.launchers[2]));
+        // An override that runs something else is not the target's.
+        assert!(!claims.owns_launcher(&launcher(user, "/usr/bin/env")));
     }
 }
