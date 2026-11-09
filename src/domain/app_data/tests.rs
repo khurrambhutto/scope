@@ -582,3 +582,154 @@ fn preview_futures_do_not_inline_all_manager_inventory_states() {
         "Ownership collection inlines too much state onto ordinary worker stacks"
     );
 }
+
+fn make(path: &Path) {
+    std::fs::create_dir_all(path).unwrap();
+    std::fs::write(path.join("marker"), b"data").unwrap();
+}
+
+fn paths(plan: &CleanupPlan) -> HashSet<PathBuf> {
+    plan.items.iter().map(|item| item.path.clone()).collect()
+}
+
+fn defaults(plan: &CleanupPlan) -> HashSet<PathBuf> {
+    let selected = plan.default_selection();
+    plan.items
+        .iter()
+        .filter(|item| selected.contains(&item.id))
+        .map(|item| item.path.clone())
+        .collect()
+}
+
+#[test]
+fn browser_cache_defaults_selected_but_profile_needs_review() {
+    let f = Fixture::new(PackageSource::Apt, "google-chrome-stable");
+    let profile = f.roots.config.join("google-chrome");
+    let cache = f.roots.cache.join("google-chrome");
+    make(&profile);
+    make(&cache);
+    make(&f.roots.config.join("google-chrome-beta"));
+    let plan = f.plan(&complete());
+    assert_eq!(paths(&plan), HashSet::from([profile, cache.clone()]));
+    assert_eq!(defaults(&plan), HashSet::from([cache]));
+}
+
+#[test]
+fn cursor_ide_never_offers_the_cursor_agent_cli_files() {
+    let f = Fixture::new(PackageSource::Apt, "cursor");
+    let ide = f.roots.config.join("Cursor");
+    let extensions = f.roots.home.join(".cursor/extensions");
+    make(&ide);
+    make(&extensions);
+    make(&f.roots.config.join("cursor"));
+    make(&f.roots.state.join("cursor"));
+    std::fs::write(f.roots.home.join(".cursor/cli-config.json"), b"{}").unwrap();
+    let plan = f.plan(&complete());
+    assert_eq!(paths(&plan), HashSet::from([ide, extensions]));
+    assert!(defaults(&plan).is_empty());
+}
+
+#[test]
+fn t3_code_offers_its_state_but_never_project_worktrees() {
+    let f = Fixture::new(PackageSource::Apt, "t3code");
+    let profile = f.roots.config.join("t3code-v2");
+    let threads = f.roots.home.join(".t3/userdata");
+    let caches = f.roots.home.join(".t3/caches");
+    make(&profile);
+    make(&threads);
+    make(&caches);
+    make(&f.roots.home.join(".t3/worktrees/project"));
+    let plan = f.plan(&complete());
+    assert_eq!(
+        paths(&plan),
+        HashSet::from([profile, threads, caches.clone()])
+    );
+    assert_eq!(defaults(&plan), HashSet::from([caches]));
+}
+
+#[test]
+fn sandboxed_snap_of_a_known_app_offers_no_host_folders() {
+    let f = Fixture::new(PackageSource::Snap, "chromium");
+    make(&f.roots.config.join("chromium"));
+    make(&f.roots.cache.join("chromium"));
+    assert!(f.plan(&complete()).items.is_empty());
+}
+
+#[test]
+fn xdg_ninja_places_add_to_the_exact_name_search() {
+    let f = Fixture::new(PackageSource::Apt, "audacity");
+    let legacy = f.roots.home.join(".audacity-data");
+    let current = f.roots.config.join("audacity");
+    make(&legacy);
+    make(&current);
+    let plan = f.plan(&complete());
+    assert_eq!(paths(&plan), HashSet::from([legacy, current]));
+    assert!(defaults(&plan).is_empty());
+}
+
+#[test]
+fn another_installation_keeps_folders_its_rule_names() {
+    let f = Fixture::new(PackageSource::Apt, "chrome-remote-helper");
+    let profile = f.roots.config.join("google-chrome");
+    make(&profile);
+    let mut claims = complete();
+    claims.roots = Some(f.roots.clone());
+    claims.packages.push(InstalledPackage::new(
+        PackageSource::Apt,
+        "google-chrome-stable",
+    ));
+    assert!(claims
+        .shared_reason(&f.pkg, &profile)
+        .is_some_and(|reason| reason.contains("google-chrome-stable")));
+    assert!(claims
+        .shared_reason(&f.pkg, &f.roots.config.join("unrelated"))
+        .is_none());
+}
+
+#[test]
+fn firefox_channels_keep_their_shared_profiles() {
+    let f = Fixture::new(PackageSource::Apt, "firefox-esr");
+    let profiles = f.roots.home.join(".mozilla/firefox");
+    make(&profiles);
+    make(&f.roots.home.join(".mozilla/native-messaging-hosts"));
+    let mut claims = complete();
+    claims.roots = Some(f.roots.clone());
+    claims
+        .packages
+        .push(InstalledPackage::new(PackageSource::Snap, "firefox"));
+    let plan = f.plan(&claims);
+    assert_eq!(paths(&plan), HashSet::from([profiles]));
+    assert_eq!(plan.items[0].effect, CleanupEffect::Kept);
+}
+
+#[test]
+fn reviewed_place_is_not_claimed_by_an_unrelated_launcher_with_its_folder_name() {
+    let f = Fixture::new(PackageSource::Apt, "cursor");
+    let extensions = f.roots.home.join(".cursor/extensions");
+    make(&extensions);
+    let mut claims = complete();
+    claims.roots = Some(f.roots.clone());
+    let mut gnome = crate::domain::desktop_entries::DesktopApp {
+        id: "org.gnome.Extensions".into(),
+        file_path: "/usr/share/applications/org.gnome.Extensions.desktop".into(),
+        name: "Extensions".into(),
+        comment: None,
+        exec: "gnome-extensions-app".into(),
+        executable: None,
+        icon: None,
+        categories: Vec::new(),
+        terminal: false,
+        menu_visible: true,
+    };
+    claims.launchers.push(gnome.clone());
+    assert!(claims.shared_reason(&f.pkg, &extensions).is_none());
+    // Another launcher for the same app still keeps the data.
+    gnome.id = "cursor".into();
+    gnome.file_path = "/home/u/.local/share/applications/cursor.desktop".into();
+    gnome.name = "Cursor".into();
+    claims.launchers.push(gnome);
+    assert!(claims.shared_reason(&f.pkg, &extensions).is_some());
+    // A folder found by name still treats a same-named launcher as a claimant.
+    let found = f.roots.config.join("extensions");
+    assert!(claims.shared_reason(&f.pkg, &found).is_some());
+}
