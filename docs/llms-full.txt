@@ -1,78 +1,77 @@
 # Scope for Linux: full text
 
-Scope for Linux (also called Scope) is a free, open-source app manager. It lists apps installed through APT, Snap, Flatpak, and AppImage in one searchable list. Every update or uninstall starts with a plan that shows the exact commands. Scope runs them only after the user confirms. Written in Rust with Zed's GPUI, no webview. Ubuntu is the first target. Current version: 0.3.7. License: MIT. Source: https://github.com/khurrambhutto/scope
+Scope for Linux (also called Scope) is a free, open-source app manager. It lists apps, command-line tools and games from APT, Snap, Flatpak, AppImage, uv, pipx, Cargo, npm, Bun, Steam and JetBrains Toolbox in one searchable list. Every update or uninstall starts with a plan that shows the exact commands. Scope runs them only after the user confirms. Written in Rust with Zed's GPUI, no webview. Ubuntu on x86-64 is the primary target. Current version: 0.3.8. License: MIT. Source: https://github.com/khurrambhutto/scope
 
 ## What Scope does
 
-Most Linux users install software from several places. A package can come from the Ubuntu archive, a Snap from the Snap Store, a Flatpak from Flathub, or an AppImage from a download folder. Each source has its own list and its own command, so a user rarely knows everything that is installed.
+Most Linux users install software from several places: the Ubuntu archive, the Snap Store, Flathub, AppImages from download pages, and developer tools from uv, pipx, Cargo, npm or Bun. Each source has its own list and its own command, so a user rarely knows everything that is installed.
 
-Scope reads all four sources and shows them side by side. The default list shows recognizable GUI apps and command-line tools. Show all reveals every row the scanners return, including libraries and system components. Protected packages stay locked even with Show all on.
+Scope reads all of them and shows them in one list. The default list shows recognizable apps and tools. Show all reveals packages hidden from the default list. Protected packages stay locked even with Show all on.
 
-Users can switch between installed apps and available updates, search by app or package name, filter by source, and rescan the system.
+Users can switch between installed apps and available updates, search by app or package name, filter by source, inspect what an app occupies on disk, and rescan. To install a downloaded .deb or AppImage, choose Open With → Scope and review the installation preview.
 
 ## How a change works
 
-1. Plan. Scope builds a preview with the exact commands, for example `pkexec env DEBIAN_FRONTEND=noninteractive apt remove -y <package>`. Nothing runs yet.
-2. Confirm. The user reads the plan and runs it or cancels. A plan works once and expires after five minutes.
-3. Revalidate. Right before it runs, Scope checks that the package is still installed, that an update's version has not changed, and that the deny-list still allows the action. If it cannot confirm the state, it stops.
-4. Run. Scope runs the command through the Polkit dialog for admin rights and streams the log into the footer. Only one package operation runs at a time.
+1. Plan. Scope builds a preview with the exact commands, for example `pkexec env DEBIAN_FRONTEND=noninteractive apt-get -o APT::Get::AutomaticRemove=false purge -y -- <package>`. APT transactions are simulated first. Nothing runs yet.
+2. Confirm. The user reads the plan and confirms or cancels. A plan works once and expires after five minutes.
+3. Revalidate. Right before it runs, Scope checks that the package is still installed, that an update's version has not changed, and that the deny-list still allows the action. APT simulations must match the preview. If Scope cannot confirm the state, it stops.
+4. Run. Admin commands go through the Polkit dialog. Progress appears at the bottom of the window. Only one package operation runs at a time.
 
 ## Supported sources and actions
 
-- APT: lists manual installs only. Uninstall runs `apt remove -y`. Update runs `apt install -y` for the package. Every APT transaction is simulated with `LC_ALL=C` before the preview, and again right before apply. The plan stores a fingerprint of the simulation.
-- Snap: lists apps and tools. Runtimes and bases such as core, snapd, bare, and the GTK and GNOME content snaps are hidden. Uninstall runs `snap remove`. Update runs `snap refresh`.
-- Flatpak: lists user and system installs separately. Each app keeps the scope it was found in. Uninstall runs `flatpak uninstall -y --user` or `--system`. Update runs `flatpak update -y` with the same scope. A missing scope is an error, never a default.
-- AppImage: lists valid AppImages in /opt, /usr/local/bin, ~/Applications, ~/apps, ~/AppImages, ~/Downloads, and ~/.local/bin. Uninstall and update are not supported yet, so the plan is a protected plan and no command runs.
-- Desktop launchers: lists visible launchers in the user's applications folder that no scanner owns. These are for discovery only, and their actions are disabled.
+| Source | Uninstall | Update |
+| --- | --- | --- |
+| APT | `pkexec env DEBIAN_FRONTEND=noninteractive apt-get -o APT::Get::AutomaticRemove=false purge -y -- <pkg>` | `pkexec env DEBIAN_FRONTEND=noninteractive apt install -y <pkg>` |
+| Snap | `pkexec snap remove <pkg>` | `pkexec snap refresh <pkg>` |
+| Flatpak user | `flatpak uninstall -y --user <id>` | `flatpak update -y --user <id>` |
+| Flatpak system | `pkexec flatpak uninstall -y --system <id>` | `pkexec flatpak update -y --system <id>` |
+| uv tool | `uv tool uninstall <pkg>` in the recorded tool and bin roots | `uv tool upgrade <pkg>` |
+| pipx | `pipx uninstall <environment>` | `pipx upgrade <environment>` with recorded pip options |
+| Cargo | `cargo uninstall --root <root> <pkg>` | `cargo install --root <root>` with the original source and build settings |
+| npm global | `npm uninstall --global --prefix <prefix> <pkg>` | `npm update --global --prefix <prefix> <pkg>` |
+| Bun global | `bun remove --global <pkg>` | `bun update --global <pkg>` |
+| AppImage in ~/AppImages (Scope or Gear Lever) | moves the AppImage, its launchers and icons to the Trash; app data only when opted in | downloads the published update over HTTPS, verifies its digest, replaces in place |
+| Other AppImages, unmanaged launchers | discovery only | discovery only |
+| Steam games | read-only | Open in Steam |
+| JetBrains Toolbox IDEs | read-only | Open Toolbox |
 
-Scope never edits the dpkg or apt databases directly. It always uses the package manager's own command.
+User tools are managed as the user, never as root. Update availability depends on the source and how the app was installed. Scope never edits the dpkg or apt databases directly.
 
 ## Safety
 
-- Preview first. Every destructive action builds a plan. Scope applies a plan only when the user confirms it, and only once.
-- Revalidate before running. Scope checks the package, the version for updates, and the deny-list. It fails closed when it cannot verify the state.
-- Simulate APT. Scope rejects any removal that would take a protected package with it.
-- Deny-list. Critical APT packages, kernel images, lib* packages matched by a heuristic, Snap runtimes, and AppImage paths outside the allow-list are protected.
+- Preview first. Every destructive action builds a plan, applied only once and only within five minutes.
+- Revalidate before running. Scope fails closed when it cannot verify the state.
+- Simulate APT with LC_ALL=C. Scope rejects transactions that would remove or purge a protected package, and requires the same simulation right before apply.
+- APT uninstall purges package configuration with autoremove disabled. Personal settings and data in the home directory remain. Scope never runs autoremove.
+- Deny-list. Critical APT packages (including Ubuntu desktop metapackages and the Ubuntu session), kernel images, lib* packages matched by a heuristic, Snap runtimes, and AppImage paths outside ~/AppImages are protected.
 - No passwords in the app. Commands that need root run through pkexec and the standard Polkit dialog.
-- No shell. Commands are fixed argument lists. Text from the interface never reaches sh -c.
-- Trash. Scope moves files to the Trash with gio trash, with a manual fallback to ~/.local/share/Trash.
-- Verified updates. Official .deb builds check a minisign-signed SHA-256 manifest before they install a new version. The public key is compiled into the app.
+- No shell. Commands are fixed argument lists.
+- Trash. Files Scope removes itself go to the Trash with gio trash, with a fallback to ~/.local/share/Trash.
+- Verified updates. Official .deb builds check a minisign-signed SHA-256 manifest before they install a new version.
 
 ## Install
 
 Ubuntu, x86-64:
 
 ```bash
-sudo apt install ./scope_0.3.7_amd64.deb
+sudo apt install ./scope_0.3.8_amd64.deb
 ```
 
-A portable x86-64 build is also available as Scope-0.3.7-x86_64.AppImage. Make it executable with chmod +x, then launch it. Releases include SHA256SUMS and its minisign signature.
+A portable x86-64 build is available as Scope-0.3.8-x86_64.AppImage. Make it executable with chmod +x, then launch it. Most AppImages need libfuse2t64; AppImage integration needs squashfs-tools. Releases include SHA256SUMS and its minisign signature.
 
-The package is named scope and installs the scope command. Remove it with `sudo apt remove scope`. Removing Scope does not remove the apps it lists.
+The package is named scope. Remove it with `sudo apt remove scope`. Removing Scope does not remove the apps it lists.
 
-Build from source needs Rust stable and these packages: build-essential, pkg-config, libfontconfig1-dev, libx11-dev, libx11-xcb-dev, libxcb1-dev, libxkbcommon-dev, libxkbcommon-x11-dev, libwayland-dev, and wayland-protocols. Then run `cargo run`. libxkbcommon-x11-dev is required even on Wayland-only sessions.
+Build from source needs Rust stable and build-essential, pkg-config, libfontconfig1-dev, libx11-dev, libx11-xcb-dev, libxcb1-dev, libxkbcommon-dev, libxkbcommon-x11-dev, libwayland-dev and wayland-protocols. Then run `cargo run`.
 
-## Status
+## Not yet
 
-Working today:
-
-- One list across APT, Snap, Flatpak, AppImage, and unmanaged desktop launchers
-- Display names, categories, and icons from desktop entries and the icon theme
-- Uninstall with a preview, Polkit authentication, and a deny-list
-- Update with a preview for APT, Snap, and Flatpak
-- Self-updater that checks a signed SHA-256 manifest for official .deb builds
-
-Not yet:
-
-- AppImage uninstall and update
 - .rpm release packages
-- Snap target version in the update preview
-- Whole-system cleanup and disk usage views
 - Fedora and Arch package-manager support
+- Whole-system cleanup and disk usage views
 
 ## Comparison
 
-Synaptic manages APT packages only. GNOME Software and KDE Discover are app stores that show what their catalogs offer. Scope starts from what is already installed, across APT, Snap, Flatpak, and AppImage, and makes the plan the thing the user approves.
+Synaptic manages APT packages only. GNOME Software, KDE Discover and Flathub are app stores that show what their catalogs offer. Scope starts from what is already installed, across system packages, AppImages and developer tools, and makes the plan the thing the user approves.
 
 ## Who made it
 
@@ -81,16 +80,19 @@ Scope is built by Khurram Bhutto (https://github.com/khurrambhutto). Source and 
 ## FAQ
 
 Q: What is Scope?
-A: A free, open-source Linux app manager that lists APT, Snap, Flatpak, and AppImage apps in one list, with a preview before every update or uninstall.
+A: A free, open-source Linux app manager that lists apps, tools and games from twelve sources in one list, with a preview before every update or uninstall.
 
 Q: Does Scope ask for my password?
 A: No. Admin actions use the standard Polkit dialog through pkexec. Scope never sees or stores the password.
 
 Q: Can Scope remove critical system packages by accident?
-A: No. The deny-list protects critical packages. It is checked at preview and again before apply.
+A: The deny-list protects critical packages. It is checked at preview and again before apply, and APT transactions that would take a protected package with them are rejected.
+
+Q: What does uninstall remove?
+A: The app and what its package manager installed. APT uninstall purges package configuration but keeps home-directory data. Snap may keep a recovery snapshot.
 
 Q: Which distributions are supported?
-A: Ubuntu first, with a .deb for x86-64. Other Debian-based systems can build from source. Fedora and Arch package-manager support, and .rpm packages, are not available yet.
+A: Ubuntu on x86-64 first, with a .deb and an AppImage. Other distributions can use the AppImage or build from source.
 
 Q: Is Scope free?
 A: Yes. It is released under the MIT License.

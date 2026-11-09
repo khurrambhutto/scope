@@ -73,6 +73,7 @@ src/                      GPUI app
 assets/                   SVG icons (filter, refresh, window controls), title-bar
                           logo chip, app icon tile (scope-icon.svg, scope.png)
 docs/                     GitHub Pages site
+design/                   website design dossier and rules (design/CLAUDE.md)
 ```
 
 ## Module rules
