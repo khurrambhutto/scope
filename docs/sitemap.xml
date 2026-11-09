@@ -2,13 +2,13 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
   <url>
     <loc>https://khurrambhutto.github.io/scope/</loc>
-    <lastmod>2026-10-12</lastmod>
+    <lastmod>2026-11-06</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
     <image:image>
       <image:loc>https://khurrambhutto.github.io/scope/image.png</image:loc>
       <image:title>Scope for Linux</image:title>
-      <image:caption>Scope for Linux showing APT, Snap, Flatpak and AppImage apps in one list</image:caption>
+      <image:caption>Scope for Linux showing apps from every source in one list</image:caption>
     </image:image>
     <image:image>
       <image:loc>https://khurrambhutto.github.io/scope/app-details.png</image:loc>
@@ -18,13 +18,13 @@
   </url>
   <url>
     <loc>https://khurrambhutto.github.io/scope/install.html</loc>
-    <lastmod>2026-10-12</lastmod>
+    <lastmod>2026-11-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://khurrambhutto.github.io/scope/safety.html</loc>
-    <lastmod>2026-10-12</lastmod>
+    <lastmod>2026-11-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>

@@ -7,7 +7,7 @@
   <meta name="description" content="How Scope for Linux previews every update and uninstall, revalidates packages before it runs them, simulates APT changes, and protects critical system packages.">
   <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
   <meta name="author" content="Khurram Bhutto">
-  <meta name="theme-color" content="#211719">
+  <meta name="theme-color" content="#0b0c0f">
   <link rel="canonical" href="https://khurrambhutto.github.io/scope/safety.html">
   <link rel="icon" href="favicon.png?v=2" type="image/png" sizes="256x256">
   <meta property="og:type" content="article">
@@ -20,120 +20,139 @@
   <meta name="twitter:image" content="https://khurrambhutto.github.io/scope/image.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@500&display=swap">
+  <link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-menu" viewBox="0 0 16 16"><path d="M2.5 4h11M2.5 8h11M2.5 12h11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-download" viewBox="0 0 20 20"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3v10"/><path d="m5.5 8.8 4.5 4.5 4.5-4.5"/><path d="M4 16.5h12"/></g></symbol>
+    <symbol id="i-github" viewBox="0 0 16 16"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.22 1.87.87 2.33.67.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.19c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></symbol>
+  </svg>
 
   <header class="site-header">
     <div class="page">
-      <a class="wordmark" href="index.html">
-        <img src="scope-logo.svg" width="26" height="26" alt="">
-        Scope <span class="wordmark-sub">for Linux</span>
-      </a>
-      <nav class="site-nav" aria-label="Primary">
-        <a href="index.html#how">How it works</a>
-        <a href="index.html#sources">Sources</a>
-        <a href="install.html">Install</a>
+      <a class="wordmark" href="./" aria-label="Scope for Linux home"><img src="scope-logo.svg" width="28" height="28" alt="">Scope</a>
+      <button class="menu-button" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="Menu" data-menu><svg class="icon" aria-hidden="true"><use href="#i-menu"/></svg></button>
+      <nav class="nav-links" id="nav-links" aria-label="Primary">
+        <a href="./#plan">How it works</a>
+        <a href="./#sources">Sources</a>
         <a href="safety.html" aria-current="page">Safety</a>
-        <a href="index.html#faq">FAQ</a>
-        <a class="nav-github" href="https://github.com/khurrambhutto/scope" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <a href="install.html">Install</a>
+        <a class="nav-github" href="https://github.com/khurrambhutto/scope" target="_blank" rel="noopener noreferrer"><svg class="icon" aria-hidden="true"><use href="#i-github"/></svg>GitHub</a>
       </nav>
+      <a class="button button-primary button-small nav-cta" href="https://github.com/khurrambhutto/scope/releases/download/v0.3.8/scope_0.3.8_amd64.deb">Download</a>
     </div>
   </header>
 
-  <main>
-    <header class="page-head">
-      <div class="page">
-        <p class="crumbs"><a href="index.html">Scope</a> / Safety</p>
+  <main id="main">
+    <div class="page">
+      <header class="doc-head">
+        <p class="crumbs"><a href="./">Scope</a> / Safety</p>
         <h1>How Scope for Linux keeps changes safe</h1>
-        <p class="lead">Scope changes packages on a machine you depend on, so every change is checked twice. This page explains what runs, when, and what stops it.</p>
+        <p>Scope changes packages on a machine you depend on, so every change is checked twice. This page explains what runs, when, and what stops it.</p>
+      </header>
+
+      <div class="doc">
+        <article class="prose">
+          <h2 id="preview">Every change starts as a preview</h2>
+          <p>Each uninstall and update builds a plan before anything runs. The plan lists the exact commands, such as <code>pkexec snap remove firefox</code> for a Snap app or <code>flatpak update -y --user &lt;id&gt;</code> for a Flatpak app in your user scope.</p>
+          <p>A plan works once. Scope keeps it for five minutes, and applying it a second time or after that window fails. You can cancel at any point before you confirm.</p>
+
+          <h2 id="revalidate">Scope checks the system again before it runs</h2>
+          <p>Packages change between the moment you read a plan and the moment you confirm it. An update can finish in the background, or another tool can remove the app. Right before it runs anything, Scope checks that:</p>
+          <ul>
+            <li>the package is still installed,</li>
+            <li>an update's version has not changed since the plan was built, and</li>
+            <li>the deny-list still allows the action.</li>
+          </ul>
+          <p>If Scope cannot confirm one of these, it stops and does not run the command. Failing closed means a stale plan never runs against a different system.</p>
+
+          <h2 id="apt">APT changes are simulated first</h2>
+          <p>Before it previews an APT change, Scope runs the transaction as a simulation with <code>LC_ALL=C</code>. The simulation shows what else would be removed, purged or upgraded. Scope rejects the plan if the transaction would take a protected package with it.</p>
+          <p>Scope stores a fingerprint of the simulation in the plan. Right before it applies the plan, it runs the simulation again and compares the result. If the fingerprint differs, the plan does not run.</p>
+          <p>APT uninstall uses <code>purge</code> with autoremove turned off, so the package's system configuration goes with it. Settings, profiles and caches in your home directory stay, and Scope never runs <code>autoremove</code>.</p>
+
+          <h2 id="admin">Admin rights go through the system dialog</h2>
+          <p>Commands that need root run through <code>pkexec</code>, which shows the standard Polkit dialog. Scope never sees, asks for, or stores your password.</p>
+          <p>Scope does not run commands through a shell. It builds each command as a fixed argument list, so text from the interface cannot turn into extra shell syntax.</p>
+
+          <h2 id="tools">Your own tools stay yours</h2>
+          <p>Tools from uv, pipx, Cargo, npm and Bun live in your home directory, so Scope manages them as your user, never as root. Each command runs with the folders the tool was installed to, and Scope checks that the installation belongs to that tool before it offers an action.</p>
+
+          <h2 id="protected">Critical packages are protected</h2>
+          <p>A deny-list in the backend blocks changes to packages that the system depends on. It covers:</p>
+          <ul>
+            <li>critical APT packages, including Ubuntu desktop metapackages and the Ubuntu session,</li>
+            <li>kernel images,</li>
+            <li><code>lib*</code> packages, matched by a heuristic,</li>
+            <li>Snap runtimes, and</li>
+            <li>AppImage paths outside <code>~/AppImages</code>.</li>
+          </ul>
+          <p>Protected rows show a disabled uninstall action. The deny-list runs at preview and again before apply, so a protected package stays protected even if you turn on Show all. Show all only reveals rows. It does not bypass the checks.</p>
+
+          <h2 id="trash">Deleted files go to the Trash</h2>
+          <p>When Scope removes files itself, such as a managed AppImage with its launchers and icons, it moves them to the Trash with <code>gio trash</code>. If <code>gio</code> is unavailable, Scope writes to <code>~/.local/share/Trash</code> directly. App data is removed only when you opt in for that app in the uninstall preview.</p>
+
+          <h2 id="flatpak">Flatpak scope is never guessed</h2>
+          <p>Flatpak installs are scanned in two scopes, user and system. Each app keeps the scope it was found in, and every later command uses that scope. If the scope is missing, Scope fails at preview, probe and apply. It never falls back to system scope.</p>
+
+          <h2 id="self-update">Scope updates are verified too</h2>
+          <p>The self-updater downloads the release manifest, checks its minisign signature with a public key compiled into the app, and then checks the SHA-256 hash of the package. Downloads go to a private temporary folder. Builds that predate the embedded key must be updated by hand.</p>
+
+          <h2 id="limits">What these checks do not cover</h2>
+          <p>The checks reduce risk, but they do not replace a backup. Snap may keep a recovery snapshot, but Scope does not back up your data. Scope also cannot judge whether an app is one you need. Read the plan before you confirm it.</p>
+        </article>
+
+        <aside aria-label="On this page">
+          <span class="label">On this page</span>
+          <ul>
+            <li><a href="#preview">Preview first</a></li>
+            <li><a href="#revalidate">Checks before it runs</a></li>
+            <li><a href="#apt">APT simulation</a></li>
+            <li><a href="#admin">Admin rights</a></li>
+            <li><a href="#tools">Your own tools</a></li>
+            <li><a href="#protected">Protected packages</a></li>
+            <li><a href="#trash">Trash</a></li>
+            <li><a href="#flatpak">Flatpak scope</a></li>
+            <li><a href="#self-update">Verified updates</a></li>
+            <li><a href="#limits">What is not covered</a></li>
+          </ul>
+          <div class="related">
+            <span class="label">Related</span>
+            <ul>
+              <li><a href="./#plan">How a change works</a></li>
+              <li><a href="install.html">Install Scope</a></li>
+            </ul>
+          </div>
+        </aside>
       </div>
-    </header>
-
-    <div class="page doc">
-      <article>
-        <h2 id="preview">Every change starts as a preview</h2>
-        <p>Each uninstall and update builds a plan before anything runs. The plan lists the exact commands, such as <code>apt remove -y</code> for an APT app or <code>flatpak update -y --user</code> for a Flatpak app in your user scope.</p>
-        <p>A plan works once. Scope stores it for five minutes, and applying it a second time or after that window fails. You can cancel at any point before you confirm.</p>
-
-        <h2 id="revalidate">Scope checks the system again before it runs</h2>
-        <p>Packages change between the moment you read a plan and the moment you confirm it. An update can finish in the background, or another tool can remove the app. Right before it runs anything, Scope checks that:</p>
-        <ul>
-          <li>the package is still installed,</li>
-          <li>an update's version has not changed since the plan was built, and</li>
-          <li>the deny-list still allows the action.</li>
-        </ul>
-        <p>If Scope cannot confirm one of these, it stops and does not run the command. Failing closed means a stale plan never runs against a different system.</p>
-
-        <h2 id="apt">APT changes are simulated first</h2>
-        <p>Before it previews an APT removal, Scope runs the transaction as a simulation with <code>LC_ALL=C</code>. The simulation shows what else would be removed or upgraded. Scope rejects the plan if the transaction would take a protected package with it.</p>
-        <p>Scope stores a fingerprint of the simulation in the plan. Right before it applies the plan, it runs the simulation again and compares the result. If the fingerprint differs, the plan does not run.</p>
-
-        <h2 id="privilege">Admin rights go through the system dialog</h2>
-        <p>Commands that need root run through <code>pkexec</code>, which shows the standard Polkit dialog. Scope never sees, asks for, or stores your password.</p>
-        <p>Scope does not run commands through a shell. It builds each command as a fixed argument list, so text from the interface cannot turn into extra shell syntax.</p>
-
-        <h2 id="protected">Critical packages are protected</h2>
-        <p>A deny-list in the backend blocks changes to packages that the system depends on. It covers:</p>
-        <ul>
-          <li>critical APT packages,</li>
-          <li>kernel images,</li>
-          <li><code>lib*</code> packages, matched by a heuristic,</li>
-          <li>Snap runtimes, and</li>
-          <li>AppImage paths outside the allow-list.</li>
-        </ul>
-        <p>Protected rows show a disabled uninstall action. The deny-list runs at preview and again before apply, so a protected package stays protected even if you turn on Show all. Show all only reveals rows. It does not bypass the checks.</p>
-
-        <h2 id="trash">Deleted files go to the Trash</h2>
-        <p>When Scope removes a file of its own, it moves the file to the Trash with <code>gio trash</code>. If <code>gio</code> is unavailable, Scope writes to <code>~/.local/share/Trash</code> directly. Files are not deleted outright.</p>
-
-        <h2 id="flatpak">Flatpak scope is never guessed</h2>
-        <p>Flatpak installs are scanned in two scopes, user and system. Each app keeps the scope it was found in, and every later command uses that scope. If the scope is missing, Scope fails at preview, probe, and apply. It never falls back to system scope.</p>
-
-        <h2 id="updates-safety">Scope updates are verified too</h2>
-        <p>The self-updater downloads the release manifest, checks its minisign signature with a public key compiled into the app, and then checks the SHA-256 hash of the package. Downloads go to a private temporary folder. Builds that predate the embedded key must be updated by hand.</p>
-
-        <h2 id="limits">What these checks do not cover</h2>
-        <p>The checks reduce risk, but they do not replace a backup. A removed app can take its user data with it, and Scope does not back up that data. Scope also cannot judge whether an app is one you need. Read the plan before you confirm it.</p>
-      </article>
-
-      <aside>
-        <h2>On this page</h2>
-        <ul>
-          <li><a href="#preview" aria-current="page">Preview first</a></li>
-          <li><a href="#revalidate">Checks before it runs</a></li>
-          <li><a href="#apt">APT simulation</a></li>
-          <li><a href="#privilege">Admin rights</a></li>
-          <li><a href="#protected">Protected packages</a></li>
-          <li><a href="#trash">Trash</a></li>
-          <li><a href="#flatpak">Flatpak scope</a></li>
-          <li><a href="#updates-safety">Verified updates</a></li>
-          <li><a href="#limits">What is not covered</a></li>
-        </ul>
-        <h2 style="margin-top:1.6rem">Related</h2>
-        <ul>
-          <li><a href="index.html#how">How a change works</a></li>
-          <li><a href="install.html">Install Scope</a></li>
-        </ul>
-      </aside>
     </div>
   </main>
 
   <footer class="site-footer">
-    <div class="page footer-grid">
-      <div>
-        <span class="wordmark"><img src="scope-logo.svg" width="28" height="28" alt="">Scope <span class="wordmark-sub">for Linux</span></span>
-        <p class="footer-note">Scope for Linux is free and open source under the MIT License. Built by <a href="https://github.com/khurrambhutto" target="_blank" rel="noopener noreferrer" style="color:inherit">Khurram Bhutto</a>.</p>
+    <div class="page">
+      <div class="closing">
+        <p>Read it. Then run it.</p>
+        <a class="button button-primary" href="https://github.com/khurrambhutto/scope/releases/download/v0.3.8/scope_0.3.8_amd64.deb"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>Download for Ubuntu</a>
       </div>
-      <nav class="footer-links" aria-label="Footer">
-        <a href="index.html">Home</a>
-        <a href="install.html">Install</a>
-        <a href="https://github.com/khurrambhutto/scope">GitHub</a>
-        <a href="https://github.com/khurrambhutto/scope/releases">Releases</a>
-        <a href="llms-full.txt">Full text for AI tools</a>
-      </nav>
+      <div class="footer-grid">
+        <div>
+          <span class="wordmark"><img src="scope-logo.svg" width="28" height="28" alt="">Scope for Linux</span>
+          <p class="footer-note">Free and open source under the MIT License. Built by <a class="text-link" href="https://github.com/khurrambhutto" target="_blank" rel="noopener noreferrer">Khurram Bhutto</a>.</p>
+        </div>
+        <nav class="footer-links" aria-label="Footer">
+          <a href="install.html">Install</a>
+          <a href="safety.html">Safety</a>
+          <a href="https://github.com/khurrambhutto/scope">GitHub</a>
+          <a href="https://github.com/khurrambhutto/scope/releases">Releases</a>
+          <a href="https://github.com/khurrambhutto/scope/issues">Report an issue</a>
+          <a href="llms-full.txt">Full text for AI tools</a>
+        </nav>
+      </div>
     </div>
   </footer>
-
+  <script src="site.js?v=3" defer></script>
 </body>
 </html>
