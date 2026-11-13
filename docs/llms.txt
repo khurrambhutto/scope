@@ -1,6 +1,6 @@
 # Scope for Linux
 
-> Scope for Linux (also called Scope) is a free, open-source app manager. It lists apps, command-line tools and games from APT, Snap, Flatpak, AppImage, uv, pipx, Cargo, npm, Bun, Steam and JetBrains Toolbox in one searchable list, and it shows the exact commands for every update or uninstall before anything runs. Written in Rust with Zed's GPUI. Ubuntu on x86-64 is the primary target. Version 0.3.8, MIT License.
+> Scope for Linux (also called Scope) is a free, open-source app manager. It lists apps, command-line tools and games from APT, Snap, Flatpak, AppImage, uv, pipx, Cargo, npm, Bun, Steam and JetBrains Toolbox in one searchable list, and it shows the exact commands for every update or uninstall before anything runs. Written in Rust with Zed's GPUI. Ubuntu on x86-64 is the primary target. Version 0.3.9, MIT License.
 
 Scope is a desktop app for Ubuntu and other Linux systems. It answers the question "what is installed on this machine, and how do I update or remove it safely?" Admin actions use the standard Polkit dialog, so the app never sees the user's password.
 
@@ -29,4 +29,4 @@ Scope is a desktop app for Ubuntu and other Linux systems. It answers the questi
 - Stack: Rust, Zed's GPUI, no webview
 - License: MIT
 - Author: Khurram Bhutto (https://github.com/khurrambhutto)
-- Current release: v0.3.8 (https://github.com/khurrambhutto/scope/releases/tag/v0.3.8)
+- Current release: v0.3.9 (https://github.com/khurrambhutto/scope/releases/tag/v0.3.9)

@@ -32,8 +32,8 @@
     "tool": ["apt"],
     "totalTime": "PT2M",
     "step": [
-      { "@type": "HowToStep", "name": "Download the .deb", "text": "Download scope_0.3.8_amd64.deb from the Scope v0.3.8 release on GitHub.", "url": "https://github.com/khurrambhutto/scope/releases/tag/v0.3.8" },
-      { "@type": "HowToStep", "name": "Install with apt", "text": "Run sudo apt install ./scope_0.3.8_amd64.deb from the folder that holds the download." },
+      { "@type": "HowToStep", "name": "Download the .deb", "text": "Download scope_0.3.9_amd64.deb from the Scope v0.3.9 release on GitHub.", "url": "https://github.com/khurrambhutto/scope/releases/tag/v0.3.9" },
+      { "@type": "HowToStep", "name": "Install with apt", "text": "Run sudo apt install ./scope_0.3.9_amd64.deb from the folder that holds the download." },
       { "@type": "HowToStep", "name": "Open Scope", "text": "Start Scope from the application menu. It scans your sources when it opens." }
     ]
   }
@@ -58,7 +58,7 @@
         <a href="install.html" aria-current="page">Install</a>
         <a class="nav-github" href="https://github.com/khurrambhutto/scope" target="_blank" rel="noopener noreferrer"><svg class="icon" aria-hidden="true"><use href="#i-github"/></svg>GitHub</a>
       </nav>
-      <a class="button button-primary button-small nav-cta" href="https://github.com/khurrambhutto/scope/releases/download/v0.3.8/scope_0.3.8_amd64.deb">Download</a>
+      <a class="button button-primary button-small nav-cta" href="https://github.com/khurrambhutto/scope/releases/download/v0.3.9/scope_0.3.9_amd64.deb">Download</a>
     </div>
   </header>
 
@@ -73,14 +73,14 @@
       <div class="doc">
         <article class="prose">
           <h2 id="deb">Install the .deb</h2>
-          <p>Scope targets Ubuntu on x86-64. Download <a class="text-link" href="https://github.com/khurrambhutto/scope/releases/download/v0.3.8/scope_0.3.8_amd64.deb">scope_0.3.8_amd64.deb</a> from the <a class="text-link" href="https://github.com/khurrambhutto/scope/releases/tag/v0.3.8">v0.3.8 release</a>, open a terminal in the download folder and run:</p>
-          <div class="command"><button class="copy-button" type="button" data-copy="sudo apt install ./scope_0.3.8_amd64.deb">Copy</button><span class="line"><span class="prompt">$ </span>sudo apt install ./scope_0.3.8_amd64.deb</span></div>
+          <p>Scope targets Ubuntu on x86-64. Download <a class="text-link" href="https://github.com/khurrambhutto/scope/releases/download/v0.3.9/scope_0.3.9_amd64.deb">scope_0.3.9_amd64.deb</a> from the <a class="text-link" href="https://github.com/khurrambhutto/scope/releases/tag/v0.3.9">v0.3.9 release</a>, open a terminal in the download folder and run:</p>
+          <div class="command"><button class="copy-button" type="button" data-copy="sudo apt install ./scope_0.3.9_amd64.deb">Copy</button><span class="line"><span class="prompt">$ </span>sudo apt install ./scope_0.3.9_amd64.deb</span></div>
           <p>Start Scope from the application menu or run <code>scope</code> in a terminal. Scope scans your sources when it opens.</p>
           <p>The <code>./</code> in the command matters. Without it, apt looks for a package in its repositories, not in your download folder.</p>
 
           <h2 id="appimage">Run the AppImage</h2>
-          <p>For a portable x86-64 build, download <a class="text-link" href="https://github.com/khurrambhutto/scope/releases/download/v0.3.8/Scope-0.3.8-x86_64.AppImage">Scope-0.3.8-x86_64.AppImage</a>, make it executable, and launch it:</p>
-          <div class="command"><button class="copy-button" type="button" data-copy="chmod +x Scope-0.3.8-x86_64.AppImage&#10;./Scope-0.3.8-x86_64.AppImage">Copy</button><span class="line"><span class="prompt">$ </span>chmod +x Scope-0.3.8-x86_64.AppImage</span><span class="line"><span class="prompt">$ </span>./Scope-0.3.8-x86_64.AppImage</span></div>
+          <p>For a portable x86-64 build, download <a class="text-link" href="https://github.com/khurrambhutto/scope/releases/download/v0.3.9/Scope-0.3.9-x86_64.AppImage">Scope-0.3.9-x86_64.AppImage</a>, make it executable, and launch it:</p>
+          <div class="command"><button class="copy-button" type="button" data-copy="chmod +x Scope-0.3.9-x86_64.AppImage&#10;./Scope-0.3.9-x86_64.AppImage">Copy</button><span class="line"><span class="prompt">$ </span>chmod +x Scope-0.3.9-x86_64.AppImage</span><span class="line"><span class="prompt">$ </span>./Scope-0.3.9-x86_64.AppImage</span></div>
           <p>Most AppImages, this one included, need <code>libfuse2t64</code> to run. Install it with <code>sudo apt install libfuse2t64</code> if the AppImage does not start.</p>
 
           <h2 id="open-with">Install apps with Scope</h2>
@@ -89,7 +89,7 @@
 
           <h2 id="updates">Updates to Scope</h2>
           <p>Scope checks GitHub Releases on startup. Official <code>.deb</code> builds install later updates after they verify a SHA-256 manifest signed with minisign. The public key is compiled into the app, and Scope asks before it installs.</p>
-          <p>If you are upgrading from a build that predates the embedded verification key, install v0.3.8 by hand with the command above. Other install types open the Releases page when an update is available.</p>
+          <p>If you are upgrading from a build that predates the embedded verification key, install v0.3.9 by hand with the command above. Other install types open the Releases page when an update is available.</p>
 
           <h2 id="source">Build from source</h2>
           <p>Build from source on any Linux distribution where you can install Rust stable and the GPUI dependencies. The first build takes a while because it compiles the GPUI toolkit.</p>
@@ -135,7 +135,7 @@
     <div class="page">
       <div class="closing">
         <p>Read it. Then run it.</p>
-        <a class="button button-primary" href="https://github.com/khurrambhutto/scope/releases/download/v0.3.8/scope_0.3.8_amd64.deb"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>Download for Ubuntu</a>
+        <a class="button button-primary" href="https://github.com/khurrambhutto/scope/releases/download/v0.3.9/scope_0.3.9_amd64.deb"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>Download for Ubuntu</a>
       </div>
       <div class="footer-grid">
         <div>

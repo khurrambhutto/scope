@@ -1,6 +1,6 @@
 # Scope for Linux: full text
 
-Scope for Linux (also called Scope) is a free, open-source app manager. It lists apps, command-line tools and games from APT, Snap, Flatpak, AppImage, uv, pipx, Cargo, npm, Bun, Steam and JetBrains Toolbox in one searchable list. Every update or uninstall starts with a plan that shows the exact commands. Scope runs them only after the user confirms. Written in Rust with Zed's GPUI, no webview. Ubuntu on x86-64 is the primary target. Current version: 0.3.8. License: MIT. Source: https://github.com/khurrambhutto/scope
+Scope for Linux (also called Scope) is a free, open-source app manager. It lists apps, command-line tools and games from APT, Snap, Flatpak, AppImage, uv, pipx, Cargo, npm, Bun, Steam and JetBrains Toolbox in one searchable list. Every update or uninstall starts with a plan that shows the exact commands. Scope runs them only after the user confirms. Written in Rust with Zed's GPUI, no webview. Ubuntu on x86-64 is the primary target. Current version: 0.3.9. License: MIT. Source: https://github.com/khurrambhutto/scope
 
 ## What Scope does
 
@@ -54,10 +54,10 @@ User tools are managed as the user, never as root. Update availability depends o
 Ubuntu, x86-64:
 
 ```bash
-sudo apt install ./scope_0.3.8_amd64.deb
+sudo apt install ./scope_0.3.9_amd64.deb
 ```
 
-A portable x86-64 build is available as Scope-0.3.8-x86_64.AppImage. Make it executable with chmod +x, then launch it. Most AppImages need libfuse2t64; AppImage integration needs squashfs-tools. Releases include SHA256SUMS and its minisign signature.
+A portable x86-64 build is available as Scope-0.3.9-x86_64.AppImage. Make it executable with chmod +x, then launch it. Most AppImages need libfuse2t64; AppImage integration needs squashfs-tools. Releases include SHA256SUMS and its minisign signature.
 
 The package is named scope. Remove it with `sudo apt remove scope`. Removing Scope does not remove the apps it lists.
 

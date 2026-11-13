@@ -71,11 +71,11 @@
         "applicationCategory": "UtilitiesApplication",
         "applicationSubCategory": "Package manager",
         "operatingSystem": "Linux",
-        "softwareVersion": "0.3.8",
+        "softwareVersion": "0.3.9",
         "license": "https://opensource.org/licenses/MIT",
         "codeRepository": "https://github.com/khurrambhutto/scope",
         "downloadUrl": "https://github.com/khurrambhutto/scope/releases",
-        "installUrl": "https://github.com/khurrambhutto/scope/releases/tag/v0.3.8",
+        "installUrl": "https://github.com/khurrambhutto/scope/releases/tag/v0.3.9",
         "availableOnDevice": "Desktop",
         "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
         "author": {
@@ -104,7 +104,7 @@
           { "@type": "Question", "name": "Can Scope remove critical system packages by accident?", "acceptedAnswer": { "@type": "Answer", "text": "A backend deny-list protects critical APT packages, Ubuntu desktop metapackages, kernel images, Snap runtimes and related system libraries. The check runs when Scope builds a plan and again right before it runs, and APT transactions that would take a protected package with them are rejected." } },
           { "@type": "Question", "name": "What does uninstall remove?", "acceptedAnswer": { "@type": "Answer", "text": "The app and what its package manager installed. APT uninstall purges the package's configuration but leaves settings and data in your home directory, and Scope never runs autoremove. Snap may keep a recovery snapshot. Managed AppImages and their launchers go to the Trash." } },
           { "@type": "Question", "name": "Which Linux distributions does Scope support?", "acceptedAnswer": { "@type": "Answer", "text": "Ubuntu on x86-64 is the primary target, with a .deb and an AppImage. Other distributions can run the AppImage or build from source with Rust. .rpm packages, and Fedora and Arch package-manager support, are not available yet." } },
-          { "@type": "Question", "name": "How do I install Scope for Linux?", "acceptedAnswer": { "@type": "Answer", "text": "Download scope_0.3.8_amd64.deb from GitHub Releases, then run sudo apt install ./scope_0.3.8_amd64.deb. Official .deb builds update themselves after verifying a signed checksum manifest." } },
+          { "@type": "Question", "name": "How do I install Scope for Linux?", "acceptedAnswer": { "@type": "Answer", "text": "Download scope_0.3.9_amd64.deb from GitHub Releases, then run sudo apt install ./scope_0.3.9_amd64.deb. Official .deb builds update themselves after verifying a signed checksum manifest." } },
           { "@type": "Question", "name": "Is Scope free and open source?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Scope is free and released under the MIT License. The source code is on GitHub." } }
         ]
       }
@@ -140,22 +140,22 @@
         <a href="install.html">Install</a>
         <a class="nav-github" href="https://github.com/khurrambhutto/scope" target="_blank" rel="noopener noreferrer"><svg class="icon" aria-hidden="true"><use href="#i-github"/></svg>GitHub</a>
       </nav>
-      <a class="button button-primary button-small nav-cta" href="https://github.com/khurrambhutto/scope/releases/download/v0.3.8/scope_0.3.8_amd64.deb">Download</a>
+      <a class="button button-primary button-small nav-cta" href="https://github.com/khurrambhutto/scope/releases/download/v0.3.9/scope_0.3.9_amd64.deb">Download</a>
     </div>
   </header>
 
   <main id="main">
     <section class="hero" id="top" aria-labelledby="hero-title">
       <div class="page">
-        <p class="label" data-hero>Scope for Linux · v0.3.8</p>
+        <p class="label" data-hero>Scope for Linux · v0.3.9</p>
         <h1 id="hero-title" data-split>See it before it runs.</h1>
         <p class="lede" data-hero>Every app, tool and game on your Linux machine in one list. Update or uninstall any of them after reading exactly what will happen.</p>
         <div class="actions" data-hero>
-          <a class="button button-primary" href="https://github.com/khurrambhutto/scope/releases/download/v0.3.8/scope_0.3.8_amd64.deb"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>Download for Ubuntu</a>
-          <a class="button button-ghost" href="https://github.com/khurrambhutto/scope/releases/download/v0.3.8/Scope-0.3.8-x86_64.AppImage">Get the AppImage</a>
+          <a class="button button-primary" href="https://github.com/khurrambhutto/scope/releases/download/v0.3.9/scope_0.3.9_amd64.deb"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>Download for Ubuntu</a>
+          <a class="button button-ghost" href="https://github.com/khurrambhutto/scope/releases/download/v0.3.9/Scope-0.3.9-x86_64.AppImage">Get the AppImage</a>
         </div>
         <div data-hero>
-          <div class="install-line"><code><span class="prompt">$ </span>sudo apt install ./scope_0.3.8_amd64.deb</code><button class="copy-button" type="button" data-copy="sudo apt install ./scope_0.3.8_amd64.deb">Copy</button></div>
+          <div class="install-line"><code><span class="prompt">$ </span>sudo apt install ./scope_0.3.9_amd64.deb</code><button class="copy-button" type="button" data-copy="sudo apt install ./scope_0.3.9_amd64.deb">Copy</button></div>
           <p class="hero-note">Ubuntu on x86-64 · Free and open source, MIT</p>
         </div>
 
@@ -342,7 +342,7 @@
           <h2 id="install-title" data-split>Install Scope for Linux</h2>
           <p>Built for Ubuntu on x86-64. Official .deb builds update themselves after you confirm.</p>
           <div class="button-row">
-            <a class="button button-primary" href="https://github.com/khurrambhutto/scope/releases/download/v0.3.8/scope_0.3.8_amd64.deb"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>Download .deb</a>
+            <a class="button button-primary" href="https://github.com/khurrambhutto/scope/releases/download/v0.3.9/scope_0.3.9_amd64.deb"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>Download .deb</a>
             <a class="button button-ghost" href="install.html">Install guide</a>
           </div>
         </div>
@@ -352,7 +352,7 @@
             <button role="tab" aria-selected="false" data-install="appimage">AppImage</button>
             <button role="tab" aria-selected="false" data-install="source">From source</button>
           </div>
-          <div class="command" data-install-cmd><span class="line"><span class="prompt">$ </span>sudo apt install ./scope_0.3.8_amd64.deb</span></div>
+          <div class="command" data-install-cmd><span class="line"><span class="prompt">$ </span>sudo apt install ./scope_0.3.9_amd64.deb</span></div>
           <p class="fine" data-install-note>Run it from the folder you downloaded the .deb to. The ./ tells apt to use the local file.</p>
         </div>
       </div>
@@ -372,7 +372,7 @@
           <details><summary>Can Scope remove critical system packages by accident?</summary><p>A backend deny-list protects critical APT packages, Ubuntu desktop metapackages, kernel images, Snap runtimes and related system libraries. The check runs when Scope builds a plan and again right before it runs, and APT transactions that would take a protected package with them are rejected.</p></details>
           <details><summary>What does uninstall remove?</summary><p>The app and what its package manager installed. APT uninstall purges the package's configuration but leaves settings and data in your home directory, and Scope never runs autoremove. Snap may keep a recovery snapshot. Managed AppImages and their launchers go to the Trash.</p></details>
           <details><summary>Which Linux distributions does Scope support?</summary><p>Ubuntu on x86-64 is the primary target, with a <code>.deb</code> and an AppImage. Other distributions can run the AppImage or build from source with Rust. <code>.rpm</code> packages, and Fedora and Arch package-manager support, are not available yet.</p></details>
-          <details><summary>How do I install Scope for Linux?</summary><p>Download <code>scope_0.3.8_amd64.deb</code> from <a class="text-link" href="https://github.com/khurrambhutto/scope/releases/tag/v0.3.8">GitHub Releases</a>, then run <code>sudo apt install ./scope_0.3.8_amd64.deb</code>. Official .deb builds update themselves after verifying a signed checksum manifest.</p></details>
+          <details><summary>How do I install Scope for Linux?</summary><p>Download <code>scope_0.3.9_amd64.deb</code> from <a class="text-link" href="https://github.com/khurrambhutto/scope/releases/tag/v0.3.9">GitHub Releases</a>, then run <code>sudo apt install ./scope_0.3.9_amd64.deb</code>. Official .deb builds update themselves after verifying a signed checksum manifest.</p></details>
           <details><summary>Is Scope free and open source?</summary><p>Yes. Scope is released under the MIT License, and the source is on <a class="text-link" href="https://github.com/khurrambhutto/scope" target="_blank" rel="noopener noreferrer">GitHub</a>.</p></details>
         </div>
       </div>
@@ -383,7 +383,7 @@
     <div class="page">
       <div class="closing">
         <p>Read it. Then run it.</p>
-        <a class="button button-primary" href="https://github.com/khurrambhutto/scope/releases/download/v0.3.8/scope_0.3.8_amd64.deb"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>Download for Ubuntu</a>
+        <a class="button button-primary" href="https://github.com/khurrambhutto/scope/releases/download/v0.3.9/scope_0.3.9_amd64.deb"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>Download for Ubuntu</a>
       </div>
       <div class="footer-grid">
         <div>
