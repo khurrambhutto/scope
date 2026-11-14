@@ -5874,6 +5874,7 @@ dependencies = [
  "gpui-kit",
  "minisign-verify",
  "pep440_rs",
+ "rayon",
  "regex",
  "rustix",
  "semver",

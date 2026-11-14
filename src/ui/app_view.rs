@@ -27,6 +27,7 @@ use crate::theme::{self, text, text_faint};
 use super::detail::detail_element;
 use super::detail_transition::DetailTransition;
 use super::dialog::Dialog;
+use super::disk::{self, DiskState};
 use super::filters::{OpenSelect, SourceFilter, ViewMode};
 use super::operation_controller::OperationController;
 use super::operation_footer::{operation_footer, OperationStatus};
@@ -119,6 +120,8 @@ pub struct ScopeApp {
     /// Bumped whenever a fresh scan replaces `scan`, so a rescan that arrives
     /// with identical filters still triggers a rebuild.
     scan_gen: u64,
+    /// The Disk tab's scan, rings, and focus.
+    pub(super) disk: DiskState,
 }
 
 impl ScopeApp {
@@ -169,6 +172,7 @@ impl ScopeApp {
             search_blobs: Vec::new(),
             blob_gen: u64::MAX,
             scan_gen: 0,
+            disk: DiskState::default(),
         };
         app.start_scan(cx);
         app.check_updater(cx);
@@ -225,6 +229,16 @@ impl ScopeApp {
             });
         })
         .detach();
+    }
+
+    /// Switches the top-level view. The Disk tab starts its scan on first use.
+    pub(super) fn set_view_mode(&mut self, mode: ViewMode, cx: &mut Context<Self>) {
+        self.view_mode = mode;
+        self.open_select = None;
+        if mode == ViewMode::Disk {
+            self.ensure_disk_scan(cx);
+        }
+        cx.notify();
     }
 
     pub(super) fn toggle_select(&mut self, key: &str, cx: &mut Context<Self>) {
@@ -856,6 +870,10 @@ impl Render for ScopeApp {
 
         let banner_children = self.banner_stack(&entity);
 
+        let disk_view = self.view_mode == ViewMode::Disk;
+        let disk_page =
+            disk_view.then(|| disk::page(&mut self.disk, &entity, corner_radius, window));
+
         let operation_footer = self
             .operation_status
             .as_ref()
@@ -912,6 +930,8 @@ impl Render for ScopeApp {
                 } else if this.open_select.is_some() {
                     this.open_select = None;
                     cx.notify();
+                } else if this.view_mode == ViewMode::Disk {
+                    this.disk_escape(cx);
                 } else {
                     // Escape clears the query; programmatic set_value emits
                     // no Change event, so notify the view explicitly.
@@ -924,7 +944,9 @@ impl Render for ScopeApp {
                 }
             }))
             .on_action(cx.listener(|this, _: &Rescan, _window, cx| {
-                if !this.refreshing {
+                if this.view_mode == ViewMode::Disk {
+                    this.restart_disk_scan(cx);
+                } else if !this.refreshing {
                     this.start_scan(cx);
                 }
             }))
@@ -933,19 +955,22 @@ impl Render for ScopeApp {
                 corner_radius,
                 act(&entity, |this, cx| this.open_settings(cx)),
             ))
-            .child(self.filters(cx))
+            .when(!disk_view, |this| this.child(self.filters(cx)))
             .children(banner_children)
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .flex_1()
-                    .min_h(px(0.))
-                    .pl(px(32.))
-                    .pr(px(16.))
-                    .pb(px(16.))
-                    .child(list_element),
-            )
+            .when_some(disk_page, |this, page| this.child(page))
+            .when(!disk_view, |this| {
+                this.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .flex_1()
+                        .min_h(px(0.))
+                        .pl(px(32.))
+                        .pr(px(16.))
+                        .pb(px(16.))
+                        .child(list_element),
+                )
+            })
             .when_some(operation_footer, |this, status| {
                 this.child(
                     div()

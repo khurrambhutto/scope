@@ -23,6 +23,7 @@ use super::widgets::{menu_item, select_widget, view_toggle_button};
 pub(super) enum ViewMode {
     Uninstall,
     Updates,
+    Disk,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -103,6 +104,7 @@ impl ScopeApp {
                         IconName::RefreshCw,
                         ViewMode::Updates,
                     ),
+                    ("view-disk", "Disk", IconName::ChartPie, ViewMode::Disk),
                 ]
                 .into_iter()
                 .map(|(id, label, icon, mode)| {
@@ -130,11 +132,7 @@ impl ScopeApp {
                                 .active(theme::selected_surface()),
                         )
                         .toggled(active)
-                        .on_click(act(&entity, move |this, cx| {
-                            this.view_mode = mode;
-                            this.open_select = None;
-                            cx.notify();
-                        }))
+                        .on_click(act(&entity, move |this, cx| this.set_view_mode(mode, cx)))
                 }),
             )
     }

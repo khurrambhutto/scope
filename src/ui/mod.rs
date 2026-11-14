@@ -7,6 +7,7 @@ pub mod app_view;
 pub mod detail;
 mod detail_transition;
 pub mod dialog;
+mod disk;
 pub mod filters;
 mod footprint_row;
 mod install_preview;

@@ -7,6 +7,7 @@
 pub mod app_data;
 pub mod appimage;
 pub mod desktop_entries;
+pub mod disk_usage;
 pub mod extracted_app;
 pub mod icons;
 pub mod install_metadata;

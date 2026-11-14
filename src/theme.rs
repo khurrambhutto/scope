@@ -4,6 +4,7 @@
 
 use gpui_kit::{rgb, App, Hsla};
 
+use crate::domain::disk_usage::DiskCategory;
 use crate::domain::package::{AppKind, InstalledPackage, PackageSource, SteamUpdateStatus};
 
 pub const FONT_FAMILY: &str = "Work Sans";
@@ -206,6 +207,53 @@ pub fn on_accent() -> Hsla {
 pub fn background_top() -> Hsla {
     rgb(0x22110e).into()
 }
+// ---- Disk palette ---------------------------------------------------------
+//
+// Matte category hues for the Disk tab. Nested segments mix each hue toward
+// `elev()`, so deeper rings recede.
+
+fn disk_category_hex(category: DiskCategory) -> u32 {
+    match category {
+        DiskCategory::Apps => 0x5f86b3,
+        DiskCategory::Documents => 0x7f97a6,
+        DiskCategory::Downloads => 0x8f80c2,
+        DiskCategory::Pictures => 0x6e9f86,
+        DiskCategory::Videos => 0x5c9aa3,
+        DiskCategory::Music => 0xb56d8e,
+        DiskCategory::Developer => 0xc7895a,
+        DiskCategory::Cache => 0xc4a55f,
+        DiskCategory::Trash => 0x8d6d61,
+        DiskCategory::System => 0x71655f,
+        DiskCategory::Other => 0x5f5451,
+    }
+}
+
+/// Category colour for swatches, legends and share bars.
+pub fn disk_category_color(category: DiskCategory) -> Hsla {
+    rgb(disk_category_hex(category)).into()
+}
+
+/// Segment colour: the category hue mixed toward the surface by ring depth.
+/// Odd siblings are a little darker, so neighbours separate.
+pub fn disk_segment_color(category: DiskCategory, depth: usize, sibling_index: usize) -> Hsla {
+    const DEPTH_WEIGHT: [f32; 4] = [0.90, 0.72, 0.57, 0.46];
+    let mut weight = DEPTH_WEIGHT[depth.min(DEPTH_WEIGHT.len() - 1)];
+    if sibling_index % 2 == 1 {
+        weight -= 0.06;
+    }
+    mix_rgb(disk_category_hex(category), 0x1a1312, weight)
+}
+
+/// Linear RGB mix: `weight` of `from` and the rest of `to`.
+fn mix_rgb(from: u32, to: u32, weight: f32) -> Hsla {
+    let channel = |shift: u32| {
+        let a = ((from >> shift) & 0xff) as f32;
+        let b = ((to >> shift) & 0xff) as f32;
+        (a * weight + b * (1. - weight)).round() as u32
+    };
+    rgb((channel(16) << 16) | (channel(8) << 8) | channel(0)).into()
+}
+
 /// Scrim under dialogs: background_bottom at 60% alpha.
 pub fn scrim() -> Hsla {
     gpui_kit::rgba(0x100b0a99).into()
