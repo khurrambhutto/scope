@@ -58,6 +58,8 @@ src/                      GPUI app
     tool_managers/        uv/pipx/Cargo/npm/Bun receipts, rooted identity, update checks,
                           ownership validation, and shared preview/apply commands
     package.rs            InstalledPackage plus source/scope enums
+    disk_usage/           read-only Disk tab scan: mountinfo filtering, parallel
+                          allocated-size walk, directory arena, path categories
   theme.rs                palette and formatting helpers
   ui/                     screen state and composition
     app_view.rs           header, filters, virtualized list, inline detail, dialogs
@@ -74,6 +76,10 @@ src/                      GPUI app
     resize_zones.rs       invisible window edge/corner bands that start resizing
     text_input.rs         search field
     widgets.rs            banners, empty/loading states
+    disk/                 Disk tab: view.rs scan, zoom and selection state;
+                          render.rs page and header; panel.rs focus card and
+                          list; geometry.rs ring layout and hit testing;
+                          motion.rs zoom and intro tweens; rings.rs painting
     package_list_model.rs scan replacement and stable-key list behavior
     operation_controller.rs request identity and apply exclusivity
 assets/                   SVG icons (filter, refresh, window controls), title-bar
@@ -108,6 +114,8 @@ design/                   website design dossier and rules (design/CLAUDE.md)
 - Expanded details append source-neutral detected user data after the native footprint. Use User data for XDG configuration/profile roots, Cache for cache roots, and App state for state roots; never imply configuration folders contain only preferences. Data rows belong under Review until the fresh modal authorizes selection. Keep native removal and optional review byte totals separate, deduplicate overlapping/native paths, and share the compact label/path/size row with the modal. Preserve actual retained-path reasons and required preview warnings; do not repeat per-row discovery explanations.
 - Every source uses the same inline details panel, immediate source-appropriate placeholders, streaming measurements, 30-second cache, and measured-height easing. Expired complete details stay visible during refresh. Request identity includes the stable package key and raw version; Flatpak user/system keys remain distinct. Share a two-inspection worker limit, preserve cancellation and reduced motion, and keep Snap uninstall previews on fresh complete inspection.
 - Inspect only attributable installed footprints. APT measures dpkg-listed files individually, groups them by location, and marks conffiles removed by purge; never walk their shared parent directories or guess home-directory data. Flatpak resolves the deployment with the DTO's explicit scope, excludes shared runtimes, and reports current-user `~/.var/app/<id>` data as kept. AppImage reports its file and existing exact `.home`/`.config` portable sidecars; for Scope/Gear Lever integrations the file, every launcher that runs it, and its `~/AppImages/.icons` entries are removed and the sidecars are kept; app data found by name is offered only in the uninstall preview. Desktop reports its launcher and resolved executable, or a verified dedicated AppDir root and launcher set when `extracted_installation` is present. Unverified local-source rows remain informational and cannot uninstall/update. Unattributable data stays explicitly unknown; no inspection launches apps, elevates privileges, or changes package-manager state.
+
+- The Disk tab is read-only. It measures allocated size (`st_blocks`), counts hard links once, never follows symlinks, and skips virtual, network, FUSE and other-device mounts using `/proc/self/mountinfo` (Btrfs subvolumes of the same device stay in, because their `st_dev` differs). Header totals come from `statvfs`, never from summed folders. Unreadable folders stay explicit; scanning never elevates. Scans run off the UI thread, stream depth-limited snapshots, and stop on cancellation.
 
 ## GPUI notes
 
@@ -203,7 +211,9 @@ Ask first:
 
 Done: unified package view, uninstall (preview + apply, all sources), update (preview + apply for APT/Snap/Flatpak, verified user uv/pipx/Cargo/npm/Bun installs, and Scope/Gear Lever AppImages), AppImage and .deb install from an opened file, self-updater.
 
-Until updates are complete and tested, do not build whole-system clean, disk analyze, purge, leftover removal, or status dashboards. Exceptions are normal per-app APT uninstall using purge, verified per-app cleanup through the shared uninstall preview, and verified extracted-AppDir removal. Snap purge, snapshot deletion, orphan dependency cleanup and arbitrary/system-wide leftover removal remain outside the supported contract. Those wait behind this fence.
+The read-only Disk tab is in progress: a scan of HOME and the root filesystem drawn as rings, with Open folder and Open in Apps. It never deletes or moves data. Disk cleanup actions (Trash, Empty Trash, cache clearing) wait until the read-only tab ships and need their own preview-first plan through `system::trash::trash_checked`.
+
+Do not build whole-system clean, purge, leftover removal, or status dashboards. Exceptions are normal per-app APT uninstall using purge, verified per-app cleanup through the shared uninstall preview, and verified extracted-AppDir removal. Snap purge, snapshot deletion, orphan dependency cleanup and arbitrary/system-wide leftover removal remain outside the supported contract. Those wait behind this fence.
 
 ## Definition of done
 

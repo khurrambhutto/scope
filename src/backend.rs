@@ -6,11 +6,16 @@
 
 use std::future::Future;
 use std::path::PathBuf;
+use std::process::Stdio;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
+use std::time::Duration;
 
 use futures::channel::{mpsc, oneshot};
 
 mod scan_cache;
 
+use crate::domain::disk_usage::{self, ScanOptions, ScanProgress};
 use crate::domain::operations::{
     uninstall, update, Operation, OperationPlan, OperationResult, OperationStage, OperationTarget,
     PlanStore,
@@ -94,6 +99,41 @@ pub fn spawn_scan(load_cache: bool, tx: mpsc::UnboundedSender<ScanUpdate>) {
 pub fn spawn_open_jetbrains_toolbox(tx: oneshot::Sender<Result<(), String>>) {
     std::thread::spawn(move || {
         let _ = tx.send(block_on(crate::domain::jetbrains_toolbox::open()));
+    });
+}
+
+/// Measure HOME and the root filesystem on a worker thread, streaming snapshots
+/// until the final one. Sends nothing when HOME is unset. Cancelling `cancel`
+/// stops the walk without a final snapshot.
+pub fn spawn_disk_scan(cancel: Arc<AtomicBool>, tx: mpsc::UnboundedSender<ScanProgress>) {
+    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
+        return;
+    };
+    std::thread::spawn(move || {
+        let options = ScanOptions {
+            home,
+            include_system: true,
+            snapshot_depth: 6,
+            snapshot_interval: Duration::from_millis(150),
+            threads: None,
+        };
+        disk_usage::scan(&options, &cancel, move |progress| {
+            let _ = tx.unbounded_send(progress);
+        });
+    });
+}
+
+/// Open a folder in the desktop file manager. Stdio is closed and the worker
+/// reaps `gio` when it exits. Launch failures are not reported.
+pub fn spawn_open_folder(path: PathBuf) {
+    std::thread::spawn(move || {
+        let _ = std::process::Command::new(crate::domain::system::abs("gio"))
+            .arg("open")
+            .arg(&path)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
     });
 }
 

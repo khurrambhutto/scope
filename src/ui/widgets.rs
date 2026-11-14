@@ -168,6 +168,21 @@ pub(super) fn loading_state(cx: &App) -> impl IntoElement {
         )
 }
 
+/// A spinner with one line of copy, for a screen that waits on a single job.
+pub(super) fn loading_message(message: &'static str) -> impl IntoElement {
+    div()
+        .flex()
+        .flex_1()
+        .items_center()
+        .justify_center()
+        .gap(px(10.))
+        .text_color(text_faint())
+        .text_size(px(14.))
+        .line_height(px(20.))
+        .child(Spinner::new().small().color(text_faint()))
+        .child(message)
+}
+
 /// A list-row placeholder at the real row's icon, name, and metadata sizes.
 fn skeleton_row(index: usize, name_width: f32, meta_width: f32, animate: bool) -> AnyElement {
     use gpui_kit::{Animation, AnimationExt};
