@@ -8,8 +8,8 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::Icon;
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    div, px, relative, transparent_black, AnyElement, FontWeight, Hsla, IntoElement, Pixels,
-    WeakEntity,
+    div, px, relative, transparent_black, AnyElement, App, ClickEvent, FontWeight, Hsla,
+    IntoElement, Pixels, WeakEntity, Window,
 };
 
 use super::render::{clip, disk_total, fraction, percent, size_text};
@@ -66,121 +66,85 @@ pub(super) fn focus_panel(
         tags.push(tag("Read-only".to_string()));
     }
 
-    let mut actions: Vec<AnyElement> = Vec::new();
-    if let Some(owner) = node.owner.clone() {
+    // Header: back to the parent level on the left, where you are in the
+    // middle, and opening the folder on the right.
+    let back = focus.parent.map(|_| {
         let entity = entity.clone();
-        actions.push(
-            button(
-                "disk-open-apps",
-                "Open in Apps",
-                ButtonStyle::Neutral,
-                move |_, window, cx| {
-                    let owner = owner.clone();
-                    entity
-                        .update(cx, |this, cx| this.open_in_apps(&owner, window, cx))
-                        .ok();
-                },
-            )
-            .icon(IconName::LayoutDashboard)
-            .into_any_element(),
-        );
-    }
-    if let Some(path) = tree.path(id) {
-        actions.push(
-            button(
-                "disk-open-folder",
-                "Open folder",
-                ButtonStyle::Neutral,
-                move |_, _, _| backend::spawn_open_folder(path.clone()),
-            )
-            .icon(IconName::FolderOpen)
-            .into_any_element(),
-        );
-    }
-
-    let back = focus.parent.map(|parent| {
-        let entity = entity.clone();
-        div()
-            .id("disk-panel-back")
-            .flex()
-            .items_center()
-            .gap(px(4.))
-            .ml(px(-4.))
-            .px(px(4.))
-            .py(px(2.))
-            .rounded(px(6.))
-            .self_start()
-            .cursor_pointer()
-            .text_size(px(12.5))
-            .text_color(theme::text_faint())
-            .hover(|style| style.text_color(theme::text()).bg(theme::hover_surface()))
-            .on_click(move |_, _, cx| {
-                entity.update(cx, |this, cx| this.disk_zoom_up(cx)).ok();
-            })
-            .child(Icon::new(IconName::ChevronLeft).size(px(14.)))
-            .child(clip(&tree.node(parent).name, 32))
+        icon_button("disk-panel-back", IconName::ChevronLeft, move |_, _, cx| {
+            entity.update(cx, |this, cx| this.disk_zoom_up(cx)).ok();
+        })
     });
-
-    let card = div()
-        .flex_none()
+    let open_folder = tree.path(id).map(|path| {
+        icon_button("disk-open-folder", IconName::FolderOpen, move |_, _, _| {
+            backend::spawn_open_folder(path.clone())
+        })
+    });
+    let path = path_label(tree, id);
+    let show_path = path != "~" && path != "Whole disk" && path != node.name;
+    let header = div()
         .flex()
-        .flex_col()
-        .gap(px(14.))
-        .px(px(20.))
-        .pt(px(if back.is_some() { 14. } else { 20. }))
-        .pb(px(18.))
-        .border_b_1()
-        .border_color(theme::border())
+        .items_center()
+        .gap(px(10.))
         .when_some(back, |this, back| this.child(back))
         .child(
             div()
+                .flex_1()
+                .min_w(px(0.))
                 .flex()
-                .items_start()
-                .gap(px(12.))
+                .flex_col()
+                .gap(px(2.))
                 .child(
                     div()
-                        .flex_none()
-                        .mt(px(6.))
-                        .size(px(12.))
-                        .rounded(px(4.))
-                        .bg(color),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w(px(0.))
                         .flex()
-                        .flex_col()
-                        .gap(px(3.))
+                        .items_center()
+                        .gap(px(8.))
+                        .child(swatch(color, 10.))
                         .child(
                             div()
-                                .text_size(px(18.))
-                                .line_height(px(24.))
+                                .min_w(px(0.))
+                                .truncate()
+                                .text_size(px(17.))
+                                .line_height(px(22.))
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .child(node.name.clone()),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(12.))
-                                .text_color(theme::text_faint())
-                                .child(path_label(tree, id)),
                         ),
-                ),
+                )
+                .when(show_path, |this| {
+                    this.child(
+                        div()
+                            .truncate()
+                            .text_size(px(12.))
+                            .text_color(theme::text_faint())
+                            .child(path),
+                    )
+                }),
         )
+        .when_some(open_folder, |this, open| this.child(open));
+
+    // Size, share of the parent level, and the share bar read as one block.
+    let stats = div()
+        .flex()
+        .flex_col()
+        .gap(px(10.))
+        .p(px(14.))
+        .rounded(px(12.))
+        .bg(theme::elev2())
         .child(
             div()
                 .flex()
-                .items_center()
+                .items_end()
                 .justify_between()
                 .gap(px(12.))
                 .child(
                     div()
-                        .text_size(px(30.))
+                        .text_size(px(26.))
+                        .line_height(px(30.))
                         .font_weight(FontWeight::SEMIBOLD)
                         .child(size),
                 )
                 .child(
                     div()
+                        .pb(px(3.))
                         .text_size(px(12.5))
                         .text_color(theme::text_faint())
                         .child(share),
@@ -188,23 +152,52 @@ pub(super) fn focus_panel(
         )
         .child(
             div()
-                .h(px(6.))
-                .rounded(px(3.))
+                .h(px(4.))
+                .rounded(px(2.))
                 .bg(theme::hover_surface())
                 .overflow_hidden()
-                .child(div().h_full().rounded(px(3.)).w(relative(width)).bg(color)),
-        )
-        .when(!tags.is_empty(), |this| {
-            this.child(div().flex().flex_wrap().gap(px(6.)).children(tags))
-        })
-        .child(
-            div()
-                .flex()
-                .flex_wrap()
-                .items_center()
-                .gap(px(8.))
-                .children(actions),
+                .child(div().h_full().rounded(px(2.)).w(relative(width)).bg(color)),
         );
+
+    let open_in_apps = node.owner.clone().map(|owner| {
+        let entity = entity.clone();
+        button(
+            "disk-open-apps",
+            "Open in Apps",
+            ButtonStyle::Neutral,
+            move |_, window, cx| {
+                let owner = owner.clone();
+                entity
+                    .update(cx, |this, cx| this.open_in_apps(&owner, window, cx))
+                    .ok();
+            },
+        )
+        .icon(IconName::LayoutDashboard)
+    });
+
+    let card = div()
+        .flex_none()
+        .flex()
+        .flex_col()
+        .gap(px(14.))
+        .px(px(16.))
+        .pt(px(16.))
+        .pb(px(16.))
+        .border_b_1()
+        .border_color(theme::border())
+        .child(header)
+        .child(stats)
+        .when(!tags.is_empty() || open_in_apps.is_some(), |this| {
+            this.child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap(px(6.))
+                    .children(tags)
+                    .when_some(open_in_apps, |this, open| this.child(open)),
+            )
+        });
 
     let mut panel = div()
         .flex_none()
@@ -392,6 +385,33 @@ fn row(
                 .ok();
         })
         .into_any_element()
+}
+
+/// Square icon-only control used in the card header.
+fn icon_button(
+    id: &'static str,
+    icon: IconName,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(id)
+        .flex_none()
+        .size(px(32.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded(px(9.))
+        .border_1()
+        .border_color(theme::border())
+        .text_color(theme::text_dim())
+        .cursor_pointer()
+        .hover(|style| {
+            style
+                .border_color(theme::border_hover())
+                .text_color(theme::text())
+        })
+        .on_click(on_click)
+        .child(Icon::new(icon).size(px(16.)))
 }
 
 fn swatch(color: Hsla, size: f32) -> impl IntoElement {
