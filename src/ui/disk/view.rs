@@ -350,7 +350,11 @@ fn category_totals(tree: &DiskTree) -> Vec<(DiskCategory, u64)> {
     // Largest first; System and Other always close the list.
     totals.sort_by_key(|&(category, bytes)| {
         let tail = matches!(category, DiskCategory::System | DiskCategory::Other);
-        (tail, category == DiskCategory::Other, std::cmp::Reverse(bytes))
+        (
+            tail,
+            category == DiskCategory::Other,
+            std::cmp::Reverse(bytes),
+        )
     });
     totals
 }

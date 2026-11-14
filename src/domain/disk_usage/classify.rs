@@ -287,9 +287,17 @@ mod tests {
         XdgDirs::from_user_dirs(&home(), home().join(".cache"), None)
     }
 
-    fn classify(parent: DiskCategory, path: &str, has_tag: bool) -> (DiskCategory, bool, Option<String>) {
+    fn classify(
+        parent: DiskCategory,
+        path: &str,
+        has_tag: bool,
+    ) -> (DiskCategory, bool, Option<String>) {
         let p = PathBuf::from(path);
-        let name = p.file_name().unwrap_or_default().to_string_lossy().into_owned();
+        let name = p
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
         classify_dir(&home(), &xdg(), (parent, false), &p, &name, has_tag)
     }
 
@@ -298,7 +306,14 @@ mod tests {
         let (cat, rebuild, owner) = classify(DiskCategory::Other, "/home/tester/.cache", false);
         assert_eq!((cat, rebuild, owner), (DiskCategory::Cache, true, None));
         let child = PathBuf::from("/home/tester/.cache/foo");
-        let (cat, rebuild, _) = classify_dir(&home(), &xdg(), (DiskCategory::Cache, true), &child, "foo", false);
+        let (cat, rebuild, _) = classify_dir(
+            &home(),
+            &xdg(),
+            (DiskCategory::Cache, true),
+            &child,
+            "foo",
+            false,
+        );
         assert_eq!((cat, rebuild), (DiskCategory::Cache, true));
     }
 
@@ -322,16 +337,27 @@ mod tests {
     fn cachedir_tag_marks_other_as_caches_but_keeps_other_categories() {
         let (cat, rebuild, _) = classify(DiskCategory::Other, "/home/tester/x/build", true);
         assert_eq!((cat, rebuild), (DiskCategory::Cache, true));
-        let (cat, rebuild, _) = classify(DiskCategory::Pictures, "/home/tester/Pictures/cache", true);
+        let (cat, rebuild, _) =
+            classify(DiskCategory::Pictures, "/home/tester/Pictures/cache", true);
         assert_eq!((cat, rebuild), (DiskCategory::Pictures, true));
     }
 
     #[test]
     fn flatpak_and_snap_owners_are_their_ids() {
-        let (cat, _, owner) = classify(DiskCategory::Other, "/home/tester/.var/app/org.x.App", false);
-        assert_eq!((cat, owner), (DiskCategory::Apps, Some("org.x.App".to_string())));
+        let (cat, _, owner) = classify(
+            DiskCategory::Other,
+            "/home/tester/.var/app/org.x.App",
+            false,
+        );
+        assert_eq!(
+            (cat, owner),
+            (DiskCategory::Apps, Some("org.x.App".to_string()))
+        );
         let (cat, _, owner) = classify(DiskCategory::Other, "/home/tester/snap/firefox", false);
-        assert_eq!((cat, owner), (DiskCategory::Apps, Some("firefox".to_string())));
+        assert_eq!(
+            (cat, owner),
+            (DiskCategory::Apps, Some("firefox".to_string()))
+        );
         let (cat, _, owner) = classify(DiskCategory::Other, "/home/tester/.var/app", false);
         assert_eq!((cat, owner), (DiskCategory::Other, None));
     }
@@ -343,20 +369,35 @@ mod tests {
             "/home/tester/Library/steamapps/common/Hades",
             false,
         );
-        assert_eq!((cat, owner), (DiskCategory::Apps, Some("Hades".to_string())));
+        assert_eq!(
+            (cat, owner),
+            (DiskCategory::Apps, Some("Hades".to_string()))
+        );
         let (cat, _, owner) = classify(DiskCategory::Other, "/home/tester/steamapps/common", false);
         assert_eq!((cat, owner), (DiskCategory::Other, None));
     }
 
     #[test]
     fn trash_games_and_developer_roots() {
-        let (cat, _, _) = classify(DiskCategory::Other, "/home/tester/.local/share/Trash", false);
+        let (cat, _, _) = classify(
+            DiskCategory::Other,
+            "/home/tester/.local/share/Trash",
+            false,
+        );
         assert_eq!(cat, DiskCategory::Trash);
-        let (cat, _, _) = classify(DiskCategory::Other, "/home/tester/.local/share/Steam", false);
+        let (cat, _, _) = classify(
+            DiskCategory::Other,
+            "/home/tester/.local/share/Steam",
+            false,
+        );
         assert_eq!(cat, DiskCategory::Apps);
         let (cat, _, _) = classify(DiskCategory::Other, "/home/tester/.cargo", false);
         assert_eq!(cat, DiskCategory::Developer);
-        let (cat, _, _) = classify(DiskCategory::Developer, "/home/tester/.cargo/registry", false);
+        let (cat, _, _) = classify(
+            DiskCategory::Developer,
+            "/home/tester/.cargo/registry",
+            false,
+        );
         assert_eq!(cat, DiskCategory::Developer);
     }
 
@@ -380,7 +421,10 @@ mod tests {
         let parsed = parse_user_dirs(text, &home());
         assert_eq!(parsed.get("XDG_PICTURES_DIR"), Some(&home().join("Images")));
         assert_eq!(parsed.get("XDG_VIDEOS_DIR"), Some(&home().join("Clips")));
-        assert_eq!(parsed.get("XDG_DOWNLOAD_DIR"), Some(&PathBuf::from("/data/dl")));
+        assert_eq!(
+            parsed.get("XDG_DOWNLOAD_DIR"),
+            Some(&PathBuf::from("/data/dl"))
+        );
         assert!(!parsed.contains_key("XDG_MUSIC_DIR"));
         assert!(!parsed.contains_key("XDG_DESKTOP_DIR"));
         assert!(!parsed.contains_key("UNRELATED"));

@@ -113,7 +113,10 @@ fn statvfs_usage(path: &Path) -> Option<FsUsage> {
     Some(FsUsage {
         total: stat.f_blocks.saturating_mul(unit),
         free: stat.f_bavail.saturating_mul(unit),
-        used: stat.f_blocks.saturating_sub(stat.f_bfree).saturating_mul(unit),
+        used: stat
+            .f_blocks
+            .saturating_sub(stat.f_bfree)
+            .saturating_mul(unit),
     })
 }
 
@@ -180,7 +183,9 @@ fn run(
             // Dropping the sender tells the reporter the walk is over.
             drop(done_tx);
         });
-        while let Err(mpsc::RecvTimeoutError::Timeout) = done_rx.recv_timeout(options.snapshot_interval) {
+        while let Err(mpsc::RecvTimeoutError::Timeout) =
+            done_rx.recv_timeout(options.snapshot_interval)
+        {
             if cancel.load(Ordering::Relaxed) {
                 break;
             }
@@ -223,7 +228,14 @@ fn walk_roots(ctx: &Ctx, home_id: NodeId, system_id: Option<NodeId>) {
             owner: None,
             read_only: true,
         };
-        walk_dir(ctx, Path::new("/"), system_id, "System", &system_class, true);
+        walk_dir(
+            ctx,
+            Path::new("/"),
+            system_id,
+            "System",
+            &system_class,
+            true,
+        );
     }
 }
 
@@ -264,7 +276,14 @@ fn walk_dir(ctx: &Ctx, path: &Path, id: NodeId, name: &str, parent: &Class, is_r
     });
 }
 
-fn resolve(ctx: &Ctx, path: &Path, name: &str, parent: &Class, is_root: bool, has_tag: bool) -> Class {
+fn resolve(
+    ctx: &Ctx,
+    path: &Path,
+    name: &str,
+    parent: &Class,
+    is_root: bool,
+    has_tag: bool,
+) -> Class {
     if is_root {
         return parent.clone();
     }
@@ -413,7 +432,13 @@ impl Ctx<'_> {
         let count = collected.local.other_count;
         if count > 0 {
             let kind = NodeKind::OtherFiles { count };
-            let other = new_node(&other_label(count), id, kind, collected.local.other_bytes, own);
+            let other = new_node(
+                &other_label(count),
+                id,
+                kind,
+                collected.local.other_bytes,
+                own,
+            );
             children.push(arena.push(other));
         }
         arena.node_mut(id).children = children;
@@ -505,7 +530,9 @@ struct SeenSet {
 impl SeenSet {
     fn new() -> Self {
         Self {
-            shards: (0..SEEN_SHARDS).map(|_| Mutex::new(HashSet::new())).collect(),
+            shards: (0..SEEN_SHARDS)
+                .map(|_| Mutex::new(HashSet::new()))
+                .collect(),
         }
     }
 
@@ -536,7 +563,9 @@ mod tests {
     fn run_scan(home: &Path, tuning: Tuning, interval: Duration) -> Vec<ScanProgress> {
         let cancel = AtomicBool::new(false);
         let mut out = Vec::new();
-        run(&options(home, false, interval), &cancel, tuning, |p| out.push(p));
+        run(&options(home, false, interval), &cancel, tuning, |p| {
+            out.push(p)
+        });
         out
     }
 
@@ -777,7 +806,9 @@ mod tests {
         write_file(&dir.path().join("a.bin"), 1_000);
         let cancel = AtomicBool::new(true);
         let mut count = 0;
-        scan(&options(dir.path(), false, Duration::ZERO), &cancel, |_| count += 1);
+        scan(&options(dir.path(), false, Duration::ZERO), &cancel, |_| {
+            count += 1
+        });
         assert_eq!(count, 0);
     }
 
@@ -809,7 +840,10 @@ mod tests {
         }
         let deepest = find(&last.tree, "d");
         assert!(last.tree.ancestors(deepest).len() > 3);
-        assert_eq!(last.tree.node(last.tree.home.expect("home")).bytes, expected_bytes(home));
+        assert_eq!(
+            last.tree.node(last.tree.home.expect("home")).bytes,
+            expected_bytes(home)
+        );
         assert_directory_totals(&last.tree);
     }
 

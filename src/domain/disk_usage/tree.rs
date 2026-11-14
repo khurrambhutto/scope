@@ -274,7 +274,12 @@ mod tests {
     #[test]
     fn path_is_none_for_other_files_group() {
         let mut b = sample();
-        let other = b.push(node("2 other files", Some(1), NodeKind::OtherFiles { count: 2 }, 5));
+        let other = b.push(node(
+            "2 other files",
+            Some(1),
+            NodeKind::OtherFiles { count: 2 },
+            5,
+        ));
         let tree = b.finish(Path::new("/home/tester"));
         assert_eq!(tree.path(other), None);
     }
@@ -311,7 +316,10 @@ mod tests {
         assert_eq!(home.map(|n| n.bytes), Some(50));
         assert!(tree.node(tree.home.unwrap_or(0)).children.is_empty());
         assert_eq!(tree.node(tree.system.unwrap_or(0)).bytes, 7);
-        assert_eq!(tree.path(tree.home.unwrap_or(0)), Some(PathBuf::from("/home/tester")));
+        assert_eq!(
+            tree.path(tree.home.unwrap_or(0)),
+            Some(PathBuf::from("/home/tester"))
+        );
     }
 
     #[test]
@@ -329,6 +337,9 @@ mod tests {
         let deep_leaf = tree.node(deep).children[0];
         assert_eq!(tree.node(deep_leaf).name, "deep");
         assert_eq!(tree.node(deep_leaf).parent, Some(deep));
-        assert_eq!(tree.path(deep_leaf), Some(PathBuf::from("/home/tester/big/deep")));
+        assert_eq!(
+            tree.path(deep_leaf),
+            Some(PathBuf::from("/home/tester/big/deep"))
+        );
     }
 }

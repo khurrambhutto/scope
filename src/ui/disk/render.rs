@@ -10,8 +10,8 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::button::Button;
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    div, px, relative, AnyElement, App, FontWeight, Hsla, IntoElement, SharedString, WeakEntity,
-    Window,
+    div, px, relative, AnyElement, App, FontWeight, Hsla, IntoElement, Pixels, SharedString,
+    WeakEntity, Window,
 };
 
 use super::geometry::Segment;
@@ -27,6 +27,7 @@ use crate::ui::widgets::{banner, loading_message, BannerKind};
 pub(in crate::ui) fn page(
     state: &mut DiskState,
     entity: &WeakEntity<ScopeApp>,
+    corner_radius: Pixels,
     window: &mut Window,
 ) -> AnyElement {
     let (frame, animating) = state.frame(Instant::now());
@@ -48,7 +49,12 @@ pub(in crate::ui) fn page(
             .min_h(px(0.))
             .flex()
             .child(stage(state, &tree, frame, entity))
-            .child(super::panel::focus_panel(state, &tree, entity))
+            .child(super::panel::focus_panel(
+                state,
+                &tree,
+                entity,
+                corner_radius,
+            ))
             .into_any_element(),
     };
     div()
@@ -396,7 +402,11 @@ fn legend(state: &DiskState) -> impl IntoElement {
         status.push(format!("{} entries scanned", state.entries));
     }
     if state.unreadable > 0 {
-        let noun = if state.unreadable == 1 { "folder" } else { "folders" };
+        let noun = if state.unreadable == 1 {
+            "folder"
+        } else {
+            "folders"
+        };
         status.push(format!("{} {noun} unreadable", state.unreadable));
     }
     let chips = state.totals.iter().map(|&(category, bytes)| {

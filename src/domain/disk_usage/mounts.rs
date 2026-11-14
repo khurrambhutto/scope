@@ -144,10 +144,13 @@ pub fn device_is_rotational(path: &Path) -> bool {
     let major = ((dev >> 8) & 0xfff) | ((dev >> 32) & !0xfff);
     let minor = (dev & 0xff) | ((dev >> 12) & !0xff);
     let base = format!("/sys/dev/block/{major}:{minor}");
-    [format!("{base}/queue/rotational"), format!("{base}/../queue/rotational")]
-        .iter()
-        .find_map(|file| std::fs::read_to_string(file).ok())
-        .is_some_and(|value| value.trim() == "1")
+    [
+        format!("{base}/queue/rotational"),
+        format!("{base}/../queue/rotational"),
+    ]
+    .iter()
+    .find_map(|file| std::fs::read_to_string(file).ok())
+    .is_some_and(|value| value.trim() == "1")
 }
 
 /// Mount points indexed for the walker, with the root filesystem source of each scan.
@@ -219,7 +222,10 @@ mod tests {
         let line = "50 44 8:17 / /media/me/My\\040Disk\\011x\\134y rw - vfat /dev/sdb\\040\\101 rw";
         let entries = parse_mountinfo(line);
         assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].mount_point, PathBuf::from("/media/me/My Disk\tx\\y"));
+        assert_eq!(
+            entries[0].mount_point,
+            PathBuf::from("/media/me/My Disk\tx\\y")
+        );
         assert_eq!(entries[0].source, "/dev/sdb A");
     }
 
@@ -238,7 +244,17 @@ mod tests {
 
     #[test]
     fn virtual_and_network_filesystems_are_skipped() {
-        for fs in ["proc", "sysfs", "tmpfs", "squashfs", "fuse.sshfs", "fuse", "nfs4", "cifs", "overlay"] {
+        for fs in [
+            "proc",
+            "sysfs",
+            "tmpfs",
+            "squashfs",
+            "fuse.sshfs",
+            "fuse",
+            "nfs4",
+            "cifs",
+            "overlay",
+        ] {
             let mount = entry("/x", fs, "whatever");
             assert!(should_skip_mount(&mount, Some("/dev/nvme0n1p2")), "{fs}");
             assert!(should_skip_mount(&mount, None), "{fs}");
@@ -257,7 +273,10 @@ mod tests {
         let lines = "36 44 0:31 /@home /home rw,relatime shared:20 - btrfs /dev/nvme0n1p2 rw,subvol=/@home\n\
             44 1 259:2 /@ / rw,relatime shared:1 - btrfs /dev/nvme0n1p2 rw,subvol=/@";
         let entries = parse_mountinfo(lines);
-        let home = entries.iter().find(|e| e.mount_point == Path::new("/home")).cloned();
+        let home = entries
+            .iter()
+            .find(|e| e.mount_point == Path::new("/home"))
+            .cloned();
         let home = home.unwrap_or_else(|| entry("/home", "", ""));
         assert_eq!(home.source, "/dev/nvme0n1p2");
         assert!(!should_skip_mount(&home, Some("/dev/nvme0n1p2")));

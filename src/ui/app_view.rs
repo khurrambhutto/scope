@@ -871,7 +871,8 @@ impl Render for ScopeApp {
         let banner_children = self.banner_stack(&entity);
 
         let disk_view = self.view_mode == ViewMode::Disk;
-        let disk_page = disk_view.then(|| disk::page(&mut self.disk, &entity, window));
+        let disk_page =
+            disk_view.then(|| disk::page(&mut self.disk, &entity, corner_radius, window));
 
         let operation_footer = self
             .operation_status

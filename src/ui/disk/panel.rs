@@ -8,7 +8,8 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::Icon;
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    div, px, relative, transparent_black, AnyElement, FontWeight, Hsla, IntoElement, WeakEntity,
+    div, px, relative, transparent_black, AnyElement, FontWeight, Hsla, IntoElement, Pixels,
+    WeakEntity,
 };
 
 use super::render::{clip, disk_total, fraction, percent, size_text};
@@ -25,6 +26,7 @@ pub(super) fn focus_panel(
     state: &DiskState,
     tree: &DiskTree,
     entity: &WeakEntity<ScopeApp>,
+    corner_radius: Pixels,
 ) -> impl IntoElement {
     let id = state.card_node(tree);
     let node = tree.node(id);
@@ -213,6 +215,9 @@ pub(super) fn focus_panel(
         .border_l_1()
         .border_color(theme::border())
         .bg(theme::elev())
+        // The panel reaches the window's bottom-right corner, and GPUI does
+        // not clip children to the window's rounded corners.
+        .rounded_br(corner_radius)
         .child(card);
 
     // The list always shows the rings' level: what is inside the zoom focus.
