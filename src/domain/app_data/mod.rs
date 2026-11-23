@@ -65,7 +65,11 @@ impl CleanupItem {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CleanupPlan {
     pub items: Vec<CleanupItem>,
+    /// Discovery diagnostics kept in the plan but not shown in the modal.
     pub warnings: Vec<String>,
+    /// Process notices the user must see before selecting data.
+    #[serde(default)]
+    pub disclosures: Vec<String>,
     package: Option<Box<InstalledPackage>>,
     roots: Option<Roots>,
     #[serde(default)]
@@ -171,7 +175,7 @@ pub async fn preview(pkg: &InstalledPackage) -> CleanupPlan {
         if plan.items.iter().any(CleanupItem::selectable) || package.extracted_installation.is_some() {
             let inspected = processes::assess(&package, &plan.executables, &roots);
             if inspected.running {
-                plan.warnings.push(if package.extracted_installation.is_some() {
+                plan.disclosures.push(if package.extracted_installation.is_some() {
                     "Close the extracted app before uninstalling."
                 } else {
                     "Close the app before uninstalling with app data selected."
@@ -187,9 +191,9 @@ pub async fn preview(pkg: &InstalledPackage) -> CleanupPlan {
                 }
                 plan.warnings.push(error);
             } else if !inspected.hidden.is_empty() {
-                plan.warnings.push(format!("Close the app first. {} background processes couldn't be checked; selecting data accepts that.", inspected.hidden.len()));
+                plan.disclosures.push(format!("Close the app first. {} background processes couldn't be checked; selecting data accepts that.", inspected.hidden.len()));
                 if package.extracted_installation.is_some() {
-                    plan.warnings.push("Uninstalling also accepts those unchecked processes for the app files; a running app or a new gap still stops removal.".into());
+                    plan.disclosures.push("Uninstalling also accepts those unchecked processes for the app files; a running app or a new gap still stops removal.".into());
                 }
                 for item in &mut plan.items {
                     item.default_selected = false;

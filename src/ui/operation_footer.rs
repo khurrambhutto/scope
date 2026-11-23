@@ -60,9 +60,6 @@ pub(super) fn operation_footer(
             let title = theme::display_title(pkg);
             if result.success {
                 let heading = match kind {
-                    OpKind::Uninstall if !result.warnings.is_empty() => {
-                        format!("{title} was uninstalled with cleanup warnings")
-                    }
                     OpKind::Uninstall => format!("{title} was uninstalled"),
                     OpKind::Update => format!("{title} was updated"),
                     OpKind::Install => format!("{title} was installed"),
@@ -87,34 +84,24 @@ pub(super) fn operation_footer(
     let cancelled = matches!(status, OperationStatus::Done { result, .. } if is_cancelled(result));
     let failed = matches!(status, OperationStatus::Done { result, .. } if !result.success && !is_cancelled(result));
 
-    let mut warnings = match status {
-        OperationStatus::Done { result, .. } => result.warnings.clone(),
-        OperationStatus::Running { .. } => Vec::new(),
-    };
-
-    if let OperationStatus::Done { result, .. } = status {
-        for outcome in &result.cleanup {
-            let status = match outcome.status {
-                crate::domain::app_data::CleanupStatus::Included => "Included in parent removal",
-                crate::domain::app_data::CleanupStatus::Trashed => "Moved to Trash",
-                crate::domain::app_data::CleanupStatus::Removed => "Removed",
-                crate::domain::app_data::CleanupStatus::Kept => "Kept",
-                crate::domain::app_data::CleanupStatus::Shared => "Shared — kept",
-                crate::domain::app_data::CleanupStatus::Changed => "Changed — kept",
-                crate::domain::app_data::CleanupStatus::Failed => "Cleanup failed",
-                crate::domain::app_data::CleanupStatus::Unknown => "Could not verify",
-            };
-            warnings.push(format!(
-                "{status}: {} — {}",
-                if outcome.path.as_os_str().is_empty() {
+    // Only selected app data that failed to move is worth a line; retained
+    // and unverified data stays where it was, so it needs no notice.
+    let warnings: Vec<String> = match status {
+        OperationStatus::Done { result, .. } if result.success => result
+            .cleanup
+            .iter()
+            .filter(|outcome| outcome.status == crate::domain::app_data::CleanupStatus::Failed)
+            .map(|outcome| {
+                let target = if outcome.path.as_os_str().is_empty() {
                     outcome.label.clone()
                 } else {
                     outcome.path.display().to_string()
-                },
-                outcome.message
-            ));
-        }
-    }
+                };
+                format!("Could not move {target} to Trash: {}", outcome.message)
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
 
     let mut row = div()
         .flex()
@@ -122,7 +109,7 @@ pub(super) fn operation_footer(
         .gap(px(12.))
         .when(!running, |this| {
             this.child(
-                Icon::new(if failed || matches!(status, OperationStatus::Done { result, .. } if !result.warnings.is_empty()) {
+                Icon::new(if failed || !warnings.is_empty() {
                     IconName::CircleAlert
                 } else if cancelled {
                     IconName::Close

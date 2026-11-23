@@ -4,7 +4,6 @@ use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::prelude::*;
 use gpui_kit::{div, px, AnyElement, FontWeight, WeakEntity};
 
-use crate::domain::app_data::CleanupEffect;
 use crate::domain::operations::{OperationPlan, OperationTarget};
 use crate::theme;
 
@@ -91,42 +90,14 @@ pub(super) fn body(
             None,
         ));
     }
-    let retained: Vec<_> = plan
-        .cleanup
-        .items
-        .iter()
-        .filter(|item| !item.selectable() && item.effect != CleanupEffect::Included)
-        .collect();
-    if let Some(first) = retained.first() {
-        // One shared reason is said once under the heading, not on every row.
-        let shared = retained
-            .iter()
-            .all(|item| item.reason == first.reason)
-            .then_some(first.reason.as_str());
-        content = content.child(heading("Kept"));
-        if let Some(reason) = shared {
-            content = content.child(note(reason.to_string()));
-        }
-        for item in retained {
-            content = content.child(super::footprint_row::row(
-                item.label.clone(),
-                Some(&item.location_label()),
-                item.bytes
-                    .map(theme::format_size)
-                    .unwrap_or_else(|| "Unknown".into()),
-                None,
-                shared.is_none().then_some(item.reason.as_str()),
-            ));
-        }
-    }
-    if !plan.cleanup.warnings.is_empty() {
+    if !plan.cleanup.disclosures.is_empty() {
         content = content.child(
             div()
                 .mt(px(10.))
                 .flex()
                 .flex_col()
                 .gap(px(4.))
-                .children(plan.cleanup.warnings.iter().cloned().map(note)),
+                .children(plan.cleanup.disclosures.iter().cloned().map(note)),
         );
     }
     content.into_any_element()
@@ -165,12 +136,4 @@ fn note(text: String) -> gpui_kit::Div {
         .text_size(px(12.))
         .text_color(theme::text_dim())
         .child(text)
-}
-
-fn heading(label: &'static str) -> gpui_kit::Div {
-    div()
-        .mt(px(6.))
-        .text_size(px(13.))
-        .font_weight(FontWeight::SEMIBOLD)
-        .child(label)
 }
